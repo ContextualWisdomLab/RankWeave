@@ -1,0 +1,160 @@
+"""Fusion functions for hybrid (lexical + semantic) retrieval.
+
+Default strategy: a convex combination of theoretically min-max
+normalized channel scores ("TM2C2"; Bruch, Gai & Ingber 2023,
+*An Analysis of Fusion Functions for Hybrid Retrieval*, ACM TOIS
+42(1), arXiv:2210.11934). Their analysis shows TM2C2 outperforms
+Reciprocal Rank Fusion in- and out-of-domain, is robust for alpha in
+[0.6, 0.8] without training data, and — unlike RRF — preserves the
+score distribution (Lipschitz continuity).
+
+Reciprocal Rank Fusion (Cormack, Clarke & Büttcher 2009,
+*Reciprocal Rank Fusion outperforms Condorcet and individual Rank
+Learning Methods*, SIGIR) is the non-parametric alternative for
+channels that expose only ranks (learned-sparse or external
+channels), selected via ``FusionSettings.strategy_name``.
+
+The convex strategy assumes each channel score has *theoretical*
+bounds, so no per-query data-dependent normalization is needed. Two
+bound constants ship for the common lexical+dense pairing, but they
+are just ``(lower, upper)`` tuples — pass your own to
+``theoretical_min_max_normalize`` for any bounded scoring function:
+
+- ``WORD_SIMILARITY_THEORETICAL_BOUNDS``  = (0.0, 1.0) — e.g. a
+  character-trigram word-similarity such as PostgreSQL ``pg_trgm``.
+- ``COSINE_DISTANCE_THEORETICAL_BOUNDS`` = (0.0, 2.0) — cosine
+  distance for unit-norm vectors, e.g. a pgvector ``<=>`` channel;
+  fuse_channel_scores inverts it so smaller distance scores higher.
+"""
+
+from dataclasses import dataclass
+
+WORD_SIMILARITY_THEORETICAL_BOUNDS = (0.0, 1.0)
+COSINE_DISTANCE_THEORETICAL_BOUNDS = (0.0, 2.0)
+
+CONVEX_COMBINATION_STRATEGY = "convex_combination"
+RECIPROCAL_RANK_STRATEGY = "reciprocal_rank_fusion"
+
+_SUPPORTED_STRATEGY_NAMES = frozenset(
+    {CONVEX_COMBINATION_STRATEGY, RECIPROCAL_RANK_STRATEGY}
+)
+
+
+@dataclass(frozen=True)
+class FusionSettings:
+    """Tunable fusion parameters (immutable; construct one per query set)."""
+
+    strategy_name: str = CONVEX_COMBINATION_STRATEGY
+    # Weight of the semantic channel; 0.7 is the midpoint of the
+    # robust [0.6, 0.8] range reported by Bruch et al. (2023).
+    semantic_weight_alpha: float = 0.7
+    # RRF eta; 60 per Cormack et al. (2009).
+    rank_constant_eta: int = 60
+
+    def __post_init__(self) -> None:
+        if self.strategy_name not in _SUPPORTED_STRATEGY_NAMES:
+            raise ValueError(
+                "strategy_name must be one of "
+                f"{sorted(_SUPPORTED_STRATEGY_NAMES)}, got {self.strategy_name!r}"
+            )
+        if not 0.0 <= self.semantic_weight_alpha <= 1.0:
+            raise ValueError("semantic_weight_alpha must be within [0, 1]")
+        if self.rank_constant_eta < 1:
+            raise ValueError("rank_constant_eta must be >= 1")
+
+
+def theoretical_min_max_normalize(
+    score: float, bounds: tuple[float, float]
+) -> float:
+    """Scale a score to [0, 1] using the scoring function's theoretical bounds.
+
+    Using theoretical rather than observed bounds keeps the transform
+    stable across queries and candidate sets (Bruch et al. 2023, §4.2).
+    Out-of-range inputs (floating-point drift) are clamped.
+    """
+    lower_bound, upper_bound = bounds
+    if upper_bound <= lower_bound:
+        raise ValueError("bounds must satisfy upper > lower")
+    normalized = (score - lower_bound) / (upper_bound - lower_bound)
+    return min(1.0, max(0.0, normalized))
+
+
+def convex_combination_score(
+    semantic_score: float | None,
+    lexical_score: float | None,
+    semantic_weight_alpha: float,
+) -> float:
+    """TM2C2 fusion over already-normalized [0, 1] channel scores.
+
+    A channel absent for a candidate (e.g. no embedding stored yet)
+    contributes its theoretical minimum, 0 — absent evidence is the
+    infimum, not a missing value to impute.
+    """
+    semantic_component = semantic_score if semantic_score is not None else 0.0
+    lexical_component = lexical_score if lexical_score is not None else 0.0
+    return (
+        semantic_weight_alpha * semantic_component
+        + (1.0 - semantic_weight_alpha) * lexical_component
+    )
+
+
+def reciprocal_rank_fusion_score(
+    channel_ranks: dict[str, int], rank_constant_eta: int = 60
+) -> float:
+    """RRF over 1-based per-channel ranks: sum of 1 / (eta + rank)."""
+    if rank_constant_eta < 1:
+        raise ValueError("rank_constant_eta must be >= 1")
+    fused_score = 0.0
+    for channel_name, one_based_rank in channel_ranks.items():
+        if one_based_rank < 1:
+            raise ValueError(
+                f"rank for channel {channel_name!r} must be >= 1,"
+                f" got {one_based_rank}"
+            )
+        fused_score += 1.0 / (rank_constant_eta + one_based_rank)
+    return fused_score
+
+
+def fuse_channel_scores(
+    *,
+    word_similarity_score: float | None,
+    cosine_distance: float | None,
+    channel_ranks: dict[str, int],
+    settings: FusionSettings,
+) -> float:
+    """Fuse one candidate's channel evidence into a single score.
+
+    ``word_similarity_score`` and ``cosine_distance`` are the raw
+    channel outputs (None when the channel did not produce this
+    candidate); ``channel_ranks`` are the candidate's 1-based ranks in
+    the channels that returned it, used by the RRF strategy.
+    """
+    if settings.strategy_name == RECIPROCAL_RANK_STRATEGY:
+        if not channel_ranks:
+            return 0.0
+        return reciprocal_rank_fusion_score(
+            channel_ranks, settings.rank_constant_eta
+        )
+
+    normalized_lexical_score = (
+        theoretical_min_max_normalize(
+            word_similarity_score, WORD_SIMILARITY_THEORETICAL_BOUNDS
+        )
+        if word_similarity_score is not None
+        else None
+    )
+    # Cosine *distance* decreases as relevance increases; invert inside
+    # the theoretical [0, 2] range so 1.0 means identical direction.
+    normalized_semantic_score = (
+        1.0
+        - theoretical_min_max_normalize(
+            cosine_distance, COSINE_DISTANCE_THEORETICAL_BOUNDS
+        )
+        if cosine_distance is not None
+        else None
+    )
+    return convex_combination_score(
+        normalized_semantic_score,
+        normalized_lexical_score,
+        settings.semantic_weight_alpha,
+    )
