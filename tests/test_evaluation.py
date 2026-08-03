@@ -99,6 +99,15 @@ def test_evaluate_ranking_rejects_unrepresentable_exponential_gain():
         evaluate_ranking(["a"], {"a": 2048}, cutoff=1)
 
 
+def test_evaluate_ranking_rejects_unrepresentable_cumulative_gain():
+    with pytest.raises(ValueError, match="cumulative gain is too large"):
+        evaluate_ranking(
+            ["a", "b", "c"],
+            {"a": 1023, "b": 1023, "c": 1023},
+            cutoff=3,
+        )
+
+
 def test_evaluate_rankings_returns_macro_average_and_query_audit():
     report = evaluate_rankings(
         {
