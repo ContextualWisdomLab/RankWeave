@@ -11,6 +11,12 @@ def _workflow_text() -> str:
     return WORKFLOW_PATH.read_text(encoding="utf-8")
 
 
+def _job_section(workflow: str, job_name: str, next_job_name: str) -> str:
+    start = workflow.index(f"  {job_name}:\n")
+    end = workflow.index(f"  {next_job_name}:\n", start)
+    return workflow[start:end]
+
+
 def test_commercialization_loop_runs_once_each_hour():
     workflow = _workflow_text()
 
@@ -85,20 +91,47 @@ def test_agent_task_inventory_is_paginated():
     assert "per_page=100" in workflow
 
 
-def test_caller_grants_central_governance_required_permissions():
+def test_governance_permissions_are_scoped_per_calling_job():
     workflow = _workflow_text()
+    workflow_default = workflow.split("concurrency:", maxsplit=1)[0]
+    inspect = _job_section(workflow, "inspect-pr-queue", "repair-review-feedback")
+    repair = _job_section(workflow, "repair-review-feedback", "revalidate-pr-queue")
+    revalidate = _job_section(
+        workflow, "revalidate-pr-queue", "develop-next-product-gap"
+    )
 
-    required_permissions = (
+    assert "permissions:\n  contents: read" in workflow_default
+    for forbidden_permission in (
         "actions: write",
-        "checks: read",
         "contents: write",
         "id-token: write",
         "issues: write",
         "pull-requests: write",
+    ):
+        assert forbidden_permission not in workflow_default
+
+    for merge_job in (inspect, revalidate):
+        for permission in (
+            "actions: write",
+            "checks: read",
+            "contents: write",
+            "id-token: write",
+            "pull-requests: write",
+        ):
+            assert permission in merge_job
+        assert "issues: write" not in merge_job
+        assert "statuses: read" not in merge_job
+
+    for permission in (
+        "actions: write",
+        "contents: read",
+        "issues: write",
+        "pull-requests: read",
         "statuses: read",
-    )
-    for permission in required_permissions:
-        assert permission in workflow
+    ):
+        assert permission in repair
+    assert "contents: write" not in repair
+    assert "id-token: write" not in repair
 
 
 def test_agent_tasks_use_current_public_preview_api_version():
