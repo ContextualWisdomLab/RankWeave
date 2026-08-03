@@ -10,6 +10,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - `weighted_convex_combination_score` — fuse any number of normalized
   retrieval-channel scores with validated convex weights while preserving
   the existing missing-channel-as-infimum semantics.
+- CI gates for 100% line and branch coverage and complete production
+  docstrings.
 
 ### Fixed
 - Reject `NaN` and infinite scores, bounds, weights, ranks, and RRF
