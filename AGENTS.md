@@ -43,7 +43,8 @@ python -m coverage report
 ## Layout
 
 - `src/rankweave/score_fusion.py` — TM2C2 + per-candidate RRF primitives.
-- `src/rankweave/ranked_list_fusion.py` — complete-list RRF + audit results.
+- `src/rankweave/ranked_list_fusion.py` — complete-list score/rank fusion
+  with immutable audit results.
 - `src/rankweave/query_normalization.py` — NFC query normalization.
 - `tests/` — behavior tests (hand-computed expected values).
 - `docs/research/` — paper PDFs + citation manifest.
