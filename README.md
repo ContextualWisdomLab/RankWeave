@@ -27,8 +27,19 @@ systems. RRF remains available for channels that expose only ranks. See
 
 ## Install
 
+Until PyPI publishing is enabled, install RankWeave directly from the
+repository:
+
 ```bash
-pip install rankweave
+pip install "rankweave @ git+https://github.com/ContextualWisdomLab/RankWeave.git"
+```
+
+For an editable development checkout:
+
+```bash
+git clone https://github.com/ContextualWisdomLab/RankWeave.git
+cd RankWeave
+pip install -e ".[dev]"
 ```
 
 ## Quickstart
