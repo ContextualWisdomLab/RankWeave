@@ -87,6 +87,7 @@ class FusionSettings:
     rank_constant_eta: int = 60
 
     def __post_init__(self) -> None:
+        """Validate the strategy and numeric parameter domains."""
         if self.strategy_name not in _SUPPORTED_STRATEGY_NAMES:
             raise ValueError(
                 "strategy_name must be one of "
