@@ -60,6 +60,7 @@ jobs:
               wheel_members = set(wheel_file.namelist())
           required_members = {
               "rankweave/__init__.py",
+              "rankweave/comparison.py",
               "rankweave/evaluation.py",
               "rankweave/trec.py",
               "rankweave/tuning.py",
@@ -99,5 +100,13 @@ jobs:
               cutoff=1,
           )
           assert trec_report.aggregate.mean_ndcg_at_k == 1.0
+          comparison = rankweave.compare_rankings(
+              {"q": ["other", "document"]},
+              {"q": ["document", "other"]},
+              {"q": {"document": 1}},
+              cutoff=1,
+              alternative=rankweave.CANDIDATE_GREATER_ALTERNATIVE,
+          )
+          assert comparison.significance.mean_difference == 1.0
           PY
       - run: .package-smoke/bin/python -m pip check
