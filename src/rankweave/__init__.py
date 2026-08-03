@@ -1,9 +1,9 @@
-"""rankweave — language-agnostic hybrid-retrieval score fusion.
+"""rankweave — language-agnostic hybrid-retrieval fusion and evaluation.
 
 Pure-Python (stdlib-only) fusion of lexical, semantic, learned-sparse,
-and other retrieval channels, complete-list fusion, and Unicode NFC query
-normalization. Store-agnostic: bring your own channels; rankweave decides
-how to combine their evidence.
+and other retrieval channels, complete-list fusion, ranked-effectiveness
+evaluation, and Unicode NFC query normalization. Store-agnostic: bring your
+own channels; rankweave combines and evaluates their evidence.
 
 Two fusion strategies, research-grounded (see ``docs/research/``):
 
@@ -29,6 +29,14 @@ Quickstart::
     )
 """
 
+from rankweave.evaluation import (
+    AggregateRankingMetrics,
+    QueryRankingMetrics,
+    RankingEvaluationReport,
+    RankingMetrics,
+    evaluate_ranking,
+    evaluate_rankings,
+)
 from rankweave.query_normalization import (
     DEFAULT_MAX_QUERY_CHARACTER_LENGTH,
     normalize_search_text,
@@ -60,6 +68,7 @@ from rankweave.score_fusion import (
 __version__ = "0.3.0"
 
 __all__ = [
+    "AggregateRankingMetrics",
     "CONVEX_COMBINATION_STRATEGY",
     "COSINE_DISTANCE_THEORETICAL_BOUNDS",
     "DEFAULT_MAX_QUERY_CHARACTER_LENGTH",
@@ -69,9 +78,14 @@ __all__ = [
     "FusedScoredItem",
     "FusedWeightedRankedItem",
     "FusionSettings",
+    "QueryRankingMetrics",
+    "RankingEvaluationReport",
+    "RankingMetrics",
     "WeightedChannelContribution",
     "WeightedRankContribution",
     "convex_combination_score",
+    "evaluate_ranking",
+    "evaluate_rankings",
     "fuse_channel_scores",
     "normalize_search_text",
     "reciprocal_rank_fuse",
