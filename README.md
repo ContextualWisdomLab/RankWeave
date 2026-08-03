@@ -22,8 +22,9 @@ A convex combination of **theoretically** min-max normalized scores
 for `alpha ∈ [0.6, 0.8]` with no training data, and — unlike rank
 fusion — preserves the score distribution (Bruch, Gai & Ingber 2023).
 Their two-system analysis also extends directly to multiple retrieval
-systems. RRF remains available for channels that expose only ranks. See
-[`docs/research/`](docs/research/) for the grounding.
+systems. RRF remains available for channels that expose only ranks, with
+an optional fixed convex weighting policy when channels have different
+reliability. See [`docs/research/`](docs/research/) for the grounding.
 
 ## Install
 
@@ -125,6 +126,33 @@ assert best_result.item_id == "document-b"
 assert best_result.channel_ranks == (("lexical", 2), ("dense", 1))
 ```
 
+When rank-only channels have different known reliability, supply one fixed
+convex weighting policy for the call:
+
+```python
+from rankweave import weighted_reciprocal_rank_fuse
+
+weighted_results = weighted_reciprocal_rank_fuse(
+    {
+        "lexical": ["document-a", "document-b"],
+        "dense": ["document-b", "document-c"],
+    },
+    {"lexical": 0.25, "dense": 0.75},
+    limit=10,
+)
+
+best_weighted_result = weighted_results[0]
+assert best_weighted_result.item_id == "document-b"
+assert best_weighted_result.channel_contributions[0].rank == 2
+assert best_weighted_result.channel_contributions[1].rank == 1
+```
+
+The weighted RRF result records every channel's rank, weight, and reciprocal
+contribution. Missing evidence remains visible with `rank=None` and a zero
+contribution. Weights are fixed per call; RankWeave does not infer adaptive
+weights from the query or item. Equal positive weights preserve ordinary RRF
+ordering, although the numeric scores differ by a common scaling factor.
+
 Complete-list fusion rejects duplicate item identifiers within a channel and
 uses deterministic first-seen input order when scores tie. RRF results retain
 the full per-channel rank trail used to calculate each fused score.
@@ -147,6 +175,9 @@ RRF ranks and eta must be positive integers, not booleans or fractions.
 | `reciprocal_rank_fusion_score(ranks, eta=60)` | RRF over positive integer 1-based per-channel ranks. |
 | `reciprocal_rank_fuse(rankings, eta=60, limit=None)` | Fuse complete ranked item-ID lists with deterministic ordering and a rank audit trail. |
 | `FusedRankedItem` | Immutable complete-list RRF result (`item_id`, `score`, `channel_ranks`). |
+| `weighted_reciprocal_rank_fusion_score(ranks, weights, eta=60)` | Weighted RRF for one candidate under a fixed convex channel policy. |
+| `weighted_reciprocal_rank_fuse(rankings, weights, eta=60, limit=None)` | Fuse complete rank-only lists with deterministic ordering and contribution records. |
+| `FusedWeightedRankedItem`, `WeightedRankContribution` | Immutable weighted-RRF result and its present or missing channel evidence. |
 | `theoretical_min_max_normalize(score, bounds)` | Scale a score to `[0, 1]` using a scoring function's theoretical bounds. |
 | `normalize_search_text(text)` | NFC-compose + whitespace-collapse + length-cap a query. |
 | `WORD_SIMILARITY_THEORETICAL_BOUNDS`, `COSINE_DISTANCE_THEORETICAL_BOUNDS` | `(lower, upper)` tuples for the common lexical/dense pairing. |
@@ -172,6 +203,11 @@ cannot silently diverge.
 - **Cormack, Clarke & Büttcher (2009).** *Reciprocal Rank Fusion
   outperforms Condorcet and individual Rank Learning Methods.* SIGIR
   2009. — RRF definition, η = 60.
+- **Samuel et al. (2025).** *MMMORRF: Multimodal Multilingual Modularized
+  Reciprocal Rank Fusion.* SIGIR 2025. DOI: 10.1145/3726302.3730157. —
+  evidence that weighted RRF can improve retrieval when channels have
+  different reliability. RankWeave exposes generic fixed convex weights,
+  not the paper's video-specific adaptive estimator.
 - **UAX #15**, Unicode Normalization Forms — NFC composition.
 
 PDFs and a citation manifest live in [`docs/research/`](docs/research/).

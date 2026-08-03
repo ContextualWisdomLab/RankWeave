@@ -18,6 +18,10 @@ Reciprocal Rank Fusion (Cormack, Clarke & Büttcher 2009,
 Learning Methods*, SIGIR) is the non-parametric alternative for
 channels that expose only ranks (learned-sparse or external
 channels), selected via ``FusionSettings.strategy_name``.
+``weighted_reciprocal_rank_fusion_score`` generalizes RRF with convex
+channel weights. Samuel et al. (SIGIR 2025, DOI: 10.1145/3726302.3730157)
+demonstrate that modality-aware weighted RRF can improve retrieval when
+channels have different reliability.
 
 The convex strategy assumes each channel score has *theoretical*
 bounds, so no per-query data-dependent normalization is needed. Two
@@ -51,6 +55,19 @@ RECIPROCAL_RANK_STRATEGY = "reciprocal_rank_fusion"
 _SUPPORTED_STRATEGY_NAMES = frozenset(
     {CONVEX_COMBINATION_STRATEGY, RECIPROCAL_RANK_STRATEGY}
 )
+
+
+def _validate_convex_weights(channel_weights: Mapping[str, float]) -> None:
+    """Require finite, non-negative channel weights that sum to one."""
+    for channel_name, channel_weight in channel_weights.items():
+        _require_finite(
+            channel_weight, f"weight for channel {channel_name!r}"
+        )
+        if channel_weight < 0.0:
+            raise ValueError("channel weights must be non-negative")
+    total_weight = math.fsum(channel_weights.values())
+    if not math.isclose(total_weight, 1.0, rel_tol=0.0, abs_tol=1e-12):
+        raise ValueError("channel weights must sum to 1")
 
 
 @dataclass(frozen=True)
@@ -144,15 +161,7 @@ def weighted_convex_combination_score(
             "channel scores contain channels without weights: "
             f"{sorted(score_channels_without_weights)!r}"
         )
-    for channel_name, channel_weight in channel_weights.items():
-        _require_finite(
-            channel_weight, f"weight for channel {channel_name!r}"
-        )
-        if channel_weight < 0.0:
-            raise ValueError("channel weights must be non-negative")
-    total_weight = math.fsum(channel_weights.values())
-    if not math.isclose(total_weight, 1.0, rel_tol=0.0, abs_tol=1e-12):
-        raise ValueError("channel weights must sum to 1")
+    _validate_convex_weights(channel_weights)
     for channel_name, channel_score in channel_scores.items():
         if channel_score is not None:
             _require_unit_interval(
@@ -168,7 +177,7 @@ def weighted_convex_combination_score(
 
 
 def reciprocal_rank_fusion_score(
-    channel_ranks: dict[str, int], rank_constant_eta: int = 60
+    channel_ranks: Mapping[str, int], rank_constant_eta: int = 60
 ) -> float:
     """RRF over positive integer 1-based ranks: sum of 1 / (eta + rank)."""
     validated_eta = _require_positive_integer(
@@ -181,6 +190,42 @@ def reciprocal_rank_fusion_score(
         )
         fused_score += 1.0 / (validated_eta + validated_rank)
     return fused_score
+
+
+def weighted_reciprocal_rank_fusion_score(
+    channel_ranks: Mapping[str, int],
+    channel_weights: Mapping[str, float],
+    rank_constant_eta: int = 60,
+) -> float:
+    """Fuse 1-based ranks with convex channel weights.
+
+    ``channel_weights`` defines the complete channel set and must sum to one.
+    Missing rank evidence contributes zero. A rank supplied without a weight
+    is rejected because silently dropping that channel would change the
+    intended fusion policy. Weights are fixed per channel for one call; this
+    primitive does not infer query- or document-adaptive weights.
+    """
+    rank_channels_without_weights = set(channel_ranks) - set(channel_weights)
+    if rank_channels_without_weights:
+        raise ValueError(
+            "channel ranks contain channels without weights: "
+            f"{sorted(rank_channels_without_weights)!r}"
+        )
+    _validate_convex_weights(channel_weights)
+    validated_eta = _require_positive_integer(
+        rank_constant_eta, "rank_constant_eta"
+    )
+    validated_ranks = {
+        channel_name: _require_positive_integer(
+            one_based_rank, f"rank for channel {channel_name!r}"
+        )
+        for channel_name, one_based_rank in channel_ranks.items()
+    }
+    return math.fsum(
+        channel_weight / (validated_eta + validated_ranks[channel_name])
+        for channel_name, channel_weight in channel_weights.items()
+        if channel_name in validated_ranks
+    )
 
 
 def fuse_channel_scores(

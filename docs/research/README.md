@@ -10,6 +10,7 @@ material so the grounding travels with the code.
 |---|---|---|
 | `pdfs/bruch-gai-ingber-2023-analysis-fusion-functions-hybrid-retrieval.pdf` | Bruch, S., Gai, S., & Ingber, A. (2023). *An Analysis of Fusion Functions for Hybrid Retrieval.* ACM Transactions on Information Systems 42(1). arXiv:2210.11934. | cite-only pending license confirmation |
 | `pdfs/cormack-clarke-buettcher-2009-reciprocal-rank-fusion.pdf` | Cormack, G. V., Clarke, C. L. A., & Büttcher, S. (2009). *Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods.* SIGIR 2009. | cite-only pending license confirmation |
+| — | Samuel, S., et al. (2025). *MMMORRF: Multimodal Multilingual Modularized Reciprocal Rank Fusion.* SIGIR 2025. arXiv:2503.20698. DOI: 10.1145/3726302.3730157. | cite-only; no redistributed copy |
 
 Standards: **UAX #15 — Unicode Normalization Forms** (Unicode
 Consortium), the basis for `normalize_search_text`'s NFC step.
@@ -30,6 +31,12 @@ Consortium), the basis for `normalize_search_text`'s NFC step.
   not scores) does not.
 - **Cormack, Clarke & Büttcher 2009** → the **RRF alternative** and its
   `eta = 60` default.
+- **Samuel et al. 2025** → the value of exposing weighted RRF when
+  retrieval channels have different reliability. Their video-dependent
+  weighting improved MultiVENT 2.0 nDCG@10 from 0.562 with ordinary RRF
+  to 0.586 with weighted RRF. RankWeave supplies fixed convex channel
+  weights and immutable contribution records; it intentionally does not
+  reproduce the paper's domain-specific video weight estimator.
 - **UAX #15** → NFC composition, so decomposed Vietnamese/Korean input
   matches composed indexed text.
 

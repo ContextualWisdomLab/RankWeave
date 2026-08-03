@@ -6,6 +6,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `weighted_reciprocal_rank_fusion_score` and
+  `weighted_reciprocal_rank_fuse` for fixed convex channel-reliability
+  policies over rank-only retrieval outputs.
+- Immutable `FusedWeightedRankedItem` and `WeightedRankContribution`
+  records that expose present and missing channel evidence for auditability.
+
 ## [0.2.0] — 2026-08-03
 
 ### Added
