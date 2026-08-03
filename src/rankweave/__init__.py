@@ -2,9 +2,9 @@
 
 Pure-Python (stdlib-only) fusion of lexical, semantic, learned-sparse,
 and other retrieval channels, complete-list fusion, ranked-effectiveness
-evaluation, offline weight-policy tuning, and Unicode NFC query normalization.
-Store-agnostic: bring your own channels; rankweave combines and evaluates
-their evidence.
+evaluation, offline weight-policy tuning, strict TREC interchange, and Unicode
+NFC query normalization. Store-agnostic: bring your own channels; rankweave
+combines and evaluates their evidence.
 
 Two fusion strategies, research-grounded (see ``docs/research/``):
 
@@ -65,6 +65,17 @@ from rankweave.score_fusion import (
     weighted_convex_combination_score,
     weighted_reciprocal_rank_fusion_score,
 )
+from rankweave.trec import (
+    TrecQrelEntry,
+    TrecQrels,
+    TrecRun,
+    TrecRunEntry,
+    evaluate_trec_run,
+    format_trec_qrels,
+    format_trec_run,
+    parse_trec_qrels,
+    parse_trec_run,
+)
 from rankweave.tuning import (
     MEAN_NDCG_OBJECTIVE,
     MEAN_PRECISION_OBJECTIVE,
@@ -97,6 +108,10 @@ __all__ = [
     "QueryRankingMetrics",
     "RankingEvaluationReport",
     "RankingMetrics",
+    "TrecQrelEntry",
+    "TrecQrels",
+    "TrecRun",
+    "TrecRunEntry",
     "WeightedChannelContribution",
     "WeightedRRFTuningReport",
     "WeightedRRFTuningTrial",
@@ -104,8 +119,13 @@ __all__ = [
     "convex_combination_score",
     "evaluate_ranking",
     "evaluate_rankings",
+    "evaluate_trec_run",
+    "format_trec_qrels",
+    "format_trec_run",
     "fuse_channel_scores",
     "normalize_search_text",
+    "parse_trec_qrels",
+    "parse_trec_run",
     "reciprocal_rank_fuse",
     "reciprocal_rank_fusion_score",
     "theoretical_min_max_normalize",

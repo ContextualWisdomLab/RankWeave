@@ -5,8 +5,8 @@ Operating guide for automated agents working in this repo.
 ## What this is
 
 `rankweave` is a **pure-Python, stdlib-only** library for
-language-agnostic hybrid-retrieval fusion, effectiveness evaluation, and
-offline policy tuning, extracted from
+language-agnostic hybrid-retrieval fusion, effectiveness evaluation, offline
+policy tuning, and strict TREC interchange, extracted from
 [ContextualWisdomLab/naruon](https://github.com/ContextualWisdomLab/naruon)
 Context Search under the lab's ONE SOURCE MULTI USE convention
 (standalone product *and* submodule-importable).
@@ -18,7 +18,8 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   probably belongs in the consumer, not here.
 - **Store-agnostic.** rankweave never talks to a database, embedding provider,
   or search index. It fuses scores, evaluates rankings, selects offline
-  policies, and normalizes query text. Keep SQL, HTTP, and ORM concerns out.
+  policies, parses interchange artifacts, and normalizes query text. Keep SQL,
+  HTTP, and ORM concerns out.
 - **Behavior parity with naruon.** A behavior change in shared retrieval
   primitives must be mirrored in naruon's `services/hybrid_retrieval` (and
   vice versa) until naruon consumes this package directly. Prefer additive,
@@ -26,9 +27,9 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
 - **Permissive license only** (Apache-2.0). Any added code or asset must be
   compatible.
 - **Research-grounded defaults, metrics, and selection.** Numeric defaults,
-  metric definitions, gain/discount conventions, and tuning objectives trace
-  to the papers in `docs/research/`. Changing one requires citing evidence and
-  updating hand-computed regression tests.
+  metric definitions, gain/discount conventions, tuning objectives, and
+  interchange assumptions trace to the sources in `docs/research/`. Changing
+  one requires citing evidence and updating hand-computed regression tests.
 - **Complete evaluation sets.** Aggregate evaluation and tuning must fail
   closed when ranking and judgment query IDs differ; omitted queries must
   never silently inflate metrics.
@@ -38,6 +39,19 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
 - **Deterministic model selection.** Candidate mapping insertion order is the
   tie-breaker for equal objective values. Never replace it with unordered set
   iteration or nondeterministic parallel reduction.
+- **Strict TREC boundaries.** Four-column qrels and six-column run artifacts
+  must reject malformed, duplicate, non-finite, or unserializable state before
+  evaluation. Run rankings are determined by descending score; exact score
+  ties preserve input order as RankWeave's documented deterministic extension.
+- **Central automation trust boundary.** Repository workflows may call the
+  reusable PR-governance workflows only at an immutable central commit SHA.
+  Agent-task creation requires a user-to-server `COPILOT_GITHUB_TOKEN`; never
+  fall back to the workflow token, and fail closed when the task inventory
+  cannot be listed or interpreted.
+- **Single-flight autonomous development.** The hourly product loop may start
+  a task only when no pull request and no nonterminal Copilot agent task exists.
+  Each task must select one bounded buyer-visible gap and open one PR; agents
+  never merge their own work or bypass reviews and required checks.
 - **Complete quality gates.** Production docstrings and both line and branch
   coverage must remain at 100%.
 - **Release metadata stays synchronized.** A release must update
@@ -64,6 +78,14 @@ python -m pip wheel . --no-deps --wheel-dir dist
   with immutable per-query and aggregate reports.
 - `src/rankweave/tuning.py` — deterministic validation-set selection for
   fixed weighted-RRF policies.
+- `src/rankweave/trec.py` — strict TREC qrels/run parsing, formatting, and
+  direct evaluation adapters.
 - `src/rankweave/query_normalization.py` — NFC query normalization.
+- `.github/workflows/hourly-commercialization-loop.yml` — hourly bounded
+  review/fix/revalidate/develop orchestration using central reusable policy.
+- `docs/operations/hourly-commercialization-loop.md` — setup, credentials,
+  single-flight behavior, and failure modes for autonomous maintenance.
+- `docs/trec-interoperability.md` — interchange contracts and compatibility
+  differences from reference TREC tooling.
 - `tests/` — behavior tests with hand-computed expected values.
-- `docs/research/` — paper PDFs + citation manifest.
+- `docs/research/` — paper, standard, and reference-implementation manifest.

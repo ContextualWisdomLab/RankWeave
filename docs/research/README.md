@@ -1,9 +1,9 @@
 # Research grounding — rankweave
 
-rankweave's defaults, metric conventions, and tuning workflow are not
-arbitrary; each is tied to published evidence or an authoritative reference
-implementation. This directory preserves citations so the grounding travels
-with the code.
+rankweave's defaults, metric conventions, tuning workflow, and interchange
+contracts are not arbitrary; each is tied to published evidence or an
+authoritative reference implementation. This directory preserves citations so
+the grounding travels with the code.
 
 ## Papers
 
@@ -19,8 +19,13 @@ Standards and reference implementations:
 - **UAX #15 — Unicode Normalization Forms** (Unicode Consortium), the basis
   for `normalize_search_text`'s NFC step.
 - **NIST `trec_eval`**, the standard TREC evaluation implementation and the
-  reference for precision-at-cutoff, recall, and first-relevant reciprocal
-  rank conventions used by `evaluate_ranking`.
+  reference for precision-at-cutoff, recall, first-relevant reciprocal rank,
+  and score-ordered run evaluation.
+- **NIST TREC qrels guidance**, which defines the four fields `TOPIC`,
+  `ITERATION`, `DOCUMENT`, and `RELEVANCY`.
+- **NIST TREC run submission guidance**, which defines the six fields
+  `topicid`, `Q0`, `docid`, `rank`, `score`, and `run-tag`, recommends short
+  alphanumeric run tags, and states that evaluation tools reorder by score.
 
 ## What each grounds
 
@@ -53,7 +58,15 @@ Standards and reference implementations:
   the denominator even when a run is short; recall divides retrieved relevant
   documents by all judged relevant documents; reciprocal rank uses the first
   relevant result and is bounded by the requested cutoff in RankWeave's
-  `reciprocal_rank_at_k` implementation.
+  `reciprocal_rank_at_k` implementation. TREC run adapters sort submitted
+  results by decreasing score, matching reference-tool behavior rather than
+  trusting the rank column.
+- **NIST qrels/run guidance** → strict four- and six-column interchange,
+  literal `Q0`, finite numeric fields, one run tag per file, and conservative
+  1–12 character ASCII-alphanumeric run tags. RankWeave additionally preserves
+  source order for exact score ties to make repeated evaluation deterministic;
+  exact parity with a tool that breaks ties arbitrarily requires distinct
+  scores.
 - **UAX #15** → NFC composition, so decomposed Vietnamese/Korean input matches
   composed indexed text.
 
@@ -66,6 +79,20 @@ insertion order as the deterministic tie-breaker. The selected policy is not a
 final effectiveness estimate: consumers must evaluate it once on a separate
 held-out test set. This prevents validation-set selection from being reported
 as unbiased test performance.
+
+## TREC interoperability protocol
+
+`parse_trec_qrels` and `parse_trec_run` preserve validated source records in
+frozen dataclasses. Negative qrels grades remain in the audit artifact but are
+omitted from evaluation judgments as explicit unjudged markers. Public
+constructors apply the same validation as parsers, and container inputs are
+snapshotted so caller mutation cannot change an evaluation artifact.
+
+`evaluate_trec_run` requires exact run/qrels query-set parity through
+`evaluate_rankings`. This deliberately fails closed when a judged query is
+missing from a run instead of silently improving aggregate metrics by dropping
+that query. Detailed compatibility notes are in
+[`docs/trec-interoperability.md`](../trec-interoperability.md).
 
 ## PDF preservation note
 

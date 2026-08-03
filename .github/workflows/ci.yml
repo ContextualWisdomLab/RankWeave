@@ -61,6 +61,7 @@ jobs:
           required_members = {
               "rankweave/__init__.py",
               "rankweave/evaluation.py",
+              "rankweave/trec.py",
               "rankweave/tuning.py",
               "rankweave/py.typed",
           }
@@ -92,5 +93,11 @@ jobs:
               cutoff=1,
           )
           assert tuning.best_policy_id == "dense-only"
+          trec_report = rankweave.evaluate_trec_run(
+              "q Q0 document 1 1.0 rw1\n",
+              "q 0 document 1\n",
+              cutoff=1,
+          )
+          assert trec_report.aggregate.mean_ndcg_at_k == 1.0
           PY
       - run: .package-smoke/bin/python -m pip check
