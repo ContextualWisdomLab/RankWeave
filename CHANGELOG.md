@@ -14,6 +14,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Reject `NaN` and infinite scores, bounds, weights, ranks, and RRF
   constants instead of silently clamping or propagating invalid values.
+- Enforce the documented `[0, 1]` domain for direct convex fusion and
+  require positive integer RRF ranks and constants.
 
 ## [0.1.0] — 2026-07-11
 
