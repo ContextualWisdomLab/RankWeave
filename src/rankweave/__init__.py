@@ -1,9 +1,10 @@
-"""rankweave — language-agnostic hybrid-retrieval fusion and evaluation.
+"""rankweave — language-agnostic retrieval fusion, evaluation, and tuning.
 
 Pure-Python (stdlib-only) fusion of lexical, semantic, learned-sparse,
 and other retrieval channels, complete-list fusion, ranked-effectiveness
-evaluation, and Unicode NFC query normalization. Store-agnostic: bring your
-own channels; rankweave combines and evaluates their evidence.
+evaluation, offline weight-policy tuning, and Unicode NFC query normalization.
+Store-agnostic: bring your own channels; rankweave combines and evaluates
+their evidence.
 
 Two fusion strategies, research-grounded (see ``docs/research/``):
 
@@ -64,6 +65,16 @@ from rankweave.score_fusion import (
     weighted_convex_combination_score,
     weighted_reciprocal_rank_fusion_score,
 )
+from rankweave.tuning import (
+    MEAN_NDCG_OBJECTIVE,
+    MEAN_PRECISION_OBJECTIVE,
+    MEAN_RECALL_OBJECTIVE,
+    MEAN_RECIPROCAL_RANK_OBJECTIVE,
+    SUPPORTED_TUNING_OBJECTIVES,
+    WeightedRRFTuningReport,
+    WeightedRRFTuningTrial,
+    tune_weighted_reciprocal_rank_fusion,
+)
 
 __version__ = "0.4.0"
 
@@ -72,7 +83,12 @@ __all__ = [
     "CONVEX_COMBINATION_STRATEGY",
     "COSINE_DISTANCE_THEORETICAL_BOUNDS",
     "DEFAULT_MAX_QUERY_CHARACTER_LENGTH",
+    "MEAN_NDCG_OBJECTIVE",
+    "MEAN_PRECISION_OBJECTIVE",
+    "MEAN_RECALL_OBJECTIVE",
+    "MEAN_RECIPROCAL_RANK_OBJECTIVE",
     "RECIPROCAL_RANK_STRATEGY",
+    "SUPPORTED_TUNING_OBJECTIVES",
     "WORD_SIMILARITY_THEORETICAL_BOUNDS",
     "FusedRankedItem",
     "FusedScoredItem",
@@ -82,6 +98,8 @@ __all__ = [
     "RankingEvaluationReport",
     "RankingMetrics",
     "WeightedChannelContribution",
+    "WeightedRRFTuningReport",
+    "WeightedRRFTuningTrial",
     "WeightedRankContribution",
     "convex_combination_score",
     "evaluate_ranking",
@@ -91,6 +109,7 @@ __all__ = [
     "reciprocal_rank_fuse",
     "reciprocal_rank_fusion_score",
     "theoretical_min_max_normalize",
+    "tune_weighted_reciprocal_rank_fusion",
     "weighted_convex_combination_score",
     "weighted_convex_fuse",
     "weighted_reciprocal_rank_fuse",
