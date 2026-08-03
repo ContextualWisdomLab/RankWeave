@@ -118,8 +118,9 @@ PDFs and a citation manifest live in [`docs/research/`](docs/research/).
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest -q          # no external services
 python -m ruff check .
+python -m coverage run -m pytest -q
+python -m coverage report    # 100% line + branch coverage required
 ```
 
 ## License
