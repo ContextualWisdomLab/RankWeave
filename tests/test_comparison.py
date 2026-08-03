@@ -198,12 +198,9 @@ def test_compare_rankings_evaluates_and_compares_complete_query_sets():
     ],
 )
 def test_all_documented_metrics_are_supported(metric_name):
-    baseline = _report((("query", 0.25),))
-    candidate = _report((("query", 0.75),))
-
     result = compare_ranking_reports(
-        baseline,
-        candidate,
+        _report((("query", 0.25),)),
+        _report((("query", 0.75),)),
         metric_name=metric_name,
     )
 
@@ -212,15 +209,10 @@ def test_all_documented_metrics_are_supported(metric_name):
 
 
 def test_comparison_records_are_immutable():
-    result = compare_ranking_reports(
-        _report((("query", 0.25),)),
-        _report((("query", 0.75),)),
-    )
-    comparison = RankingComparisonReport(
-        baseline=_report((("query", 0.25),)),
-        candidate=_report((("query", 0.75),)),
-        significance=result,
-    )
+    baseline = _report((("query", 0.25),))
+    candidate = _report((("query", 0.75),))
+    result = compare_ranking_reports(baseline, candidate)
+    comparison = RankingComparisonReport(baseline, candidate, result)
 
     assert isinstance(result, PairedRandomizationResult)
     assert isinstance(result.query_differences[0], QueryMetricDifference)
@@ -316,9 +308,17 @@ def test_comparison_rejects_malformed_report_components():
         compare_ranking_reports(wrong_metrics, valid)
 
 
-@pytest.mark.parametrize("invalid_value", [-0.1, 1.1, math.nan, math.inf])
-def test_comparison_rejects_metric_values_outside_unit_interval(invalid_value):
-    with pytest.raises(ValueError, match="within \[0, 1\]"):
+@pytest.mark.parametrize(
+    ("invalid_value", "message"),
+    [
+        (-0.1, r"within \[0, 1\]"),
+        (1.1, r"within \[0, 1\]"),
+        (math.nan, "must be finite"),
+        (math.inf, "must be finite"),
+    ],
+)
+def test_comparison_rejects_invalid_metric_values(invalid_value, message):
+    with pytest.raises(ValueError, match=message):
         compare_ranking_reports(
             _report((("query", invalid_value),)),
             _report((("query", 0.5),)),
