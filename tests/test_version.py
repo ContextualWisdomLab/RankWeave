@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import tomllib
+import tomli
 
 import rankweave
 
@@ -13,7 +13,7 @@ def test_public_version_matches_release_version():
 
 
 def test_project_metadata_matches_public_version():
-    project_metadata = tomllib.loads(
+    project_metadata = tomli.loads(
         (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )
 
