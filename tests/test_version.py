@@ -5,7 +5,7 @@ import rankweave
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_RELEASE_VERSION = "0.5.0"
+EXPECTED_RELEASE_VERSION = "0.6.0"
 
 
 def test_public_version_matches_release_version():
