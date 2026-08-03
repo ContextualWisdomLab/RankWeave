@@ -99,3 +99,10 @@ def test_caller_grants_central_governance_required_permissions():
     )
     for permission in required_permissions:
         assert permission in workflow
+
+
+def test_agent_tasks_use_current_public_preview_api_version():
+    workflow = _workflow_text()
+
+    assert workflow.count("X-GitHub-Api-Version: 2026-03-10") == 2
+    assert "X-GitHub-Api-Version: 2022-11-28" not in workflow
