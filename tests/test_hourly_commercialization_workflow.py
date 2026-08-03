@@ -82,3 +82,19 @@ def test_agent_task_inventory_is_paginated():
     assert "--paginate" in workflow
     assert "--slurp" in workflow
     assert "per_page=100" in workflow
+
+
+def test_caller_grants_central_governance_required_permissions():
+    workflow = _workflow_text()
+
+    required_permissions = (
+        "actions: write",
+        "checks: read",
+        "contents: write",
+        "id-token: write",
+        "issues: write",
+        "pull-requests: write",
+        "statuses: read",
+    )
+    for permission in required_permissions:
+        assert permission in workflow
