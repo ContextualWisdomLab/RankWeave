@@ -29,7 +29,7 @@ def test_public_qrels_container_rejects_duplicate_judgment():
     with pytest.raises(ValueError, match="duplicate judgment"):
         TrecQrels(
             (
-                TrecQrelEntry("1", "0", "same", 1.0),
-                TrecQrelEntry("1", "1", "same", 2.0),
+                TrecQrelEntry("1", "0", "same", 1),
+                TrecQrelEntry("1", "1", "same", 2),
             )
         )
