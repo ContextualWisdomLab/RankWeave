@@ -3,7 +3,8 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = PROJECT_ROOT / ".github/workflows/hourly-commercialization-loop.yml"
-CENTRAL_WORKFLOW_SHA = "5983b41ace75040c1d81818171ca7d0f3653254e"
+MERGE_WORKFLOW_SHA = "5983b41ace75040c1d81818171ca7d0f3653254e"
+FIX_WORKFLOW_SHA = "21397126d708d2d536ccc1d68b0d333653ce9315"
 
 
 def _workflow_text() -> str:
@@ -23,11 +24,11 @@ def test_commercialization_loop_uses_pinned_central_pr_governance():
 
     merge_reference = (
         "ContextualWisdomLab/.github/.github/workflows/"
-        f"pr-review-merge-scheduler.yml@{CENTRAL_WORKFLOW_SHA}"
+        f"pr-review-merge-scheduler.yml@{MERGE_WORKFLOW_SHA}"
     )
     fix_reference = (
         "ContextualWisdomLab/.github/.github/workflows/"
-        f"pr-review-fix-scheduler.yml@{CENTRAL_WORKFLOW_SHA}"
+        f"pr-review-fix-scheduler.yml@{FIX_WORKFLOW_SHA}"
     )
     assert workflow.count(merge_reference) == 2
     assert workflow.count(fix_reference) == 1
