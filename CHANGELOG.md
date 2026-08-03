@@ -4,6 +4,13 @@ All notable changes to rankweave are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/), and the
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `weighted_convex_combination_score` — fuse any number of normalized
+  retrieval-channel scores with validated convex weights while preserving
+  the existing missing-channel-as-infimum semantics.
+
 ## [0.1.0] — 2026-07-11
 
 Initial extraction from
@@ -21,5 +28,5 @@ Context Search, unchanged in behavior (ONE SOURCE MULTI USE).
 - `normalize_search_text` — NFC compose + whitespace-collapse +
   length-cap for the query side of a language-agnostic lexical channel.
 - `WORD_SIMILARITY_THEORETICAL_BOUNDS`, `COSINE_DISTANCE_THEORETICAL_BOUNDS`.
-- 27 unit tests; no dependencies (stdlib only); typed (`py.typed`).
+- 28 unit tests; no dependencies (stdlib only); typed (`py.typed`).
 - Research grounding + paper manifest under `docs/research/`.

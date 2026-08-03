@@ -1,17 +1,17 @@
 """rankweave — language-agnostic hybrid-retrieval score fusion.
 
-Pure-Python (stdlib-only) fusion of lexical and semantic retrieval
-channels, plus Unicode NFC query normalization. Store-agnostic: bring
-your own dense (embedding) and lexical (character-trigram / BM25 /
-learned-sparse) channels; rankweave decides how to combine their
-scores.
+Pure-Python (stdlib-only) fusion of lexical, semantic, learned-sparse,
+and other retrieval channels, plus Unicode NFC query normalization.
+Store-agnostic: bring your own channels; rankweave decides how to
+combine their scores.
 
 Two fusion strategies, research-grounded (see ``docs/research/``):
 
 - ``convex_combination`` (default, "TM2C2") — Bruch, Gai & Ingber
   2023 (arXiv:2210.11934): a convex combination of theoretically
   min-max normalized scores; robust, distribution-preserving, no
-  training data needed.
+  training data needed. The public API supports both the common
+  two-channel pairing and explicit N-channel convex weights.
 - ``reciprocal_rank_fusion`` — Cormack, Clarke & Büttcher 2009: the
   non-parametric rank-only alternative.
 
@@ -42,6 +42,7 @@ from rankweave.score_fusion import (
     fuse_channel_scores,
     reciprocal_rank_fusion_score,
     theoretical_min_max_normalize,
+    weighted_convex_combination_score,
 )
 
 __version__ = "0.1.0"
@@ -58,5 +59,6 @@ __all__ = [
     "normalize_search_text",
     "reciprocal_rank_fusion_score",
     "theoretical_min_max_normalize",
+    "weighted_convex_combination_score",
     "__version__",
 ]
