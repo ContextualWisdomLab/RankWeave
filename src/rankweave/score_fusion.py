@@ -89,8 +89,11 @@ def theoretical_min_max_normalize(
     """
     lower_bound, upper_bound = bounds
     _require_finite(score, "score")
-    if not math.isfinite(lower_bound) or not math.isfinite(upper_bound):
-        raise ValueError("bounds must be finite")
+    try:
+        _require_finite(lower_bound, "bounds")
+        _require_finite(upper_bound, "bounds")
+    except ValueError as exc:
+        raise ValueError("bounds must be finite") from exc
     if upper_bound <= lower_bound:
         raise ValueError("bounds must satisfy upper > lower")
     normalized = (score - lower_bound) / (upper_bound - lower_bound)
