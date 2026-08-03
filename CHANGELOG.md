@@ -6,6 +6,15 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `tune_weighted_reciprocal_rank_fusion` for deterministic offline selection
+  of fixed convex weighted-RRF policies on a judged validation query set.
+- Immutable `WeightedRRFTuningTrial` and `WeightedRRFTuningReport` records
+  containing every candidate policy, complete evaluation evidence, objective
+  values, and the selected policy.
+- Explicit tuning objectives for macro nDCG, reciprocal rank, recall, and
+  precision, with first-candidate deterministic tie-breaking.
+
 ## [0.4.0] — 2026-08-03
 
 ### Added
