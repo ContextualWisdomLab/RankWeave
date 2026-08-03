@@ -5,8 +5,8 @@ Operating guide for automated agents working in this repo.
 ## What this is
 
 `rankweave` is a **pure-Python, stdlib-only** library for
-language-agnostic hybrid-retrieval score fusion, extracted unchanged
-in behavior from
+language-agnostic hybrid-retrieval score fusion and effectiveness evaluation,
+extracted from
 [ContextualWisdomLab/naruon](https://github.com/ContextualWisdomLab/naruon)
 Context Search under the lab's ONE SOURCE MULTI USE convention
 (standalone product *and* submodule-importable).
@@ -17,17 +17,21 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   library. Do not add a runtime dependency; if you think you need one,
   the feature probably belongs in the consumer, not here.
 - **Store-agnostic.** rankweave never talks to a database, an
-  embedding provider, or a search index. It fuses scores and normalizes
-  query text. Keep SQL, HTTP, and ORM concerns out.
+  embedding provider, or a search index. It fuses scores, evaluates rankings,
+  and normalizes query text. Keep SQL, HTTP, and ORM concerns out.
 - **Behavior parity with naruon.** This is an extraction, not a fork.
-  A behavior change here must be mirrored in naruon's
-  `services/hybrid_retrieval` (and vice versa) until naruon consumes
+  A behavior change in shared retrieval primitives must be mirrored in
+  naruon's `services/hybrid_retrieval` (and vice versa) until naruon consumes
   this package directly. Prefer additive, backward-compatible changes.
 - **Permissive license only** (Apache-2.0). Any added code or asset must
   be compatible.
-- **Research-grounded defaults.** Numeric defaults (alpha=0.7, eta=60,
-  the theoretical bounds) trace to the papers in `docs/research/`.
-  Changing a default requires citing the evidence.
+- **Research-grounded defaults and metrics.** Numeric defaults, metric
+  definitions, and gain/discount conventions trace to the papers in
+  `docs/research/`. Changing one requires citing the evidence and updating
+  hand-computed regression tests.
+- **Complete evaluation sets.** Aggregate evaluation must fail closed when
+  ranking and judgment query IDs differ; omitted queries must never silently
+  inflate metrics.
 - **Complete quality gates.** Production docstrings and both line and
   branch coverage must remain at 100%.
 - **Release metadata stays synchronized.** A release must update
@@ -50,6 +54,8 @@ python -m pip wheel . --no-deps --wheel-dir dist
 - `src/rankweave/score_fusion.py` — TM2C2 + per-candidate RRF primitives.
 - `src/rankweave/ranked_list_fusion.py` — complete-list score/rank fusion
   with immutable audit results.
+- `src/rankweave/evaluation.py` — precision, recall, RR, and graded nDCG
+  with immutable per-query and aggregate reports.
 - `src/rankweave/query_normalization.py` — NFC query normalization.
-- `tests/` — behavior tests (hand-computed expected values).
+- `tests/` — behavior tests with hand-computed expected values.
 - `docs/research/` — paper PDFs + citation manifest.

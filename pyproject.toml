@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "rankweave"
 version = "0.3.0"
-description = "Language-agnostic hybrid-retrieval score fusion (TM2C2 + RRF) and Unicode query normalization — pure-Python, store-agnostic."
+description = "Language-agnostic hybrid-retrieval score fusion, ranking evaluation, and Unicode query normalization — pure-Python, store-agnostic."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -17,6 +17,8 @@ keywords = [
     "rank-fusion",
     "reciprocal-rank-fusion",
     "rrf",
+    "retrieval-evaluation",
+    "ndcg",
     "dense-retrieval",
     "lexical-retrieval",
     "pgvector",

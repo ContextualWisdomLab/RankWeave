@@ -6,6 +6,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `evaluate_ranking` for precision@k, recall@k, reciprocal-rank@k, and
+  exponential-gain nDCG@k over graded relevance judgments.
+- `evaluate_rankings` and immutable per-query plus macro evaluation reports,
+  with fail-closed query-set matching so accidentally omitted queries cannot
+  inflate effectiveness estimates.
+
 ## [0.3.0] — 2026-08-03
 
 ### Added
