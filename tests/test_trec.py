@@ -15,7 +15,6 @@ from rankweave.trec import (
     parse_trec_run,
 )
 
-
 QRELS_TEXT = """
 1 0 doc-a 3
 1 0 doc-b 0
@@ -33,7 +32,6 @@ RUN_TEXT = """
 
 def test_parse_trec_qrels_preserves_entries_and_builds_judgment_mapping():
     qrels = parse_trec_qrels(QRELS_TEXT)
-
     assert qrels.entries == (
         TrecQrelEntry("1", "0", "doc-a", 3.0),
         TrecQrelEntry("1", "0", "doc-b", 0.0),
@@ -47,15 +45,13 @@ def test_parse_trec_qrels_preserves_entries_and_builds_judgment_mapping():
 
 
 def test_parse_trec_qrels_keeps_negative_only_query_in_mapping():
-    qrels = parse_trec_qrels("query 0 document -1\n")
-
-    assert qrels.relevance_by_query() == {"query": {}}
+    assert parse_trec_qrels("query 0 document -1\n").relevance_by_query() == {
+        "query": {}
+    }
 
 
 def test_parse_trec_qrels_ignores_blank_lines():
-    qrels = parse_trec_qrels("\n1 0 doc-a 1\n\n")
-
-    assert len(qrels.entries) == 1
+    assert len(parse_trec_qrels("\n1 0 doc-a 1\n\n").entries) == 1
 
 
 @pytest.mark.parametrize(
@@ -85,7 +81,6 @@ def test_parse_trec_qrels_rejects_non_text_input():
 
 def test_parse_trec_run_preserves_entries_and_uses_score_order():
     run = parse_trec_run(RUN_TEXT)
-
     assert run.run_id == "rankweave"
     assert run.entries == (
         TrecRunEntry("1", "Q0", "doc-a", 2, 0.9, "rankweave"),
@@ -104,8 +99,12 @@ def test_trec_run_score_ties_preserve_input_order_deterministically():
         "1 Q0 first 2 0.5 tied\n"
         "1 Q0 second 1 0.5 tied\n"
     )
-
     assert run.rankings_by_query() == {"1": ("first", "second")}
+
+
+def test_trec_run_accepts_zero_padded_decimal_rank():
+    run = parse_trec_run("1 Q0 doc-a 0001 0.5 run1\n")
+    assert run.entries[0].rank == 1
 
 
 @pytest.mark.parametrize(
@@ -118,8 +117,8 @@ def test_trec_run_score_ties_preserve_input_order_deterministically():
         ("1 Q0 doc-a 1.5 0.9 run", "line 1 rank must be a positive integer"),
         ("1 Q0 doc-a 1 nope run", "line 1 score must be a finite number"),
         ("1 Q0 doc-a 1 nan run", "line 1 score must be a finite number"),
-        ("1 Q0 doc-a 1 0.9 bad/tag", "line 1 run tag is invalid"),
-        ("1 Q0 doc-a 1 0.9 abcdefghijklmnopqrstu", "line 1 run tag is invalid"),
+        ("1 Q0 doc-a 1 0.9 bad-tag", "line 1 run tag is invalid"),
+        ("1 Q0 doc-a 1 0.9 abcdefghijklm", "line 1 run tag is invalid"),
     ],
 )
 def test_parse_trec_run_rejects_malformed_input(text, message):
@@ -159,10 +158,8 @@ def test_parse_trec_run_rejects_non_text_input():
 def test_trec_formatters_emit_canonical_round_trippable_text():
     qrels = parse_trec_qrels(QRELS_TEXT)
     run = parse_trec_run(RUN_TEXT)
-
     qrels_text = format_trec_qrels(qrels)
     run_text = format_trec_run(run)
-
     assert qrels_text.endswith("\n")
     assert run_text.endswith("\n")
     assert parse_trec_qrels(qrels_text) == qrels
@@ -178,7 +175,6 @@ def test_trec_formatters_reject_wrong_types():
 
 def test_evaluate_trec_run_uses_score_sorted_run_and_qrels():
     report = evaluate_trec_run(RUN_TEXT, QRELS_TEXT, cutoff=2)
-
     assert report.aggregate.query_count == 2
     assert report.query_metrics[0].query_id == "1"
     assert report.query_metrics[0].metrics.ndcg_at_k == 1.0
@@ -199,7 +195,6 @@ def test_trec_records_are_immutable():
     qrels = TrecQrels((qrel_entry,))
     run_entry = TrecRunEntry("1", "Q0", "doc-a", 1, 1.0, "run")
     run = TrecRun("run", (run_entry,))
-
     with pytest.raises(FrozenInstanceError):
         qrel_entry.relevance = 0.0
     with pytest.raises(FrozenInstanceError):
@@ -210,12 +205,65 @@ def test_trec_records_are_immutable():
         run.run_id = "other"
 
 
+def test_trec_containers_snapshot_list_inputs_as_tuples():
+    qrel_entries = [TrecQrelEntry("1", "0", "d", 1.0)]
+    run_entries = [TrecRunEntry("1", "Q0", "d", 1, 1.0, "run")]
+    qrels = TrecQrels(qrel_entries)
+    run = TrecRun("run", run_entries)
+    qrel_entries.clear()
+    run_entries.clear()
+    assert len(qrels.entries) == 1
+    assert len(run.entries) == 1
+    assert isinstance(qrels.entries, tuple)
+    assert isinstance(run.entries, tuple)
+
+
+@pytest.mark.parametrize(
+    "entry_factory",
+    [
+        lambda: TrecQrelEntry("bad query", "0", "doc", 1.0),
+        lambda: TrecQrelEntry("q", "0", "bad\ndoc", 1.0),
+        lambda: TrecQrelEntry("q", "0", "doc", math.inf),
+        lambda: TrecRunEntry("q", "Q0", "doc", 0, 1.0, "run"),
+        lambda: TrecRunEntry("q", "Q0", "doc", 1, math.nan, "run"),
+        lambda: TrecRunEntry("q", "Q1", "doc", 1, 1.0, "run"),
+        lambda: TrecRunEntry("q", "Q0", "doc", 1, 1.0, "bad-tag"),
+    ],
+)
+def test_public_entries_reject_unserializable_state(entry_factory):
+    with pytest.raises(ValueError):
+        entry_factory()
+
+
+def test_public_containers_reject_empty_or_inconsistent_state():
+    with pytest.raises(ValueError, match="at least one"):
+        TrecQrels(())
+    with pytest.raises(ValueError, match="at least one"):
+        TrecRun("run", ())
+    with pytest.raises(ValueError, match="run tag"):
+        TrecRun("other", (TrecRunEntry("1", "Q0", "d", 1, 1.0, "run"),))
+    with pytest.raises(ValueError, match="duplicate"):
+        TrecQrels(
+            (
+                TrecQrelEntry("1", "0", "d", 1.0),
+                TrecQrelEntry("1", "1", "d", 2.0),
+            )
+        )
+    with pytest.raises(ValueError, match="duplicate rank"):
+        TrecRun(
+            "run",
+            (
+                TrecRunEntry("1", "Q0", "a", 1, 2.0, "run"),
+                TrecRunEntry("1", "Q0", "b", 1, 1.0, "run"),
+            ),
+        )
+
+
 def test_formatting_preserves_finite_float_round_trip():
     qrels = TrecQrels((TrecQrelEntry("1", "0", "d", math.pi),))
     run = TrecRun(
         "run",
         (TrecRunEntry("1", "Q0", "d", 1, math.pi, "run"),),
     )
-
     assert parse_trec_qrels(format_trec_qrels(qrels)) == qrels
     assert parse_trec_run(format_trec_run(run)) == run
