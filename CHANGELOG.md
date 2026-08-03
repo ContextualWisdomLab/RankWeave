@@ -6,6 +6,25 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-08-04
+
+### Added
+- `compare_ranking_reports` for fail-closed paired comparison of two complete
+  retrieval evaluation reports on exactly matching query identifiers.
+- `compare_rankings` for end-to-end evaluation and statistical comparison of
+  baseline and candidate ranking maps against one judged query set.
+- Immutable `QueryMetricDifference`, `PairedRandomizationResult`, and
+  `RankingComparisonReport` records that preserve every aligned per-query
+  metric value and the complete significance-test configuration.
+- Exact Fisher sign randomization for up to 16 non-zero query differences and
+  deterministic plus-one-corrected Monte Carlo randomization above that bound.
+- Two-sided, candidate-greater, and candidate-less alternatives for precision,
+  recall, reciprocal rank, and graded nDCG at the shared cutoff.
+
+### Changed
+- Package metadata and wheel smoke tests now expose and verify the statistical
+  comparison API on Python 3.10–3.13.
+
 ## [0.6.0] — 2026-08-04
 
 ### Added

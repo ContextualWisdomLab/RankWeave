@@ -5,8 +5,9 @@ Operating guide for automated agents working in this repo.
 ## What this is
 
 `rankweave` is a **pure-Python, stdlib-only** library for
-language-agnostic hybrid-retrieval fusion, effectiveness evaluation, offline
-policy tuning, and strict TREC interchange, extracted from
+language-agnostic hybrid-retrieval fusion, effectiveness evaluation, paired
+statistical comparison, offline policy tuning, and strict TREC interchange,
+extracted from
 [ContextualWisdomLab/naruon](https://github.com/ContextualWisdomLab/naruon)
 Context Search under the lab's ONE SOURCE MULTI USE convention
 (standalone product *and* submodule-importable).
@@ -17,22 +18,35 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   Do not add a runtime dependency; if you think you need one, the feature
   probably belongs in the consumer, not here.
 - **Store-agnostic.** rankweave never talks to a database, embedding provider,
-  or search index. It fuses scores, evaluates rankings, selects offline
-  policies, parses interchange artifacts, and normalizes query text. Keep SQL,
-  HTTP, and ORM concerns out.
+  or search index. It fuses scores, evaluates and compares rankings, selects
+  offline policies, parses interchange artifacts, and normalizes query text.
+  Keep SQL, HTTP, and ORM concerns out.
 - **Behavior parity with naruon.** A behavior change in shared retrieval
   primitives must be mirrored in naruon's `services/hybrid_retrieval` (and
   vice versa) until naruon consumes this package directly. Prefer additive,
   backward-compatible changes.
 - **Permissive license only** (Apache-2.0). Any added code or asset must be
   compatible.
-- **Research-grounded defaults, metrics, and selection.** Numeric defaults,
-  metric definitions, gain/discount conventions, tuning objectives, and
-  interchange assumptions trace to the sources in `docs/research/`. Changing
-  one requires citing evidence and updating hand-computed regression tests.
-- **Complete evaluation sets.** Aggregate evaluation and tuning must fail
-  closed when ranking and judgment query IDs differ; omitted queries must
-  never silently inflate metrics.
+- **Research-grounded defaults, metrics, comparison, and selection.** Numeric
+  defaults, metric definitions, significance procedures, gain/discount
+  conventions, tuning objectives, and interchange assumptions trace to the
+  sources in `docs/research/`. Changing one requires citing evidence and
+  updating hand-computed regression tests.
+- **Complete evaluation sets.** Aggregate evaluation, comparison, and tuning
+  must fail closed when ranking and judgment query IDs differ; omitted queries
+  must never silently inflate metrics or significance.
+- **Paired comparison is identifier-aligned.** Candidate metric values must be
+  joined to baseline values by query identifier, never tuple position. Require
+  the same positive cutoff, unique hashable query IDs, and selected metric
+  values in `[0, 1]` before testing.
+- **Deterministic significance evidence.** Enumerate small paired sign spaces
+  exactly. Larger randomization tests use a local seeded `random.Random`, never
+  global random state, and retain the seed, draw count, method, alternative,
+  observed mean difference, and complete per-query differences.
+- **Significance is not business value.** Documentation and examples must
+  report effect size with the p-value and must not present statistical
+  significance as practical significance, independent test performance, or a
+  commercial valuation.
 - **Validation/test separation.** Tuning selects on validation judgments.
   Documentation and examples must tell consumers to evaluate the selected
   policy once on a separate held-out test set before making a quality claim.
@@ -80,6 +94,8 @@ python -m pip wheel . --no-deps --wheel-dir dist
   with immutable audit results.
 - `src/rankweave/evaluation.py` — precision, recall, RR, and graded nDCG
   with immutable per-query and aggregate reports.
+- `src/rankweave/comparison.py` — exact and deterministic Monte Carlo paired
+  randomization with complete per-query metric evidence.
 - `src/rankweave/tuning.py` — deterministic validation-set selection for
   fixed weighted-RRF policies.
 - `src/rankweave/trec.py` — strict TREC qrels/run parsing, formatting, and
@@ -91,5 +107,7 @@ python -m pip wheel . --no-deps --wheel-dir dist
   single-flight behavior, and failure modes for autonomous maintenance.
 - `docs/trec-interoperability.md` — interchange contracts and compatibility
   differences from reference TREC tooling.
+- `docs/superpowers/specs/` and `docs/superpowers/plans/` — reviewed product
+  design and executable implementation plans.
 - `tests/` — behavior tests with hand-computed expected values.
 - `docs/research/` — paper, standard, and reference-implementation manifest.
