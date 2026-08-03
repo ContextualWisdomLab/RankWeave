@@ -6,6 +6,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-03
+
 ### Added
 - `weighted_reciprocal_rank_fusion_score` and
   `weighted_reciprocal_rank_fuse` for fixed convex channel-reliability
