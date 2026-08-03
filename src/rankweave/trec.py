@@ -1,6 +1,7 @@
 """Strict adapters for standard TREC run and relevance-judgment text."""
 
 import math
+import operator
 import re
 import unicodedata
 from collections.abc import Iterable, Iterator
@@ -9,7 +10,9 @@ from dataclasses import dataclass
 from rankweave._validation import _require_finite, _require_positive_integer
 from rankweave.evaluation import RankingEvaluationReport, evaluate_rankings
 
-_RUN_TAG_PATTERN = re.compile(r"[A-Za-z0-9]{1,12}")
+_RUN_TAG_PATTERN = re.compile(r"[A-Za-z0-9_.-]{1,20}")
+_QREL_RELEVANCE_MIN = -127
+_QREL_RELEVANCE_MAX = 127
 
 
 def _require_token(value: str, label: str) -> str:
@@ -30,12 +33,30 @@ def _require_token(value: str, label: str) -> str:
 
 
 def _require_run_tag(value: str, label: str) -> str:
-    """Require a conservative NIST-compatible alphanumeric run tag."""
+    """Require the portable NIST run-tag profile used by RankWeave."""
     if not isinstance(value, str) or _RUN_TAG_PATTERN.fullmatch(value) is None:
         raise ValueError(
-            f"{label} must contain 1 to 12 ASCII letters or digits"
+            f"{label} must contain 1 to 20 ASCII letters, digits, periods, "
+            "underscores, or hyphens"
         )
     return value
+
+
+def _require_qrel_relevance(value: int, label: str) -> int:
+    """Require a signed integer in the standard ``trec_eval`` qrels range."""
+    error_message = (
+        f"{label} must be an integer within "
+        f"[{_QREL_RELEVANCE_MIN}, {_QREL_RELEVANCE_MAX}]"
+    )
+    if isinstance(value, bool):
+        raise ValueError(error_message)
+    try:
+        integer_value = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(error_message) from exc
+    if not _QREL_RELEVANCE_MIN <= integer_value <= _QREL_RELEVANCE_MAX:
+        raise ValueError(error_message)
+    return integer_value
 
 
 def _snapshot_entries(entries: Iterable[object], label: str) -> tuple[object, ...]:
@@ -56,15 +77,15 @@ class TrecQrelEntry:
     query_id: str
     iteration: str
     document_id: str
-    relevance: float
+    relevance: int
 
     def __post_init__(self) -> None:
         """Validate and normalize one manually constructed qrels entry."""
         _require_token(self.query_id, "query_id")
         _require_token(self.iteration, "iteration")
         _require_token(self.document_id, "document_id")
-        _require_finite(self.relevance, "relevance")
-        object.__setattr__(self, "relevance", float(self.relevance))
+        relevance = _require_qrel_relevance(self.relevance, "relevance")
+        object.__setattr__(self, "relevance", relevance)
 
 
 @dataclass(frozen=True)
@@ -89,17 +110,17 @@ class TrecQrels:
             judged_documents.add(judgment_key)
         object.__setattr__(self, "entries", entries)
 
-    def relevance_by_query(self) -> dict[str, dict[str, float]]:
+    def relevance_by_query(self) -> dict[str, dict[str, int]]:
         """Return evaluation judgments, omitting negative unjudged grades.
 
         Query identifiers remain present even when every entry for the query
         has a negative grade. This preserves complete-query-set validation in
         :func:`rankweave.evaluate_rankings`.
         """
-        relevance_by_query: dict[str, dict[str, float]] = {}
+        relevance_by_query: dict[str, dict[str, int]] = {}
         for entry in self.entries:
             query_relevance = relevance_by_query.setdefault(entry.query_id, {})
-            if entry.relevance >= 0.0:
+            if entry.relevance >= 0:
                 query_relevance[entry.document_id] = entry.relevance
         return relevance_by_query
 
@@ -185,13 +206,13 @@ class TrecRun:
         }
 
 
-def _iter_nonempty_lines(text: str, label: str) -> Iterator[tuple[int, str]]:
-    """Yield physical line numbers and stripped non-empty lines."""
+def _iter_content_lines(text: str, label: str) -> Iterator[tuple[int, str]]:
+    """Yield physical line numbers and stripped non-comment content lines."""
     if not isinstance(text, str):
         raise ValueError(f"{label} must be text")
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         stripped_line = raw_line.strip()
-        if stripped_line:
+        if stripped_line and not stripped_line.startswith("#"):
             yield line_number, stripped_line
 
 
@@ -206,38 +227,44 @@ def _parse_finite_float(raw_value: str, label: str) -> float:
     return parsed_value
 
 
+def _parse_qrel_relevance(raw_value: str, line_number: int) -> int:
+    """Parse one bounded ASCII-decimal TREC qrels relevance field."""
+    label = f"line {line_number} relevance"
+    if re.fullmatch(r"[+-]?[0-9]+", raw_value) is None:
+        raise ValueError(
+            f"{label} must be an integer within "
+            f"[{_QREL_RELEVANCE_MIN}, {_QREL_RELEVANCE_MAX}]"
+        )
+    return _require_qrel_relevance(int(raw_value), label)
+
+
 def _parse_positive_rank(raw_rank: str, line_number: int) -> int:
     """Parse a positive ASCII-decimal TREC rank field."""
     if not raw_rank.isascii() or not raw_rank.isdecimal():
-        raise ValueError(
-            f"line {line_number} rank must be a positive integer"
-        )
+        raise ValueError(f"line {line_number} rank must be a positive integer")
     parsed_rank = int(raw_rank)
     if parsed_rank < 1:
-        raise ValueError(
-            f"line {line_number} rank must be a positive integer"
-        )
+        raise ValueError(f"line {line_number} rank must be a positive integer")
     return parsed_rank
 
 
 def parse_trec_qrels(qrels_text: str) -> TrecQrels:
     """Parse strict four-column TREC qrels text with line-aware errors.
 
-    The expected columns are ``query iteration document relevance``. Finite
-    negative grades are preserved in the audit entries and omitted when
-    converting to RankWeave evaluation judgments, matching their common use
-    as an explicit unjudged marker.
+    The expected columns are ``query iteration document relevance``. Relevance
+    must be a signed integer in ``[-127, 127]``. Negative grades are preserved
+    in the audit entries and omitted from evaluation judgments as explicit
+    unjudged markers. Blank lines and lines whose first non-whitespace character
+    is ``#`` are ignored while physical error line numbers are preserved.
     """
     entries = []
     judged_documents: set[tuple[str, str]] = set()
-    for line_number, line in _iter_nonempty_lines(qrels_text, "qrels_text"):
+    for line_number, line in _iter_content_lines(qrels_text, "qrels_text"):
         fields = line.split()
         if len(fields) != 4:
             raise ValueError(f"line {line_number} must contain 4 fields")
         query_id, iteration, document_id, raw_relevance = fields
-        relevance = _parse_finite_float(
-            raw_relevance, f"line {line_number} relevance"
-        )
+        relevance = _parse_qrel_relevance(raw_relevance, line_number)
         judgment_key = (query_id, document_id)
         if judgment_key in judged_documents:
             raise ValueError(
@@ -263,17 +290,25 @@ def parse_trec_run(run_text: str) -> TrecRun:
 
     The expected columns are ``query Q0 document rank score run-tag``. The
     parser validates the literal ``Q0`` field, positive unique ranks, finite
-    scores, one document per query, and one conservative NIST run tag.
+    scores, one document per query, and one portable NIST run tag. Blank lines
+    and lines whose first non-whitespace character is ``#`` are ignored.
     """
     entries = []
     run_id: str | None = None
     documents_by_query: dict[str, set[str]] = {}
     ranks_by_query: dict[str, set[int]] = {}
-    for line_number, line in _iter_nonempty_lines(run_text, "run_text"):
+    for line_number, line in _iter_content_lines(run_text, "run_text"):
         fields = line.split()
         if len(fields) != 6:
             raise ValueError(f"line {line_number} must contain 6 fields")
-        query_id, iteration, document_id, raw_rank, raw_score, entry_run_id = fields
+        (
+            query_id,
+            iteration,
+            document_id,
+            raw_rank,
+            raw_score,
+            entry_run_id,
+        ) = fields
         if iteration != "Q0":
             raise ValueError(f"line {line_number} second field must be Q0")
         rank = _parse_positive_rank(raw_rank, line_number)
@@ -328,7 +363,7 @@ def format_trec_qrels(qrels: TrecQrels) -> str:
         raise ValueError("qrels must be TrecQrels")
     return "".join(
         f"{entry.query_id} {entry.iteration} {entry.document_id} "
-        f"{_format_float(entry.relevance)}\n"
+        f"{entry.relevance}\n"
         for entry in qrels.entries
     )
 

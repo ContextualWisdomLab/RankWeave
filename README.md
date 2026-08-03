@@ -1,43 +1,37 @@
-# rankweave
+# RankWeave
 
-**Language-agnostic hybrid-retrieval fusion, evaluation, tuning, and strict
-TREC interchange — pure Python and store-agnostic.**
+**Dependency-free, store-agnostic retrieval fusion, evaluation, tuning, and
+strict TREC interchange for Python 3.10+.**
 
 RankWeave combines lexical, dense, learned-sparse, graph, and other retrieval
-channels into deterministic rankings. It evaluates those rankings against
-relevance judgments, selects fixed weighted-RRF policies on validation data,
-and reads or writes standard TREC run and qrels artifacts. The runtime uses
-only the Python standard library and has no dependency on a database,
-embedding provider, search engine, or web framework.
+channels into deterministic rankings. It then evaluates those rankings against
+relevance judgments and can select a fixed weighted-RRF policy on a validation
+set. The runtime uses only the Python standard library.
 
 RankWeave originated in the Context Search engine of
-[naruon](https://github.com/ContextualWisdomLab/naruon) under Contextual Wisdom
-Lab's ONE SOURCE MULTI USE convention: useful as a standalone package and as a
-small reusable module inside a larger system.
+[ContextualWisdomLab/naruon](https://github.com/ContextualWisdomLab/naruon)
+and remains suitable both as a standalone package and as a small MSA module.
 
 ## Why RankWeave
 
-- **Research-grounded fusion.** The default convex strategy follows TM2C2;
-  equal-weight and fixed-weight Reciprocal Rank Fusion are available for
-  rank-only channels.
-- **Production-shaped APIs.** Pass complete score-bearing or rank-only result
-  lists instead of rebuilding per-item fusion inputs yourself.
-- **Auditable decisions.** Immutable results preserve every channel's score,
-  rank, weight, and contribution, including explicit missing evidence.
-- **Closed experiment loop.** Built-in P@k, R@k, RR@k, and graded nDCG@k
-  evaluation feeds deterministic weighted-RRF policy selection.
-- **TREC interoperability.** Strict qrels and run parsing, canonical
-  formatting, score-based ordering, and direct evaluation connect RankWeave to
-  established information-retrieval benchmarks.
-- **Fail-closed contracts.** Invalid numeric values, duplicate identifiers,
-  mismatched query sets, malformed policies, and invalid interchange records
-  raise stable `ValueError` exceptions rather than silently changing results.
-- **Portable core.** Python 3.10+, typed, Apache-2.0, and no runtime
-  dependencies.
+- **Research-grounded fusion:** TM2C2 convex score fusion and reciprocal-rank
+  fusion, including fixed channel-reliability weights.
+- **Production-shaped APIs:** fuse complete scored or rank-only result lists,
+  not only one candidate at a time.
+- **Auditable decisions:** immutable records preserve each channel's score,
+  rank, weight, and contribution, including missing evidence.
+- **Closed experiment loop:** P@k, R@k, RR@k, graded nDCG@k, and deterministic
+  validation-set policy selection.
+- **TREC interoperability:** strict qrels/run parsing, canonical formatting,
+  score-ordered rankings, comment handling, and direct evaluation.
+- **Fail-closed contracts:** malformed numeric values, duplicate identifiers,
+  incomplete query sets, and invalid interchange records raise `ValueError`
+  instead of silently changing results.
+- **Portable core:** typed, Apache-2.0, Python 3.10+, and no runtime dependency.
 
-## Install
+## Installation
 
-Until PyPI Trusted Publishing is configured, install directly from GitHub:
+Until PyPI Trusted Publishing is enabled, install from GitHub:
 
 ```bash
 pip install "rankweave @ git+https://github.com/ContextualWisdomLab/RankWeave.git"
@@ -57,7 +51,7 @@ pip install -e ".[dev]"
 from rankweave import FusionSettings, fuse_channel_scores
 
 score = fuse_channel_scores(
-    word_similarity_score=0.62,       # lexical score in [0, 1]
+    word_similarity_score=0.62,       # lexical similarity in [0, 1]
     cosine_distance=0.30,             # dense distance in [0, 2]
     channel_ranks={"lexical": 1, "dense": 1},
     settings=FusionSettings(),        # TM2C2, semantic alpha = 0.7
@@ -75,8 +69,8 @@ score = weighted_convex_combination_score(
 )
 ```
 
-Missing or `None` scores contribute the theoretical minimum, zero. Weights
-must be finite, non-negative, and sum to one.
+Weights must be finite, non-negative, and sum to one. Missing or `None` scores
+contribute the theoretical minimum, zero.
 
 ## Fuse complete scored lists
 
@@ -98,8 +92,8 @@ assert round(best.score, 2) == 0.62
 ```
 
 Each `FusedScoredItem` contains immutable `WeightedChannelContribution`
-records. An absent channel remains visible with `score=None` and a zero
-contribution.
+records. An absent channel remains visible with `score=None` and contribution
+zero.
 
 ## Fuse complete rank-only lists
 
@@ -117,10 +111,9 @@ results = reciprocal_rank_fuse(
 )
 
 assert results[0].item_id == "document-b"
-assert results[0].channel_ranks == (("lexical", 2), ("dense", 1))
 ```
 
-Fixed-weight RRF for channels with different known reliability:
+Fixed-weight RRF:
 
 ```python
 from rankweave import weighted_reciprocal_rank_fuse
@@ -140,10 +133,8 @@ assert best.channel_contributions[0].rank == 2
 assert best.channel_contributions[1].rank == 1
 ```
 
-Every `FusedWeightedRankedItem` records each channel's rank, convex weight,
-and reciprocal contribution. Missing evidence remains visible with
-`rank=None` and contribution zero. Weights are fixed for one call; RankWeave
-does not infer online query- or item-adaptive weights.
+Every weighted-RRF result records each channel's rank, convex weight, and
+reciprocal contribution. Missing evidence remains visible with `rank=None`.
 
 ## Evaluate ranking quality
 
@@ -170,21 +161,15 @@ Evaluation contracts are explicit:
 
 - positive grades count as relevant for precision, recall, and reciprocal rank;
 - unjudged items receive grade zero;
-- precision uses the requested cutoff as its denominator, so short runs are
-  penalized consistently;
+- precision uses the requested cutoff as its denominator;
 - reciprocal rank is cutoff-bound;
-- nDCG uses exponential gain (`2**relevance - 1`) and logarithmic discount;
+- nDCG uses gain `2**relevance - 1` and logarithmic discount;
 - ranking and judgment mappings must contain exactly the same query IDs.
-  Represent a no-result query with an empty sequence rather than omitting it.
 
-The immutable report preserves per-query metrics and macro averages. This
-nDCG variant is intentionally documented and is not claimed to be numerically
-identical to `trec_eval`'s default identity-gain configuration.
+The nDCG variant is documented and is not claimed to be numerically identical
+to `trec_eval`'s default identity-gain configuration.
 
 ## Tune a weighted-RRF policy
-
-Provide complete channel rankings, held-out validation judgments, and named
-candidate policies:
 
 ```python
 from rankweave import tune_weighted_reciprocal_rank_fusion
@@ -215,26 +200,30 @@ assert report.best_policy_id == "lexical-heavy"
 ```
 
 The default objective is macro nDCG@k. Macro reciprocal rank, recall, and
-precision are also supported through exported objective constants. Every
-candidate produces an immutable `WeightedRRFTuningTrial` containing its
-weights, objective value, and complete `RankingEvaluationReport`. Exact ties
-select the first candidate, preserving mapping insertion order.
+precision are also supported. Exact ties select the first candidate in mapping
+insertion order. This is validation-set model selection: evaluate the selected
+policy once more on an independent held-out test set before reporting final
+quality.
 
-This is validation-set model selection. Measure the chosen policy once more on
-a separate held-out test set before making a production quality claim.
-
-## Read and evaluate TREC artifacts
+## Read, write, and evaluate TREC artifacts
 
 ```python
-from rankweave import evaluate_trec_run, parse_trec_qrels, parse_trec_run
+from rankweave import (
+    evaluate_trec_run,
+    format_trec_qrels,
+    parse_trec_qrels,
+    parse_trec_run,
+)
 
 qrels_text = """\
+# topic judgments
 q1 0 document-a 2
 q1 0 document-b 0
 """
 run_text = """\
-q1 Q0 document-a 1 0.93 rw1
-q1 Q0 document-b 2 0.42 rw1
+# submitted run
+q1 Q0 document-a 1 0.93 NIST-run_1
+q1 Q0 document-b 2 0.42 NIST-run_1
 """
 
 qrels = parse_trec_qrels(qrels_text)
@@ -242,53 +231,58 @@ run = parse_trec_run(run_text)
 report = evaluate_trec_run(run_text, qrels_text, cutoff=10)
 
 assert run.rankings_by_query()["q1"][0] == "document-a"
-assert qrels.relevance_by_query()["q1"]["document-a"] == 2.0
+assert qrels.relevance_by_query()["q1"]["document-a"] == 2
+assert format_trec_qrels(qrels).startswith("q1 0 document-a 2")
 assert report.aggregate.mean_ndcg_at_k == 1.0
 ```
 
-The TREC adapter enforces four-column qrels and six-column run records, literal
-`Q0`, finite numeric fields, positive ranks, unique documents and submitted
-ranks per query, one run tag, and a conservative 1–12 character
-ASCII-alphanumeric run tag. Public dataclass construction is validated too;
-callers cannot bypass parser contracts and then serialize malformed state.
+### TREC contracts
 
-Runs are evaluated in decreasing score order, matching TREC tool behavior
-rather than trusting the submitted rank column. Exact score ties preserve input
-order as a deterministic RankWeave extension. Negative qrels are retained in
-the immutable audit artifact and omitted from evaluation as explicit unjudged
-markers.
+- qrels content records have exactly four fields;
+- qrels relevance is a signed ASCII-decimal integer in `[-127, 127]`;
+- run content records have exactly six fields and literal `Q0`;
+- run ranks are positive ASCII-decimal integers;
+- run scores are finite real numbers;
+- one document and one submitted rank are allowed per query;
+- a run uses one tag consisting of 1–20 ASCII letters, digits, periods,
+  underscores, or hyphens;
+- blank lines and `#` comment lines are ignored while physical diagnostic line
+  numbers are preserved.
 
-See [TREC interoperability](docs/trec-interoperability.md) for complete
-contracts and compatibility notes.
+Runs are evaluated in decreasing score order rather than trusting the submitted
+rank column. Exact score ties preserve source order as RankWeave's documented
+deterministic extension. Negative qrels remain in the immutable audit artifact
+and are omitted from evaluation as explicit unjudged markers.
+
+See [TREC interoperability](docs/trec-interoperability.md) for the full contract
+and deliberate differences from permissive reference-tool behavior.
+
+## Input and ordering guarantees
+
+- all numeric fusion and evaluation inputs must be finite;
+- direct convex scores and weights obey their documented domains;
+- RRF ranks, eta, cutoffs, and limits are positive integers, not booleans;
+- relevance grades used by the generic evaluation API are finite and
+  non-negative;
+- item identifiers are hashable and unique within a channel or ranking;
+- complete-list APIs use deterministic first-seen ordering for exact ties;
+- public result, evaluation, tuning, and TREC records are frozen dataclasses.
 
 ## Hourly governed development loop
 
-The repository includes an hourly workflow that performs:
+The default branch contains a scheduled workflow at minute 17 of every hour:
 
 `PR review/merge scan → review-feedback repair → exact-head revalidation → one
 bounded buyer-visible product task when both queues are empty`.
 
-PR governance is delegated to immutable, commit-pinned workflows in the
-organization's central `.github` repository. Product development is
-single-flight and uses GitHub's Copilot agent-tasks API only when a
-user-to-server `COPILOT_GITHUB_TOKEN` is configured. Missing credentials,
-unknown task states, task-list failures, or any open PR block new work.
+PR governance uses immutable, commit-pinned reusable workflows from the
+organization's central `.github` repository. New Copilot agent tasks require a
+user-to-server secret named `COPILOT_GITHUB_TOKEN` with repository-scoped Agent
+Tasks read/write permission. Missing credentials, unknown task states,
+task-list failures, failed governance jobs, or any open PR block new work.
 
 See [Hourly commercialization loop](docs/operations/hourly-commercialization-loop.md)
-for setup, permissions, failure modes, and verification.
-
-## Input and ordering guarantees
-
-- All numeric fusion and evaluation inputs must be finite.
-- Direct convex scores and weights obey their documented domains.
-- RRF ranks, eta, cutoffs, and limits must be positive integers; booleans and
-  fractional values are rejected.
-- Relevance grades must be finite and non-negative.
-- Item identifiers must be hashable and unique within a channel or ranking.
-- Complete-list APIs use deterministic first-seen ordering for exact score
-  ties.
-- TREC containers snapshot iterable inputs and reject inconsistent state.
-- Public result, evaluation, tuning, and TREC records are frozen dataclasses.
+for setup, permissions, and failure modes.
 
 ## API overview
 
@@ -297,44 +291,31 @@ for setup, permissions, failure modes, and verification.
 | `FusionSettings` | Immutable strategy and scalar fusion parameters. |
 | `fuse_channel_scores(...)` | Fuse one lexical+dense candidate. |
 | `weighted_convex_combination_score(...)` | N-channel scalar convex fusion. |
-| `weighted_convex_fuse(...)` | Complete scored-list convex fusion with audit records. |
+| `weighted_convex_fuse(...)` | Complete scored-list fusion with audit records. |
 | `reciprocal_rank_fusion_score(...)` | Equal-weight scalar RRF. |
-| `reciprocal_rank_fuse(...)` | Complete rank-list RRF with rank trails. |
+| `reciprocal_rank_fuse(...)` | Complete rank-list RRF. |
 | `weighted_reciprocal_rank_fusion_score(...)` | Fixed-weight scalar RRF. |
-| `weighted_reciprocal_rank_fuse(...)` | Complete fixed-weight RRF with contribution trails. |
-| `evaluate_ranking(...)` | P@k, R@k, RR@k, and graded nDCG@k for one ranking. |
-| `evaluate_rankings(...)` | Per-query and macro evaluation for a query set. |
-| `tune_weighted_reciprocal_rank_fusion(...)` | Select a fixed weighted-RRF policy on validation judgments. |
-| `parse_trec_qrels(...)`, `parse_trec_run(...)` | Parse strict standard interchange text. |
-| `format_trec_qrels(...)`, `format_trec_run(...)` | Emit canonical validated interchange text. |
-| `evaluate_trec_run(...)` | Parse, score-order, and evaluate one run against qrels. |
-| `normalize_search_text(...)` | NFC composition, whitespace collapse, and length cap. |
-
-## Query-normalization contract
-
-Character-trigram lexical retrieval is language-agnostic only when query and
-indexed documents fold identically. `normalize_search_text` performs NFC
-composition and whitespace shaping. Accent folding and lowercasing belong in
-one store-side normalization function applied identically to indexed text and
-bound queries.
+| `weighted_reciprocal_rank_fuse(...)` | Complete fixed-weight RRF. |
+| `evaluate_ranking(...)` | P@k, R@k, RR@k, and graded nDCG@k. |
+| `evaluate_rankings(...)` | Per-query and macro evaluation. |
+| `tune_weighted_reciprocal_rank_fusion(...)` | Select a validation policy. |
+| `parse_trec_qrels(...)`, `parse_trec_run(...)` | Parse strict TREC text. |
+| `format_trec_qrels(...)`, `format_trec_run(...)` | Emit canonical text. |
+| `evaluate_trec_run(...)` | Evaluate one score-ordered run against qrels. |
+| `normalize_search_text(...)` | NFC composition, whitespace collapse, and cap. |
 
 ## Research and standards
 
-- **Bruch, Gai & Ingber (2023).** *An Analysis of Fusion Functions for
-  Hybrid Retrieval.* ACM TOIS 42(1), arXiv:2210.11934 — TM2C2, theoretical
-  normalization, multi-system extension, and sample-efficient tuning.
-- **Cormack, Clarke & Büttcher (2009).** *Reciprocal Rank Fusion outperforms
-  Condorcet and individual Rank Learning Methods.* SIGIR 2009 — RRF and the
-  default `eta=60`.
-- **Samuel et al. (2025).** *MMMORRF: Multimodal Multilingual Modularized
-  Reciprocal Rank Fusion.* SIGIR 2025, DOI: 10.1145/3726302.3730157 —
-  evidence for weighted RRF when channel reliability differs.
-- **Järvelin & Kekäläinen (2002).** *Cumulated Gain-based Evaluation of IR
-  Techniques.* ACM TOIS 20(4), DOI: 10.1145/582415.582418 — graded gain,
-  rank discounting, and ideal-ranking normalization.
-- **NIST TREC and `trec_eval`.** Four-column qrels, six-column submitted runs,
-  score-order evaluation, and reference effectiveness conventions.
-- **UAX #15.** Unicode NFC normalization.
+- Bruch, Gai & Ingber (2023), *An Analysis of Fusion Functions for Hybrid
+  Retrieval* — TM2C2 and theoretical normalization.
+- Cormack, Clarke & Büttcher (2009), *Reciprocal Rank Fusion outperforms
+  Condorcet and individual Rank Learning Methods* — RRF and `eta=60`.
+- Samuel et al. (2025), *MMMORRF* — weighted RRF when channel reliability
+  differs.
+- Järvelin & Kekäläinen (2002), *Cumulated Gain-based Evaluation of IR
+  Techniques* — graded gain and ideal-ranking normalization.
+- NIST TREC and `trec_eval` — interchange and evaluation reference behavior.
+- Unicode UAX #15 — NFC normalization.
 
 Detailed citations and redistribution notes are in
 [`docs/research/`](docs/research/).

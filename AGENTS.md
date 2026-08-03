@@ -41,8 +41,12 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   iteration or nondeterministic parallel reduction.
 - **Strict TREC boundaries.** Four-column qrels and six-column run artifacts
   must reject malformed, duplicate, non-finite, or unserializable state before
-  evaluation. Run rankings are determined by descending score; exact score
-  ties preserve input order as RankWeave's documented deterministic extension.
+  evaluation. Qrels relevance is a signed ASCII-decimal integer in
+  `[-127, 127]`; portable run tags use 1–20 ASCII letters, digits, periods,
+  underscores, or hyphens. Blank and `#` comment lines are ignored without
+  losing physical diagnostic line numbers. Run rankings are determined by
+  descending score; exact score ties preserve input order as RankWeave's
+  documented deterministic extension.
 - **Central automation trust boundary.** Repository workflows may call the
   reusable PR-governance workflows only at an immutable central commit SHA.
   Agent-task creation requires a user-to-server `COPILOT_GITHUB_TOKEN`; never

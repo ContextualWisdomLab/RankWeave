@@ -1,103 +1,100 @@
-# Research grounding — rankweave
+# Research grounding — RankWeave
 
-rankweave's defaults, metric conventions, tuning workflow, and interchange
-contracts are not arbitrary; each is tied to published evidence or an
-authoritative reference implementation. This directory preserves citations so
-the grounding travels with the code.
+RankWeave's defaults, metric conventions, tuning workflow, and interchange
+contracts are tied to published evidence or an authoritative reference
+implementation. This directory preserves that grounding with the code.
 
 ## Papers
 
-| File | Citation | License / redistribution |
-|---|---|---|
-| `pdfs/bruch-gai-ingber-2023-analysis-fusion-functions-hybrid-retrieval.pdf` | Bruch, S., Gai, S., & Ingber, A. (2023). *An Analysis of Fusion Functions for Hybrid Retrieval.* ACM Transactions on Information Systems 42(1). arXiv:2210.11934. | cite-only pending license confirmation |
-| `pdfs/cormack-clarke-buettcher-2009-reciprocal-rank-fusion.pdf` | Cormack, G. V., Clarke, C. L. A., & Büttcher, S. (2009). *Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods.* SIGIR 2009. | cite-only pending license confirmation |
-| — | Samuel, S., et al. (2025). *MMMORRF: Multimodal Multilingual Modularized Reciprocal Rank Fusion.* SIGIR 2025. arXiv:2503.20698. DOI: 10.1145/3726302.3730157. | cite-only; no redistributed copy |
-| — | Järvelin, K., & Kekäläinen, J. (2002). *Cumulated Gain-based Evaluation of IR Techniques.* ACM Transactions on Information Systems 20(4), 422–446. DOI: 10.1145/582415.582418. | cite-only; no redistributed copy |
+| Citation | Grounds |
+|---|---|
+| Bruch, Gai & Ingber (2023), *An Analysis of Fusion Functions for Hybrid Retrieval*, ACM TOIS 42(1), arXiv:2210.11934 | Default TM2C2 convex fusion, theoretical normalization, multi-system extension, and sample-efficient offline tuning. |
+| Cormack, Clarke & Büttcher (2009), *Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods*, SIGIR 2009 | RRF and the default `eta=60`. |
+| Samuel et al. (2025), *MMMORRF: Multimodal Multilingual Modularized Reciprocal Rank Fusion*, SIGIR 2025, DOI: 10.1145/3726302.3730157 | Evidence for weighted RRF when retrieval channels have different reliability. |
+| Järvelin & Kekäläinen (2002), *Cumulated Gain-based Evaluation of IR Techniques*, ACM TOIS 20(4), DOI: 10.1145/582415.582418 | Graded cumulative gain, logarithmic rank discounting, and ideal-ranking normalization. |
 
-Standards and reference implementations:
+Where a locally preserved PDF is absent, the source remains cite-only until
+redistribution permission is confirmed. Git LFS is intentionally not required.
 
-- **UAX #15 — Unicode Normalization Forms** (Unicode Consortium), the basis
-  for `normalize_search_text`'s NFC step.
-- **NIST `trec_eval`**, the standard TREC evaluation implementation and the
-  reference for precision-at-cutoff, recall, first-relevant reciprocal rank,
-  and score-ordered run evaluation.
-- **NIST TREC qrels guidance**, which defines the four fields `TOPIC`,
-  `ITERATION`, `DOCUMENT`, and `RELEVANCY`.
-- **NIST TREC run submission guidance**, which defines the six fields
-  `topicid`, `Q0`, `docid`, `rank`, `score`, and `run-tag`, recommends short
-  alphanumeric run tags, and states that evaluation tools reorder by score.
+## Standards and reference implementations
 
-## What each grounds
+- **Unicode UAX #15** grounds NFC normalization in `normalize_search_text`.
+- **NIST `trec_eval`** is the reference implementation for standard qrels and
+  run ingestion and for established retrieval-effectiveness measures.
+- **NIST TREC qrels guidance** defines the four fields `TOPIC`, `ITERATION`,
+  `DOCUMENT`, and `RELEVANCY`.
+- **NIST TREC run submission guidance** defines the six fields `topicid`, `Q0`,
+  `docid`, `rank`, `score`, and `run-tag`, and documents score-order evaluation.
 
-- **Bruch, Gai & Ingber 2023** → the **default strategy and offline tuning
-  rationale**. TM2C2 (a convex combination of *theoretically* min-max
-  normalized scores) outperforms Reciprocal Rank Fusion in- and out-of-domain
-  (their Tables 2–4); the choice of normalization is immaterial for a convex
-  combination (§4.2); `alpha ∈ [0.6, 0.8]` is a robust range needing no
-  training data (we default to 0.7). Section 3.1 notes that much of the
-  two-system analysis extends directly to multiple retrieval systems,
-  grounding `weighted_convex_combination_score`. The paper also finds convex
-  fusion sample-efficient to tune, supporting a small explicit validation-set
-  policy search rather than opaque online optimization. RankWeave preserves
-  every trial and requires callers to report final quality on a separate
-  held-out test set.
-- **Cormack, Clarke & Büttcher 2009** → the **RRF alternative** and its
-  `eta = 60` default.
-- **Samuel et al. 2025** → the value of exposing weighted RRF when retrieval
-  channels have different reliability. Their video-dependent weighting
-  improved MultiVENT 2.0 nDCG@10 from 0.562 with ordinary RRF to 0.586 with
-  weighted RRF. RankWeave supplies fixed convex channel weights, deterministic
-  validation-set selection, and immutable contribution/trial records; it
-  intentionally does not reproduce the paper's video-specific estimator.
-- **Järvelin & Kekäläinen 2002** → graded cumulative gain, logarithmic rank
-  discounting, and normalization against an ideal ranking. RankWeave uses the
-  common exponential gain variant `2**relevance - 1`, so its nDCG values are
-  not asserted to be numerically identical to `trec_eval`'s default
-  identity-gain configuration.
-- **NIST `trec_eval`** → precision at a requested cutoff uses that cutoff as
-  the denominator even when a run is short; recall divides retrieved relevant
-  documents by all judged relevant documents; reciprocal rank uses the first
-  relevant result and is bounded by the requested cutoff in RankWeave's
-  `reciprocal_rank_at_k` implementation. TREC run adapters sort submitted
-  results by decreasing score, matching reference-tool behavior rather than
-  trusting the rank column.
-- **NIST qrels/run guidance** → strict four- and six-column interchange,
-  literal `Q0`, finite numeric fields, one run tag per file, and conservative
-  1–12 character ASCII-alphanumeric run tags. RankWeave additionally preserves
-  source order for exact score ties to make repeated evaluation deterministic;
-  exact parity with a tool that breaks ties arbitrarily requires distinct
-  scores.
-- **UAX #15** → NFC composition, so decomposed Vietnamese/Korean input matches
-  composed indexed text.
+## Fusion defaults
+
+Bruch, Gai & Ingber report that a convex combination of theoretically min-max
+normalized scores is robust in and out of domain. RankWeave defaults to
+`alpha=0.7`, within the reported stable range, and exposes explicit convex
+weights for more than two systems.
+
+RRF remains the rank-only alternative. RankWeave exposes equal-weight and
+fixed-weight APIs. The weighted interface is generic and auditable; it does not
+reproduce MMMORRF's domain-specific adaptive video estimator.
+
+## Metric conventions
+
+`evaluate_ranking` and `evaluate_rankings` provide precision@k, recall@k,
+reciprocal-rank@k, and graded nDCG@k.
+
+RankWeave uses the common exponential nDCG gain `2**relevance - 1`, so its nDCG
+is not claimed to be numerically identical to `trec_eval`'s default
+identity-gain configuration. Precision uses the requested cutoff denominator,
+reciprocal rank is cutoff-bound, and aggregate evaluation requires exact
+ranking/judgment query-set parity.
 
 ## Tuning protocol
 
-`tune_weighted_reciprocal_rank_fusion` evaluates named fixed-weight policies
-on a complete judged validation query set. It supports macro nDCG, reciprocal
-rank, recall, or precision as the selection objective and preserves mapping
-insertion order as the deterministic tie-breaker. The selected policy is not a
-final effectiveness estimate: consumers must evaluate it once on a separate
-held-out test set. This prevents validation-set selection from being reported
-as unbiased test performance.
+`tune_weighted_reciprocal_rank_fusion` evaluates named fixed-weight policies on
+a complete judged validation query set. It supports macro nDCG, reciprocal
+rank, recall, or precision and preserves candidate insertion order as the exact
+tie-breaker.
 
-## TREC interoperability protocol
+The selected validation policy is not an unbiased final effectiveness
+estimate. Consumers must evaluate it once on an independent held-out test set
+before making a production-quality claim.
 
-`parse_trec_qrels` and `parse_trec_run` preserve validated source records in
-frozen dataclasses. Negative qrels grades remain in the audit artifact but are
-omitted from evaluation judgments as explicit unjudged markers. Public
-constructors apply the same validation as parsers, and container inputs are
-snapshotted so caller mutation cannot change an evaluation artifact.
+## TREC interchange contract
 
-`evaluate_trec_run` requires exact run/qrels query-set parity through
-`evaluate_rankings`. This deliberately fails closed when a judged query is
-missing from a run instead of silently improving aggregate metrics by dropping
-that query. Detailed compatibility notes are in
+RankWeave uses the reference formats as the compatibility baseline and applies
+additional fail-closed validation for safe service-to-service interchange.
+
+### Qrels
+
+- exactly four content fields;
+- relevance is a signed ASCII-decimal integer in `[-127, 127]`, matching the
+  `trec_eval` qrels reader's representable judgment contract;
+- negative judgments remain in the immutable audit artifact and are omitted
+  from the generic non-negative evaluation mapping as explicit unjudged
+  markers;
+- duplicate query/document judgments are rejected.
+
+### Runs
+
+- exactly six content fields and literal `Q0`;
+- positive ASCII-decimal submitted rank and finite score;
+- one document and one submitted rank per query;
+- one run tag per artifact;
+- the portable NIST tag profile of 1–20 ASCII letters, digits, periods,
+  underscores, or hyphens.
+
+Both parsers ignore blank lines and lines whose first non-whitespace character
+is `#`, while preserving physical line numbers in diagnostics.
+
+TREC evaluation orders results by decreasing score rather than trusting the
+submitted rank field. RankWeave preserves source order for exact score ties as
+a documented deterministic extension. Exact cross-tool parity should use
+distinct scores because reference implementations and track tooling do not all
+share the same tie rule.
+
+Public TREC dataclasses enforce the same contracts as text parsing and snapshot
+container inputs to immutable tuples. `evaluate_trec_run` then applies the same
+exact query-set parity gate as the native evaluation API.
+
+Detailed operational behavior is documented in
 [`docs/trec-interoperability.md`](../trec-interoperability.md).
-
-## PDF preservation note
-
-Git LFS is intentionally **not** used; PDFs are committed as regular binaries.
-Where a PDF is absent, it is because the authoring environment's network
-policy blocked the source host; the citation and identifier make the drop
-mechanical from a network-allowed session. Only permissively redistributable
-PDFs are committed; others stay cite-only until their license is confirmed.
