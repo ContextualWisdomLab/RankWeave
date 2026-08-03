@@ -2,17 +2,14 @@
 
 import math
 import operator
+from numbers import Real
 
 
 def _require_finite(value: float, label: str) -> None:
     """Require a finite real number, rejecting booleans and wrong types."""
-    if isinstance(value, bool):
+    if isinstance(value, bool) or not isinstance(value, Real):
         raise ValueError(f"{label} must be a finite real number")
-    try:
-        value_is_finite = math.isfinite(value)
-    except TypeError as exc:
-        raise ValueError(f"{label} must be a finite real number") from exc
-    if not value_is_finite:
+    if not math.isfinite(value):
         raise ValueError(f"{label} must be finite")
 
 
