@@ -5,8 +5,14 @@ import operator
 
 
 def _require_finite(value: float, label: str) -> None:
-    """Reject IEEE non-finite values before comparisons or arithmetic."""
-    if not math.isfinite(value):
+    """Require a finite real number, rejecting booleans and wrong types."""
+    if isinstance(value, bool):
+        raise ValueError(f"{label} must be a finite real number")
+    try:
+        value_is_finite = math.isfinite(value)
+    except TypeError as exc:
+        raise ValueError(f"{label} must be a finite real number") from exc
+    if not value_is_finite:
         raise ValueError(f"{label} must be finite")
 
 
@@ -19,9 +25,14 @@ def _require_unit_interval(value: float, label: str) -> None:
 
 def _require_positive_integer(value: int, label: str) -> int:
     """Return a validated positive integer, rejecting booleans and floats."""
-    _require_finite(value, label)
     if isinstance(value, bool):
         raise ValueError(f"{label} must be a positive integer")
+    try:
+        value_is_finite = math.isfinite(value)
+    except TypeError:
+        value_is_finite = True
+    if not value_is_finite:
+        raise ValueError(f"{label} must be finite")
     try:
         integer_value = operator.index(value)
     except TypeError as exc:
