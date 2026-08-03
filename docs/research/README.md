@@ -21,7 +21,9 @@ Consortium), the basis for `normalize_search_text`'s NFC step.
   outperforms Reciprocal Rank Fusion in- and out-of-domain (their
   Tables 2–4); the choice of normalization is immaterial for a convex
   combination (§4.2); `alpha ∈ [0.6, 0.8]` is a robust range needing no
-  training data (we default to 0.7). Their five desiderata —
+  training data (we default to 0.7). Section 3.1 also notes that much of
+  the two-system analysis extends directly to multiple retrieval systems,
+  grounding `weighted_convex_combination_score`. Their five desiderata —
   monotonicity, homogeneity, boundedness, Lipschitz continuity, sample
   efficiency — are exactly the properties `convex_combination_score`
   provides and `reciprocal_rank_fusion_score` (a function of ranks,
