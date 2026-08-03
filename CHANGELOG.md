@@ -7,6 +7,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `reciprocal_rank_fuse` and immutable `FusedRankedItem` results for
+  complete-list RRF with deterministic tie-breaking and per-channel rank
+  audit trails.
 - `weighted_convex_combination_score` — fuse any number of normalized
   retrieval-channel scores with validated convex weights while preserving
   the existing missing-channel-as-infimum semantics.
