@@ -62,3 +62,23 @@ def test_product_prompt_enforces_bounded_commercial_quality():
     )
     for required_phrase in required_phrases:
         assert required_phrase in workflow
+
+
+def test_product_development_requires_successful_pr_governance():
+    workflow = _workflow_text()
+
+    assert (
+        "needs: [inspect-pr-queue, repair-review-feedback, revalidate-pr-queue]"
+        in workflow
+    )
+    assert "needs.inspect-pr-queue.result == 'success'" in workflow
+    assert "needs.repair-review-feedback.result == 'success'" in workflow
+    assert "needs.revalidate-pr-queue.result == 'success'" in workflow
+
+
+def test_agent_task_inventory_is_paginated():
+    workflow = _workflow_text()
+
+    assert "--paginate" in workflow
+    assert "--slurp" in workflow
+    assert "per_page=100" in workflow
