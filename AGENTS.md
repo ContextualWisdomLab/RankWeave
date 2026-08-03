@@ -28,18 +28,22 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
 - **Research-grounded defaults.** Numeric defaults (alpha=0.7, eta=60,
   the theoretical bounds) trace to the papers in `docs/research/`.
   Changing a default requires citing the evidence.
+- **Complete quality gates.** Production docstrings and both line and
+  branch coverage must remain at 100%.
 
 ## Develop
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest -q          # no external services required
 python -m ruff check .
+python -m coverage run -m pytest -q
+python -m coverage report
 ```
 
 ## Layout
 
-- `src/rankweave/score_fusion.py` — TM2C2 + RRF fusion primitives.
+- `src/rankweave/score_fusion.py` — TM2C2 + per-candidate RRF primitives.
+- `src/rankweave/ranked_list_fusion.py` — complete-list RRF + audit results.
 - `src/rankweave/query_normalization.py` — NFC query normalization.
 - `tests/` — behavior tests (hand-computed expected values).
 - `docs/research/` — paper PDFs + citation manifest.
