@@ -6,6 +6,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-03
+
 ### Added
 - `weighted_convex_fuse`, immutable `FusedScoredItem` results, and
   `WeightedChannelContribution` audit records for complete normalized-score
@@ -16,8 +18,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - `weighted_convex_combination_score` — fuse any number of normalized
   retrieval-channel scores with validated convex weights while preserving
   the existing missing-channel-as-infimum semantics.
-- CI gates for 100% line and branch coverage and complete production
-  docstrings.
+- CI gates for 100% line and branch coverage, complete production docstrings,
+  and installable wheel smoke tests.
 
 ### Fixed
 - Validate query text types and require a positive integer normalization
