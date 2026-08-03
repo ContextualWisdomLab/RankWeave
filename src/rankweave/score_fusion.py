@@ -8,6 +8,11 @@ Reciprocal Rank Fusion in- and out-of-domain, is robust for alpha in
 [0.6, 0.8] without training data, and — unlike RRF — preserves the
 score distribution (Lipschitz continuity).
 
+Bruch et al. analyze a lexical+semantic pair and note in §3.1 that
+much of the analysis extends directly to multiple retrieval systems.
+``weighted_convex_combination_score`` exposes that N-channel form for
+already-normalized scores and explicit convex weights.
+
 Reciprocal Rank Fusion (Cormack, Clarke & Büttcher 2009,
 *Reciprocal Rank Fusion outperforms Condorcet and individual Rank
 Learning Methods*, SIGIR) is the non-parametric alternative for
@@ -27,6 +32,8 @@ are just ``(lower, upper)`` tuples — pass your own to
   fuse_channel_scores inverts it so smaller distance scores higher.
 """
 
+import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 WORD_SIMILARITY_THEORETICAL_BOUNDS = (0.0, 1.0)
@@ -96,6 +103,43 @@ def convex_combination_score(
         semantic_weight_alpha * semantic_component
         + (1.0 - semantic_weight_alpha) * lexical_component
     )
+
+
+def weighted_convex_combination_score(
+    channel_scores: Mapping[str, float | None],
+    channel_weights: Mapping[str, float],
+) -> float:
+    """Fuse any number of normalized channels with convex weights.
+
+    ``channel_weights`` defines the complete channel set. Its values
+    must be non-negative and sum to 1 (within floating-point tolerance).
+    ``channel_scores`` may omit channels or map them to ``None``; absent
+    evidence contributes the theoretical minimum, 0. A score supplied
+    without a corresponding weight is rejected as a configuration error.
+    """
+    score_channels_without_weights = set(channel_scores) - set(channel_weights)
+    if score_channels_without_weights:
+        raise ValueError(
+            "channel scores contain channels without weights: "
+            f"{sorted(score_channels_without_weights)!r}"
+        )
+    if any(weight < 0.0 for weight in channel_weights.values()):
+        raise ValueError("channel weights must be non-negative")
+    total_weight = math.fsum(channel_weights.values())
+    if not math.isclose(total_weight, 1.0, rel_tol=0.0, abs_tol=1e-12):
+        raise ValueError("channel weights must sum to 1")
+    for channel_name, channel_score in channel_scores.items():
+        if channel_score is not None and not 0.0 <= channel_score <= 1.0:
+            raise ValueError(
+                f"score for channel {channel_name!r} must be within [0, 1]"
+            )
+
+    weighted_components = []
+    for channel_name, channel_weight in channel_weights.items():
+        channel_score = channel_scores.get(channel_name)
+        score_or_infimum = 0.0 if channel_score is None else channel_score
+        weighted_components.append(channel_weight * score_or_infimum)
+    return math.fsum(weighted_components)
 
 
 def reciprocal_rank_fusion_score(
