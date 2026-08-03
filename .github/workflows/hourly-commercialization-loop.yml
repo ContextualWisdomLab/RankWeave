@@ -54,8 +54,14 @@ jobs:
     secrets: inherit
 
   develop-next-product-gap:
-    needs: revalidate-pr-queue
-    if: ${{ always() }}
+    needs: [inspect-pr-queue, repair-review-feedback, revalidate-pr-queue]
+    if: >-
+      ${{
+        always() &&
+        needs.inspect-pr-queue.result == 'success' &&
+        needs.repair-review-feedback.result == 'success' &&
+        needs.revalidate-pr-queue.result == 'success'
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -93,7 +99,9 @@ jobs:
             GH_TOKEN="$AGENT_TOKEN" gh api \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "/agents/repos/${TARGET_REPOSITORY}/tasks"
+              --paginate \
+              --slurp \
+              "/agents/repos/${TARGET_REPOSITORY}/tasks?per_page=100"
           )"; then
             echo "::warning::Unable to list Copilot agent tasks; refusing to create another."
             echo "eligible=false" >>"$GITHUB_OUTPUT"
@@ -107,13 +115,29 @@ jobs:
           import sys
 
           payload = json.loads(os.environ["TASKS_JSON"])
-          if isinstance(payload, list):
-              tasks = payload
-          elif isinstance(payload, dict):
-              tasks = payload.get("tasks", payload.get("items"))
-          else:
-              tasks = None
-          if not isinstance(tasks, list):
+
+          def extract_tasks(value):
+              if isinstance(value, list):
+                  if all(
+                      isinstance(item, dict) and "state" in item
+                      for item in value
+                  ):
+                      return value
+                  extracted = []
+                  for page in value:
+                      page_tasks = extract_tasks(page)
+                      if page_tasks is None:
+                          return None
+                      extracted.extend(page_tasks)
+                  return extracted
+              if isinstance(value, dict):
+                  tasks_value = value.get("tasks", value.get("items"))
+                  if isinstance(tasks_value, list):
+                      return extract_tasks(tasks_value)
+              return None
+
+          tasks = extract_tasks(payload)
+          if tasks is None:
               print("Unsupported agent-task response shape", file=sys.stderr)
               raise SystemExit(1)
 
