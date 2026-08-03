@@ -71,6 +71,10 @@ Use `theoretical_min_max_normalize` for bounded scoring functions before
 calling the multi-channel helper. Missing or `None` channel scores contribute
 zero; weights must be non-negative and sum to one.
 
+All numeric fusion inputs must be finite. `NaN` and positive or negative
+infinity raise `ValueError` rather than being clamped or propagated into a
+ranking score.
+
 ## API
 
 | Symbol | Purpose |
