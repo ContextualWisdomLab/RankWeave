@@ -2,6 +2,7 @@
 
 import math
 import re
+import unicodedata
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 
@@ -12,13 +13,19 @@ _RUN_TAG_PATTERN = re.compile(r"[A-Za-z0-9]{1,12}")
 
 
 def _require_token(value: str, label: str) -> str:
-    """Require a non-empty text token without Unicode whitespace."""
+    """Require a non-empty text token without whitespace or controls."""
     if (
         not isinstance(value, str)
         or not value
-        or any(character.isspace() for character in value)
+        or any(
+            character.isspace()
+            or unicodedata.category(character) in {"Cc", "Cs"}
+            for character in value
+        )
     ):
-        raise ValueError(f"{label} must be a non-empty token without whitespace")
+        raise ValueError(
+            f"{label} must be a non-empty token without whitespace or controls"
+        )
     return value
 
 
