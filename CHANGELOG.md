@@ -20,6 +20,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
   docstrings.
 
 ### Fixed
+- Validate query text types and require a positive integer normalization
+  length cap instead of leaking downstream slicing or Unicode errors.
 - Reject booleans and non-real objects for score, weight, bound, rank, and
   RRF-constant inputs with stable `ValueError` contracts.
 - Reject `NaN` and infinite scores, bounds, weights, ranks, and RRF
