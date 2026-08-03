@@ -1,46 +1,45 @@
 # rankweave
 
-**Language-agnostic hybrid-retrieval fusion and evaluation — pure-Python,
-store-agnostic.**
+**Language-agnostic hybrid-retrieval fusion, evaluation, and tuning —
+pure-Python and store-agnostic.**
 
-`rankweave` decides *how to combine* scores from lexical, dense,
-learned-sparse, and other retrieval channels into one ranking, then measures
-how well that ranking performs against relevance judgments. It ships
-research-grounded convex score fusion for two or more normalized channels,
-complete-list score and rank fusion with audit trails, immutable retrieval
-evaluation reports, and the query-side Unicode normalization that makes
-character-level lexical matching language-agnostic. It has **no dependencies**
-(stdlib only) and **no opinion about your store** — bring your own channels;
-rankweave combines and evaluates their evidence.
+RankWeave combines lexical, dense, learned-sparse, graph, and other retrieval
+channels into deterministic rankings. It also evaluates those rankings against
+relevance judgments and selects fixed weighted-RRF policies on validation data.
+The runtime is standard-library-only and has no dependency on a database,
+embedding provider, search engine, or web framework.
 
-It is extracted from the Context Search engine of
-[naruon](https://github.com/ContextualWisdomLab/naruon), following the
-lab's ONE SOURCE MULTI USE convention: standalone product *and*
-submodule-importable.
+RankWeave originated in the Context Search engine of
+[naruon](https://github.com/ContextualWisdomLab/naruon) under Contextual Wisdom
+Lab's ONE SOURCE MULTI USE convention: useful as a standalone package and as a
+small reusable module inside a larger system.
 
-## Why
+## Why RankWeave
 
-A convex combination of **theoretically** min-max normalized scores
-(TM2C2) beats Reciprocal Rank Fusion in- and out-of-domain, is robust
-for `alpha ∈ [0.6, 0.8]` with no training data, and — unlike rank
-fusion — preserves the score distribution (Bruch, Gai & Ingber 2023).
-Their two-system analysis also extends directly to multiple retrieval
-systems. RRF remains available for channels that expose only ranks, with
-an optional fixed convex weighting policy when channels have different
-reliability. Built-in evaluation closes the loop from choosing a fusion
-policy to validating it on held-out judgments. See
-[`docs/research/`](docs/research/) for the grounding.
+- **Research-grounded fusion.** The default convex strategy follows TM2C2;
+  equal-weight and fixed-weight Reciprocal Rank Fusion are available for
+  rank-only channels.
+- **Production-shaped APIs.** Pass complete score-bearing or rank-only result
+  lists instead of rebuilding per-item fusion inputs yourself.
+- **Auditable decisions.** Immutable results preserve each channel's score,
+  rank, weight, and contribution, including explicit missing evidence.
+- **Closed experiment loop.** Built-in P@k, R@k, RR@k, and graded nDCG@k
+  evaluation feeds deterministic weighted-RRF policy selection.
+- **Fail-closed contracts.** Invalid numeric values, duplicate identifiers,
+  mismatched evaluation query sets, and malformed policies raise stable
+  `ValueError` exceptions rather than silently changing a ranking.
+- **Portable core.** Python 3.10+, typed, Apache-2.0, and no runtime
+  dependencies.
 
 ## Install
 
-Until PyPI publishing is enabled, install RankWeave directly from the
-repository:
+Until PyPI Trusted Publishing is configured, install directly from GitHub:
 
 ```bash
 pip install "rankweave @ git+https://github.com/ContextualWisdomLab/RankWeave.git"
 ```
 
-For an editable development checkout:
+For development:
 
 ```bash
 git clone https://github.com/ContextualWisdomLab/RankWeave.git
@@ -48,53 +47,39 @@ cd RankWeave
 pip install -e ".[dev]"
 ```
 
-## Quickstart
+## Fuse one candidate
 
 ```python
-from rankweave import FusionSettings, fuse_channel_scores, normalize_search_text
+from rankweave import FusionSettings, fuse_channel_scores
 
-# 1) Normalize the query the same way you normalize indexed documents
-#    (NFC compose; do accent-folding + lowercasing on the store side too).
-query = normalize_search_text("  Trần Hưng Đạo 회의  ")   # -> "Trần Hưng Đạo 회의"
-
-# 2) Run your own lexical + dense channels, then fuse per candidate.
-settings = FusionSettings()                 # TM2C2, semantic weight alpha = 0.7
 score = fuse_channel_scores(
-    word_similarity_score=0.62,             # lexical channel score in [0, 1]
-    cosine_distance=0.30,                   # dense channel distance in [0, 2]
+    word_similarity_score=0.62,       # lexical score in [0, 1]
+    cosine_distance=0.30,             # dense distance in [0, 2]
     channel_ranks={"lexical": 1, "dense": 1},
-    settings=settings,
-)                                            # -> bounded [0, 1] fused score
+    settings=FusionSettings(),        # TM2C2, semantic alpha = 0.7
+)
 ```
 
-A channel that did not return a candidate contributes its theoretical
-minimum (absent evidence is the infimum, not an imputed value). Pass
-`FusionSettings(strategy_name="reciprocal_rank_fusion")` to fuse by rank
-instead — then only `channel_ranks` matters.
-
-For three or more score-producing channels, normalize each score to `[0, 1]`
-and supply explicit convex weights:
+For arbitrary normalized channels:
 
 ```python
 from rankweave import weighted_convex_combination_score
 
-multi_channel_score = weighted_convex_combination_score(
+score = weighted_convex_combination_score(
     {"semantic": 0.80, "lexical": 0.55, "sparse": 0.65},
     {"semantic": 0.50, "lexical": 0.30, "sparse": 0.20},
 )
 ```
 
-Use `theoretical_min_max_normalize` for bounded scoring functions before
-calling the multi-channel helper. Missing or `None` channel scores contribute
-zero; weights must be non-negative and sum to one.
+Missing or `None` channel scores contribute the theoretical minimum, zero.
+Weights must be finite, non-negative, and sum to one.
 
-To fuse complete normalized-score result lists, pass each channel's
-`(item_id, score)` pairs together with the shared convex weights:
+## Fuse complete scored lists
 
 ```python
 from rankweave import weighted_convex_fuse
 
-fused_results = weighted_convex_fuse(
+results = weighted_convex_fuse(
     {
         "semantic": [("document-b", 0.90), ("document-a", 0.50)],
         "lexical": [("document-a", 0.80), ("document-c", 0.70)],
@@ -103,22 +88,23 @@ fused_results = weighted_convex_fuse(
     limit=10,
 )
 
-best_result = fused_results[0]
-assert best_result.item_id == "document-a"
-assert round(best_result.score, 2) == 0.62
+best = results[0]
+assert best.item_id == "document-a"
+assert round(best.score, 2) == 0.62
 ```
 
-Every result includes immutable per-channel contribution records containing
-the normalized score, configured weight, and resulting weighted contribution.
-Channels that did not return an item remain visible with `score=None` and a
-zero contribution, making production ranking decisions directly auditable.
+Each `FusedScoredItem` contains a tuple of `WeightedChannelContribution`
+records. An absent channel remains visible with `score=None` and a zero
+contribution.
 
-To fuse complete rank-only result lists, pass item identifiers in rank order:
+## Fuse complete rank-only lists
+
+Equal-weight RRF:
 
 ```python
 from rankweave import reciprocal_rank_fuse
 
-fused_results = reciprocal_rank_fuse(
+results = reciprocal_rank_fuse(
     {
         "lexical": ["document-a", "document-b"],
         "dense": ["document-b", "document-c"],
@@ -126,18 +112,16 @@ fused_results = reciprocal_rank_fuse(
     limit=10,
 )
 
-best_result = fused_results[0]
-assert best_result.item_id == "document-b"
-assert best_result.channel_ranks == (("lexical", 2), ("dense", 1))
+assert results[0].item_id == "document-b"
+assert results[0].channel_ranks == (("lexical", 2), ("dense", 1))
 ```
 
-When rank-only channels have different known reliability, supply one fixed
-convex weighting policy for the call:
+Fixed-weight RRF for channels with different known reliability:
 
 ```python
 from rankweave import weighted_reciprocal_rank_fuse
 
-weighted_results = weighted_reciprocal_rank_fuse(
+results = weighted_reciprocal_rank_fuse(
     {
         "lexical": ["document-a", "document-b"],
         "dense": ["document-b", "document-c"],
@@ -146,26 +130,18 @@ weighted_results = weighted_reciprocal_rank_fuse(
     limit=10,
 )
 
-best_weighted_result = weighted_results[0]
-assert best_weighted_result.item_id == "document-b"
-assert best_weighted_result.channel_contributions[0].rank == 2
-assert best_weighted_result.channel_contributions[1].rank == 1
+best = results[0]
+assert best.item_id == "document-b"
+assert best.channel_contributions[0].rank == 2
+assert best.channel_contributions[1].rank == 1
 ```
 
-The weighted RRF result records every channel's rank, weight, and reciprocal
-contribution. Missing evidence remains visible with `rank=None` and a zero
-contribution. Weights are fixed per call; RankWeave does not infer adaptive
-weights from the query or item. Equal positive weights preserve ordinary RRF
-ordering, although the numeric scores differ by a common scaling factor.
-
-Complete-list fusion rejects duplicate item identifiers within a channel and
-uses deterministic first-seen input order when scores tie. RRF results retain
-the full per-channel rank trail used to calculate each fused score.
+Every `FusedWeightedRankedItem` records each channel's rank, convex weight,
+and reciprocal contribution. Missing evidence remains visible with
+`rank=None` and contribution zero. Weights are fixed for one call; RankWeave
+does not infer online query- or item-adaptive weights.
 
 ## Evaluate ranking quality
-
-Evaluate one ranking or a complete query set without introducing a metrics
-framework dependency:
 
 ```python
 from rankweave import evaluate_rankings
@@ -186,88 +162,120 @@ print(report.aggregate.mean_ndcg_at_k)
 print(report.query_metrics[0].metrics.reciprocal_rank_at_k)
 ```
 
-`evaluate_ranking` and `evaluate_rankings` report precision@k, recall@k,
-reciprocal-rank@k, and graded nDCG@k. Their contracts are explicit:
+Evaluation contracts are explicit:
 
 - positive grades count as relevant for precision, recall, and reciprocal rank;
 - unjudged items receive relevance grade zero;
-- precision uses the requested cutoff as its denominator, so short result
-  lists are penalized rather than silently receiving an easier denominator;
-- reciprocal rank is bounded by the requested cutoff;
+- precision uses the requested cutoff as its denominator, so short runs are
+  penalized consistently;
+- reciprocal rank is cutoff-bound;
 - nDCG uses exponential gain (`2**relevance - 1`) and logarithmic discount;
-- aggregate evaluation requires exactly matching ranking and judgment query
-  IDs. Represent a no-result query with an empty sequence rather than omitting
-  it, preventing dropped queries from inflating reported quality.
+- ranking and judgment mappings must contain exactly the same query IDs.
+  Represent a no-result query with an empty sequence rather than omitting it.
 
-Every report is immutable and preserves per-query metrics alongside macro
-averages, making offline experiments and release gates reproducible. The nDCG
-variant is intentionally documented and is not claimed to be numerically
+The immutable report preserves per-query metrics and macro averages. This
+nDCG variant is intentionally documented and is not claimed to be numerically
 identical to `trec_eval`'s default identity-gain configuration.
 
-All numeric fusion and evaluation inputs must be finite. `NaN` and positive or
-negative infinity raise `ValueError` rather than being clamped or propagated.
-Direct convex helpers require scores and alpha in `[0, 1]`; RRF ranks and eta
-must be positive integers, not booleans or fractions. Relevance grades must be
-finite and non-negative.
+## Tune a weighted-RRF policy
 
-## API
+Provide complete channel rankings, held-out validation judgments, and named
+candidate policies:
+
+```python
+from rankweave import tune_weighted_reciprocal_rank_fusion
+
+report = tune_weighted_reciprocal_rank_fusion(
+    {
+        "query-a": {
+            "lexical": ["document-a", "document-b"],
+            "dense": ["document-b", "document-a"],
+        },
+        "query-b": {
+            "lexical": ["document-c", "document-d"],
+            "dense": ["document-d", "document-c"],
+        },
+    },
+    {
+        "query-a": {"document-a": 3},
+        "query-b": {"document-c": 3},
+    },
+    {
+        "dense-heavy": {"lexical": 0.1, "dense": 0.9},
+        "lexical-heavy": {"lexical": 0.9, "dense": 0.1},
+    },
+    cutoff=10,
+)
+
+assert report.best_policy_id == "lexical-heavy"
+```
+
+The default objective is macro nDCG@k. Macro reciprocal rank, recall, and
+precision are also supported through the exported objective constants. Every
+candidate produces an immutable `WeightedRRFTuningTrial` containing its
+weights, objective value, and complete `RankingEvaluationReport`. Exact ties
+select the first candidate, preserving mapping insertion order.
+
+This is validation-set model selection. Measure the chosen policy once more on
+a separate held-out test set before making a production quality claim.
+
+## Input and ordering guarantees
+
+- All numeric fusion and evaluation inputs must be finite.
+- Direct convex scores and weights obey their documented domains.
+- RRF ranks, eta, cutoffs, and limits must be positive integers; booleans and
+  fractional values are rejected.
+- Relevance grades must be finite and non-negative.
+- Item identifiers must be hashable and unique within a channel or ranking.
+- Complete-list APIs use deterministic first-seen ordering for exact score
+  ties.
+- Public result, evaluation, and tuning records are frozen dataclasses.
+
+## API overview
 
 | Symbol | Purpose |
 |---|---|
-| `FusionSettings` | Immutable strategy + parameters (`strategy_name`, `semantic_weight_alpha`, `rank_constant_eta`). |
-| `fuse_channel_scores(...)` | Fuse the common lexical-word-similarity + dense-cosine-distance pair under the selected strategy. |
-| `convex_combination_score(...)` | Two-channel TM2C2 over already-normalized `[0, 1]` scores. |
-| `weighted_convex_combination_score(scores, weights)` | N-channel convex fusion over already-normalized scores and explicit weights. |
-| `weighted_convex_fuse(results, weights, limit=None)` | Fuse complete normalized-score lists with deterministic ordering and contribution-level audit records. |
-| `FusedScoredItem`, `WeightedChannelContribution` | Immutable complete-list convex result and its per-channel evidence. |
-| `reciprocal_rank_fusion_score(ranks, eta=60)` | RRF over positive integer 1-based per-channel ranks. |
-| `reciprocal_rank_fuse(rankings, eta=60, limit=None)` | Fuse complete ranked item-ID lists with deterministic ordering and a rank audit trail. |
-| `FusedRankedItem` | Immutable complete-list RRF result (`item_id`, `score`, `channel_ranks`). |
-| `weighted_reciprocal_rank_fusion_score(ranks, weights, eta=60)` | Weighted RRF for one candidate under a fixed convex channel policy. |
-| `weighted_reciprocal_rank_fuse(rankings, weights, eta=60, limit=None)` | Fuse complete rank-only lists with deterministic ordering and contribution records. |
-| `FusedWeightedRankedItem`, `WeightedRankContribution` | Immutable weighted-RRF result and its present or missing channel evidence. |
-| `evaluate_ranking(ranking, judgments, cutoff=...)` | Evaluate one ranking with P@k, R@k, RR@k, and graded nDCG@k. |
-| `evaluate_rankings(rankings, judgments, cutoff=...)` | Evaluate a complete query set with per-query metrics and macro averages. |
-| `RankingMetrics`, `QueryRankingMetrics` | Immutable single-ranking and query-associated metric records. |
-| `AggregateRankingMetrics`, `RankingEvaluationReport` | Immutable macro metrics and complete evaluation audit report. |
-| `theoretical_min_max_normalize(score, bounds)` | Scale a score to `[0, 1]` using a scoring function's theoretical bounds. |
-| `normalize_search_text(text)` | NFC-compose + whitespace-collapse + length-cap a query. |
-| `WORD_SIMILARITY_THEORETICAL_BOUNDS`, `COSINE_DISTANCE_THEORETICAL_BOUNDS` | `(lower, upper)` tuples for the common lexical/dense pairing. |
+| `FusionSettings` | Immutable strategy and scalar fusion parameters. |
+| `fuse_channel_scores(...)` | Fuse one lexical+dense candidate. |
+| `weighted_convex_combination_score(...)` | N-channel scalar convex fusion. |
+| `weighted_convex_fuse(...)` | Complete scored-list convex fusion with audit records. |
+| `reciprocal_rank_fusion_score(...)` | Equal-weight scalar RRF. |
+| `reciprocal_rank_fuse(...)` | Complete rank-list RRF with rank trails. |
+| `weighted_reciprocal_rank_fusion_score(...)` | Fixed-weight scalar RRF. |
+| `weighted_reciprocal_rank_fuse(...)` | Complete fixed-weight RRF with contribution trails. |
+| `evaluate_ranking(...)` | P@k, R@k, RR@k, and graded nDCG@k for one ranking. |
+| `evaluate_rankings(...)` | Per-query and macro evaluation for a query set. |
+| `tune_weighted_reciprocal_rank_fusion(...)` | Select a fixed weighted-RRF policy on validation judgments. |
+| `normalize_search_text(...)` | NFC composition, whitespace collapse, and length cap. |
 
-## The normalization contract
+## Query-normalization contract
 
-Character-trigram lexical retrieval is language-agnostic only if query
-and documents fold **identically**. `normalize_search_text` owns the
-query side (NFC). Do accent-folding + lowercasing on the **store** side,
-in one place, and call it from both — e.g. a PostgreSQL `IMMUTABLE`
-wrapper `lower(unaccent(normalize(text, NFC)))` used in a `pg_trgm` GiST
-expression index. rankweave stays out of your store so the two sides
-cannot silently diverge.
+Character-trigram lexical retrieval is language-agnostic only when query and
+indexed documents fold identically. `normalize_search_text` performs NFC
+composition and whitespace shaping. Accent folding and lowercasing belong in
+one store-side normalization function that is applied identically to indexed
+text and bound queries.
 
 ## Research grounding
 
 - **Bruch, Gai & Ingber (2023).** *An Analysis of Fusion Functions for
-  Hybrid Retrieval.* ACM TOIS 42(1). arXiv:2210.11934. — TM2C2 > RRF;
-  theoretical-normalization stability; extension from two retrieval systems
-  to multiple systems; and the fusion desiderata (monotonicity, homogeneity,
-  boundedness, Lipschitz continuity, sample efficiency) this library's
-  defaults satisfy.
-- **Cormack, Clarke & Büttcher (2009).** *Reciprocal Rank Fusion
-  outperforms Condorcet and individual Rank Learning Methods.* SIGIR
-  2009. — RRF definition, η = 60.
+  Hybrid Retrieval.* ACM TOIS 42(1), arXiv:2210.11934 — TM2C2, theoretical
+  normalization, multi-system extension, and sample-efficient tuning.
+- **Cormack, Clarke & Büttcher (2009).** *Reciprocal Rank Fusion outperforms
+  Condorcet and individual Rank Learning Methods.* SIGIR 2009 — RRF and the
+  default `eta=60`.
 - **Samuel et al. (2025).** *MMMORRF: Multimodal Multilingual Modularized
-  Reciprocal Rank Fusion.* SIGIR 2025. DOI: 10.1145/3726302.3730157. —
-  evidence that weighted RRF can improve retrieval when channels have
-  different reliability. RankWeave exposes generic fixed convex weights,
-  not the paper's video-specific adaptive estimator.
+  Reciprocal Rank Fusion.* SIGIR 2025, DOI: 10.1145/3726302.3730157 —
+  evidence for weighted RRF when channel reliability differs.
 - **Järvelin & Kekäläinen (2002).** *Cumulated Gain-based Evaluation of IR
-  Techniques.* ACM TOIS 20(4). DOI: 10.1145/582415.582418. — graded gain,
-  rank discounting, and normalization by an ideal ranking.
+  Techniques.* ACM TOIS 20(4), DOI: 10.1145/582415.582418 — graded gain,
+  rank discounting, and ideal-ranking normalization.
 - **NIST `trec_eval`** — reference conventions for precision at a fixed
   cutoff, recall, and first-relevant reciprocal rank.
-- **UAX #15**, Unicode Normalization Forms — NFC composition.
+- **UAX #15** — Unicode NFC normalization.
 
-PDFs and a citation manifest live in [`docs/research/`](docs/research/).
+Detailed citations and redistribution notes are in
+[`docs/research/`](docs/research/).
 
 ## Development
 
@@ -276,6 +284,7 @@ pip install -e ".[dev]"
 python -m ruff check .
 python -m coverage run -m pytest -q
 python -m coverage report    # 100% line + branch coverage required
+python -m pip wheel . --no-deps --wheel-dir dist
 ```
 
 ## License
