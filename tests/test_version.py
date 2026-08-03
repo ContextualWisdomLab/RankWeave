@@ -1,8 +1,8 @@
-import tomllib
 from pathlib import Path
 
-import rankweave
+import tomllib
 
+import rankweave
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_RELEASE_VERSION = "0.6.0"
