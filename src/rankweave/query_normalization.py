@@ -23,6 +23,8 @@ store side so it cannot silently diverge.
 
 import unicodedata
 
+from rankweave._validation import _require_positive_integer
+
 DEFAULT_MAX_QUERY_CHARACTER_LENGTH = 1000
 
 
@@ -36,9 +38,15 @@ def normalize_search_text(
     ``max_characters`` caps pathological queries; set it to match the
     store-side bound. Returns the composed, whitespace-collapsed,
     length-capped query text.
+
+    Raises ``TypeError`` when ``raw_text`` is not a string and ``ValueError``
+    when ``max_characters`` is not a positive integer.
     """
-    if max_characters < 1:
-        raise ValueError("max_characters must be >= 1")
+    if not isinstance(raw_text, str):
+        raise TypeError("raw_text must be a string")
+    validated_max_characters = _require_positive_integer(
+        max_characters, "max_characters"
+    )
     composed_text = unicodedata.normalize("NFC", raw_text)
     collapsed_text = " ".join(composed_text.split())
-    return collapsed_text[:max_characters]
+    return collapsed_text[:validated_max_characters]
