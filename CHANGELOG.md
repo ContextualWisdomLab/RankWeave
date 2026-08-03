@@ -20,6 +20,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
   docstrings.
 
 ### Fixed
+- Reject booleans and non-real objects for score, weight, bound, rank, and
+  RRF-constant inputs with stable `ValueError` contracts.
 - Reject `NaN` and infinite scores, bounds, weights, ranks, and RRF
   constants instead of silently clamping or propagating invalid values.
 - Enforce the documented `[0, 1]` domain for direct convex fusion and
