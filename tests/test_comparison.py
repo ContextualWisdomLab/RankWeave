@@ -103,10 +103,16 @@ def test_comparison_aligns_candidate_values_by_query_id():
 
     result = compare_ranking_reports(baseline, candidate)
 
-    assert result.query_differences == (
-        QueryMetricDifference("query-a", 0.1, 0.4, pytest.approx(0.3)),
-        QueryMetricDifference("query-b", 0.2, 0.6, pytest.approx(0.4)),
-    )
+    assert [entry.query_id for entry in result.query_differences] == [
+        "query-a",
+        "query-b",
+    ]
+    assert result.query_differences[0].baseline_value == 0.1
+    assert result.query_differences[0].candidate_value == 0.4
+    assert result.query_differences[0].difference == pytest.approx(0.3)
+    assert result.query_differences[1].baseline_value == 0.2
+    assert result.query_differences[1].candidate_value == 0.6
+    assert result.query_differences[1].difference == pytest.approx(0.4)
 
 
 def test_all_zero_differences_return_exact_probability_one():
@@ -217,6 +223,7 @@ def test_comparison_records_are_immutable():
     )
 
     assert isinstance(result, PairedRandomizationResult)
+    assert isinstance(result.query_differences[0], QueryMetricDifference)
     with pytest.raises(FrozenInstanceError):
         result.p_value = 0.0
     with pytest.raises(FrozenInstanceError):
@@ -281,6 +288,32 @@ def test_comparison_rejects_inconsistent_report_structure():
             _report((("query", 0.5),), cutoff=1, metric_cutoff=2),
             valid,
         )
+
+
+def test_comparison_rejects_malformed_report_components():
+    valid = _report((("query", 0.5),))
+    wrong_aggregate = RankingEvaluationReport(
+        cutoff=1,
+        query_metrics=valid.query_metrics,
+        aggregate=object(),
+    )
+    wrong_entry = RankingEvaluationReport(
+        cutoff=1,
+        query_metrics=(object(),),
+        aggregate=AggregateRankingMetrics(1, 0.0, 0.0, 0.0, 0.0),
+    )
+    wrong_metrics = RankingEvaluationReport(
+        cutoff=1,
+        query_metrics=(QueryRankingMetrics("query", object()),),
+        aggregate=AggregateRankingMetrics(1, 0.0, 0.0, 0.0, 0.0),
+    )
+
+    with pytest.raises(ValueError, match="AggregateRankingMetrics"):
+        compare_ranking_reports(wrong_aggregate, valid)
+    with pytest.raises(ValueError, match="QueryRankingMetrics"):
+        compare_ranking_reports(wrong_entry, valid)
+    with pytest.raises(ValueError, match="RankingMetrics"):
+        compare_ranking_reports(wrong_metrics, valid)
 
 
 @pytest.mark.parametrize("invalid_value", [-0.1, 1.1, math.nan, math.inf])
