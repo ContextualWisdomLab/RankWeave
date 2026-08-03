@@ -1,12 +1,13 @@
 # RankWeave
 
-**Dependency-free, store-agnostic retrieval fusion, evaluation, tuning, and
-strict TREC interchange for Python 3.10+.**
+**Dependency-free, store-agnostic retrieval fusion, evaluation, statistical
+comparison, tuning, and strict TREC interchange for Python 3.10+.**
 
 RankWeave combines lexical, dense, learned-sparse, graph, and other retrieval
-channels into deterministic rankings. It then evaluates those rankings against
-relevance judgments and can select a fixed weighted-RRF policy on a validation
-set. The runtime uses only the Python standard library.
+channels into deterministic rankings. It evaluates those rankings against
+relevance judgments, compares paired systems with transparent randomization,
+and can select a fixed weighted-RRF policy on a validation set. The runtime
+uses only the Python standard library.
 
 RankWeave originated in the Context Search engine of
 [ContextualWisdomLab/naruon](https://github.com/ContextualWisdomLab/naruon)
@@ -20,8 +21,8 @@ and remains suitable both as a standalone package and as a small MSA module.
   not only one candidate at a time.
 - **Auditable decisions:** immutable records preserve each channel's score,
   rank, weight, and contribution, including missing evidence.
-- **Closed experiment loop:** P@k, R@k, RR@k, graded nDCG@k, and deterministic
-  validation-set policy selection.
+- **Closed experiment loop:** P@k, R@k, RR@k, graded nDCG@k, paired
+  randomization, and deterministic validation-set policy selection.
 - **TREC interoperability:** strict qrels/run parsing, canonical formatting,
   score-ordered rankings, comment handling, and direct evaluation.
 - **Fail-closed contracts:** malformed numeric values, duplicate identifiers,
@@ -169,6 +170,63 @@ Evaluation contracts are explicit:
 The nDCG variant is documented and is not claimed to be numerically identical
 to `trec_eval`'s default identity-gain configuration.
 
+## Compare a candidate system with a baseline
+
+```python
+from rankweave import (
+    CANDIDATE_GREATER_ALTERNATIVE,
+    compare_rankings,
+)
+
+comparison = compare_rankings(
+    {
+        "query-a": ["irrelevant", "relevant-a"],
+        "query-b": ["irrelevant", "relevant-b"],
+    },
+    {
+        "query-a": ["relevant-a", "irrelevant"],
+        "query-b": ["relevant-b", "irrelevant"],
+    },
+    {
+        "query-a": {"relevant-a": 1},
+        "query-b": {"relevant-b": 1},
+    },
+    cutoff=1,
+    metric_name="ndcg_at_k",
+    alternative=CANDIDATE_GREATER_ALTERNATIVE,
+)
+
+print(comparison.significance.mean_difference)
+print(comparison.significance.p_value)
+```
+
+`compare_rankings` evaluates both systems on one complete judged query set,
+then applies a paired Fisher sign-randomization test to candidate-minus-baseline
+metric differences. `compare_ranking_reports` performs the same comparison on
+existing immutable evaluation reports.
+
+Supported metrics are precision@k, recall@k, reciprocal-rank@k, and nDCG@k.
+Supported alternatives are `two-sided`, `candidate-greater`, and
+`candidate-less`.
+
+The comparison contract is intentionally strict:
+
+- both systems must use the same positive cutoff and exactly the same query IDs;
+- candidate metrics are joined to baseline metrics by query ID, never position;
+- every selected per-query value must be finite and within `[0, 1]`;
+- duplicate or unhashable query IDs are rejected;
+- all aligned values and differences are preserved in immutable records.
+
+Up to 16 non-zero query differences are enumerated exactly. Larger comparisons
+use a local deterministic PRNG, default seed `0`, 10,000 sign assignments, and
+the plus-one Monte Carlo correction, so a finite simulation never reports a
+zero p-value. The global Python random state is not touched.
+
+A p-value is evidence about sampling uncertainty under the paired null; it is
+not an effect-size threshold, business-value estimate, or substitute for an
+independent held-out test set. Report the mean difference and per-query audit
+trail alongside the p-value.
+
 ## Tune a weighted-RRF policy
 
 ```python
@@ -259,14 +317,16 @@ and deliberate differences from permissive reference-tool behavior.
 
 ## Input and ordering guarantees
 
-- all numeric fusion and evaluation inputs must be finite;
+- all numeric fusion, evaluation, and comparison inputs must be finite;
 - direct convex scores and weights obey their documented domains;
-- RRF ranks, eta, cutoffs, and limits are positive integers, not booleans;
-- relevance grades used by the generic evaluation API are finite and
-  non-negative;
-- item identifiers are hashable and unique within a channel or ranking;
+- RRF ranks, eta, cutoffs, limits, and randomization counts are positive
+  integers, not booleans;
+- relevance grades used by the generic evaluation API are non-negative;
+- item and query identifiers are hashable and unique in their scope;
 - complete-list APIs use deterministic first-seen ordering for exact ties;
-- public result, evaluation, tuning, and TREC records are frozen dataclasses.
+- comparison aligns queries by identifier and uses only local seeded randomness;
+- public result, evaluation, comparison, tuning, and TREC records are frozen
+  dataclasses.
 
 ## Hourly governed development loop
 
@@ -298,6 +358,8 @@ for setup, permissions, and failure modes.
 | `weighted_reciprocal_rank_fuse(...)` | Complete fixed-weight RRF. |
 | `evaluate_ranking(...)` | P@k, R@k, RR@k, and graded nDCG@k. |
 | `evaluate_rankings(...)` | Per-query and macro evaluation. |
+| `compare_ranking_reports(...)` | Paired randomization of two evaluation reports. |
+| `compare_rankings(...)` | Evaluate and compare two complete ranking maps. |
 | `tune_weighted_reciprocal_rank_fusion(...)` | Select a validation policy. |
 | `parse_trec_qrels(...)`, `parse_trec_run(...)` | Parse strict TREC text. |
 | `format_trec_qrels(...)`, `format_trec_run(...)` | Emit canonical text. |
@@ -314,6 +376,9 @@ for setup, permissions, and failure modes.
   differs.
 - Järvelin & Kekäläinen (2002), *Cumulated Gain-based Evaluation of IR
   Techniques* — graded gain and ideal-ranking normalization.
+- Smucker, Allan & Carterette (2007), *A Comparison of Statistical
+  Significance Tests for Information Retrieval Evaluation* — paired
+  randomization as a suitable IR system-comparison method.
 - NIST TREC and `trec_eval` — interchange and evaluation reference behavior.
 - Unicode UAX #15 — NFC normalization.
 
