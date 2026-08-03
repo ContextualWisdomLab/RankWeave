@@ -1,16 +1,19 @@
 # rankweave
 
-**Language-agnostic hybrid-retrieval score fusion — pure-Python, store-agnostic.**
+**Language-agnostic hybrid-retrieval fusion and evaluation — pure-Python,
+store-agnostic.**
 
 `rankweave` decides *how to combine* scores from lexical, dense,
-learned-sparse, and other retrieval channels into one ranking. It ships
+learned-sparse, and other retrieval channels into one ranking, then measures
+how well that ranking performs against relevance judgments. It ships
 research-grounded convex score fusion for two or more normalized channels,
-complete-list score and rank fusion with audit trails, and the query-side
-Unicode normalization that makes character-level lexical matching
-language-agnostic. It has **no dependencies** (stdlib only) and **no opinion
-about your store** — bring your own channels; rankweave fuses their evidence.
+complete-list score and rank fusion with audit trails, immutable retrieval
+evaluation reports, and the query-side Unicode normalization that makes
+character-level lexical matching language-agnostic. It has **no dependencies**
+(stdlib only) and **no opinion about your store** — bring your own channels;
+rankweave combines and evaluates their evidence.
 
-It is extracted, unchanged in behavior, from the Context Search engine of
+It is extracted from the Context Search engine of
 [naruon](https://github.com/ContextualWisdomLab/naruon), following the
 lab's ONE SOURCE MULTI USE convention: standalone product *and*
 submodule-importable.
@@ -24,7 +27,9 @@ fusion — preserves the score distribution (Bruch, Gai & Ingber 2023).
 Their two-system analysis also extends directly to multiple retrieval
 systems. RRF remains available for channels that expose only ranks, with
 an optional fixed convex weighting policy when channels have different
-reliability. See [`docs/research/`](docs/research/) for the grounding.
+reliability. Built-in evaluation closes the loop from choosing a fusion
+policy to validating it on held-out judgments. See
+[`docs/research/`](docs/research/) for the grounding.
 
 ## Install
 
@@ -157,10 +162,53 @@ Complete-list fusion rejects duplicate item identifiers within a channel and
 uses deterministic first-seen input order when scores tie. RRF results retain
 the full per-channel rank trail used to calculate each fused score.
 
-All numeric fusion inputs must be finite. `NaN` and positive or negative
-infinity raise `ValueError` rather than being clamped or propagated into a
-ranking score. Direct convex helpers require scores and alpha in `[0, 1]`;
-RRF ranks and eta must be positive integers, not booleans or fractions.
+## Evaluate ranking quality
+
+Evaluate one ranking or a complete query set without introducing a metrics
+framework dependency:
+
+```python
+from rankweave import evaluate_rankings
+
+report = evaluate_rankings(
+    {
+        "query-a": ["document-a", "document-b"],
+        "query-b": ["document-c"],
+    },
+    {
+        "query-a": {"document-a": 3, "document-b": 1},
+        "query-b": {"document-c": 2},
+    },
+    cutoff=10,
+)
+
+print(report.aggregate.mean_ndcg_at_k)
+print(report.query_metrics[0].metrics.reciprocal_rank_at_k)
+```
+
+`evaluate_ranking` and `evaluate_rankings` report precision@k, recall@k,
+reciprocal-rank@k, and graded nDCG@k. Their contracts are explicit:
+
+- positive grades count as relevant for precision, recall, and reciprocal rank;
+- unjudged items receive relevance grade zero;
+- precision uses the requested cutoff as its denominator, so short result
+  lists are penalized rather than silently receiving an easier denominator;
+- reciprocal rank is bounded by the requested cutoff;
+- nDCG uses exponential gain (`2**relevance - 1`) and logarithmic discount;
+- aggregate evaluation requires exactly matching ranking and judgment query
+  IDs. Represent a no-result query with an empty sequence rather than omitting
+  it, preventing dropped queries from inflating reported quality.
+
+Every report is immutable and preserves per-query metrics alongside macro
+averages, making offline experiments and release gates reproducible. The nDCG
+variant is intentionally documented and is not claimed to be numerically
+identical to `trec_eval`'s default identity-gain configuration.
+
+All numeric fusion and evaluation inputs must be finite. `NaN` and positive or
+negative infinity raise `ValueError` rather than being clamped or propagated.
+Direct convex helpers require scores and alpha in `[0, 1]`; RRF ranks and eta
+must be positive integers, not booleans or fractions. Relevance grades must be
+finite and non-negative.
 
 ## API
 
@@ -178,6 +226,10 @@ RRF ranks and eta must be positive integers, not booleans or fractions.
 | `weighted_reciprocal_rank_fusion_score(ranks, weights, eta=60)` | Weighted RRF for one candidate under a fixed convex channel policy. |
 | `weighted_reciprocal_rank_fuse(rankings, weights, eta=60, limit=None)` | Fuse complete rank-only lists with deterministic ordering and contribution records. |
 | `FusedWeightedRankedItem`, `WeightedRankContribution` | Immutable weighted-RRF result and its present or missing channel evidence. |
+| `evaluate_ranking(ranking, judgments, cutoff=...)` | Evaluate one ranking with P@k, R@k, RR@k, and graded nDCG@k. |
+| `evaluate_rankings(rankings, judgments, cutoff=...)` | Evaluate a complete query set with per-query metrics and macro averages. |
+| `RankingMetrics`, `QueryRankingMetrics` | Immutable single-ranking and query-associated metric records. |
+| `AggregateRankingMetrics`, `RankingEvaluationReport` | Immutable macro metrics and complete evaluation audit report. |
 | `theoretical_min_max_normalize(score, bounds)` | Scale a score to `[0, 1]` using a scoring function's theoretical bounds. |
 | `normalize_search_text(text)` | NFC-compose + whitespace-collapse + length-cap a query. |
 | `WORD_SIMILARITY_THEORETICAL_BOUNDS`, `COSINE_DISTANCE_THEORETICAL_BOUNDS` | `(lower, upper)` tuples for the common lexical/dense pairing. |
@@ -208,6 +260,11 @@ cannot silently diverge.
   evidence that weighted RRF can improve retrieval when channels have
   different reliability. RankWeave exposes generic fixed convex weights,
   not the paper's video-specific adaptive estimator.
+- **Järvelin & Kekäläinen (2002).** *Cumulated Gain-based Evaluation of IR
+  Techniques.* ACM TOIS 20(4). DOI: 10.1145/582415.582418. — graded gain,
+  rank discounting, and normalization by an ideal ranking.
+- **NIST `trec_eval`** — reference conventions for precision at a fixed
+  cutoff, recall, and first-relevant reciprocal rank.
 - **UAX #15**, Unicode Normalization Forms — NFC composition.
 
 PDFs and a citation manifest live in [`docs/research/`](docs/research/).
