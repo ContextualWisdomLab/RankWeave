@@ -73,7 +73,8 @@ zero; weights must be non-negative and sum to one.
 
 All numeric fusion inputs must be finite. `NaN` and positive or negative
 infinity raise `ValueError` rather than being clamped or propagated into a
-ranking score.
+ranking score. Direct convex helpers require scores and alpha in `[0, 1]`;
+RRF ranks and eta must be positive integers, not booleans or fractions.
 
 ## API
 
@@ -83,7 +84,7 @@ ranking score.
 | `fuse_channel_scores(...)` | Fuse the common lexical-word-similarity + dense-cosine-distance pair under the selected strategy. |
 | `convex_combination_score(...)` | Two-channel TM2C2 over already-normalized `[0, 1]` scores. |
 | `weighted_convex_combination_score(scores, weights)` | N-channel convex fusion over already-normalized scores and explicit weights. |
-| `reciprocal_rank_fusion_score(ranks, eta=60)` | RRF over 1-based per-channel ranks. |
+| `reciprocal_rank_fusion_score(ranks, eta=60)` | RRF over positive integer 1-based per-channel ranks. |
 | `theoretical_min_max_normalize(score, bounds)` | Scale a score to `[0, 1]` using a scoring function's theoretical bounds. |
 | `normalize_search_text(text)` | NFC-compose + whitespace-collapse + length-cap a query. |
 | `WORD_SIMILARITY_THEORETICAL_BOUNDS`, `COSINE_DISTANCE_THEORETICAL_BOUNDS` | `(lower, upper)` tuples for the common lexical/dense pairing. |
