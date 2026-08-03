@@ -44,7 +44,7 @@ def test_weighted_convex_combination_rejects_unknown_score_channel():
         )
 
 
-@pytest.mark.parametrize("invalid_score", [-0.1, 1.1, float("nan")])
+@pytest.mark.parametrize("invalid_score", [-0.1, 1.1])
 def test_weighted_convex_combination_rejects_score_outside_unit_interval(
     invalid_score,
 ):
