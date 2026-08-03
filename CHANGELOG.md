@@ -11,6 +11,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
   retrieval-channel scores with validated convex weights while preserving
   the existing missing-channel-as-infimum semantics.
 
+### Fixed
+- Reject `NaN` and infinite scores, bounds, weights, ranks, and RRF
+  constants instead of silently clamping or propagating invalid values.
+
 ## [0.1.0] — 2026-07-11
 
 Initial extraction from
