@@ -6,6 +6,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-04
+
 ### Added
 - Strict four-column TREC qrels and six-column TREC run parsing, canonical
   formatting, immutable audit records, score-ordered ranking conversion, and
@@ -15,10 +17,17 @@ project adheres to [Semantic Versioning](https://semver.org/).
   Copilot product task when the PR queue and agent-task queue are both empty.
 
 ### Changed
-- TREC public records now snapshot iterable inputs and validate tokens,
-  finite grades and scores, positive ranks, duplicate query/document or rank
-  state, one consistent run tag, and conservative 1–12 character
-  alphanumeric NIST run tags before they can be serialized.
+- TREC qrels relevance now follows the reference `trec_eval` interchange
+  contract: signed ASCII-decimal integers in `[-127, 127]`. Canonical qrels
+  formatting emits integers rather than floating-point spellings.
+- TREC parsers ignore blank lines and `#` comment lines while preserving
+  physical line numbers in validation errors.
+- Portable run tags accept 1–20 ASCII letters, digits, periods, underscores,
+  or hyphens, matching NIST submission guidance instead of the earlier
+  over-restrictive 1–12 alphanumeric profile.
+- TREC public records snapshot iterable inputs and validate tokens, scores,
+  ranks, duplicate query/document or rank state, and one consistent run tag
+  before they can be serialized.
 - TREC rank parsing accepts zero-padded positive ASCII decimal fields while
   preserving their normalized integer value.
 
