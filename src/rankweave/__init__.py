@@ -1,7 +1,7 @@
 """rankweave — language-agnostic hybrid-retrieval score fusion.
 
 Pure-Python (stdlib-only) fusion of lexical, semantic, learned-sparse,
-and other retrieval channels, complete-list RRF, and Unicode NFC query
+and other retrieval channels, complete-list fusion, and Unicode NFC query
 normalization. Store-agnostic: bring your own channels; rankweave decides
 how to combine their evidence.
 
@@ -34,7 +34,10 @@ from rankweave.query_normalization import (
 )
 from rankweave.ranked_list_fusion import (
     FusedRankedItem,
+    FusedScoredItem,
+    WeightedChannelContribution,
     reciprocal_rank_fuse,
+    weighted_convex_fuse,
 )
 from rankweave.score_fusion import (
     CONVEX_COMBINATION_STRATEGY,
@@ -57,7 +60,9 @@ __all__ = [
     "DEFAULT_MAX_QUERY_CHARACTER_LENGTH",
     "RECIPROCAL_RANK_STRATEGY",
     "WORD_SIMILARITY_THEORETICAL_BOUNDS",
+    "WeightedChannelContribution",
     "FusedRankedItem",
+    "FusedScoredItem",
     "FusionSettings",
     "convex_combination_score",
     "fuse_channel_scores",
@@ -66,5 +71,6 @@ __all__ = [
     "reciprocal_rank_fusion_score",
     "theoretical_min_max_normalize",
     "weighted_convex_combination_score",
+    "weighted_convex_fuse",
     "__version__",
 ]
