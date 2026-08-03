@@ -13,7 +13,8 @@ Two fusion strategies, research-grounded (see ``docs/research/``):
   training data needed. The public API supports both the common
   two-channel pairing and explicit N-channel convex weights.
 - ``reciprocal_rank_fusion`` — Cormack, Clarke & Büttcher 2009: the
-  non-parametric rank-only alternative.
+  non-parametric rank-only alternative, with equal- and convex-weighted
+  complete-list APIs.
 
 Quickstart::
 
@@ -35,9 +36,12 @@ from rankweave.query_normalization import (
 from rankweave.ranked_list_fusion import (
     FusedRankedItem,
     FusedScoredItem,
+    FusedWeightedRankedItem,
     WeightedChannelContribution,
+    WeightedRankContribution,
     reciprocal_rank_fuse,
     weighted_convex_fuse,
+    weighted_reciprocal_rank_fuse,
 )
 from rankweave.score_fusion import (
     CONVEX_COMBINATION_STRATEGY,
@@ -50,6 +54,7 @@ from rankweave.score_fusion import (
     reciprocal_rank_fusion_score,
     theoretical_min_max_normalize,
     weighted_convex_combination_score,
+    weighted_reciprocal_rank_fusion_score,
 )
 
 __version__ = "0.2.0"
@@ -60,10 +65,12 @@ __all__ = [
     "DEFAULT_MAX_QUERY_CHARACTER_LENGTH",
     "RECIPROCAL_RANK_STRATEGY",
     "WORD_SIMILARITY_THEORETICAL_BOUNDS",
-    "WeightedChannelContribution",
     "FusedRankedItem",
     "FusedScoredItem",
+    "FusedWeightedRankedItem",
     "FusionSettings",
+    "WeightedChannelContribution",
+    "WeightedRankContribution",
     "convex_combination_score",
     "fuse_channel_scores",
     "normalize_search_text",
@@ -72,5 +79,7 @@ __all__ = [
     "theoretical_min_max_normalize",
     "weighted_convex_combination_score",
     "weighted_convex_fuse",
+    "weighted_reciprocal_rank_fuse",
+    "weighted_reciprocal_rank_fusion_score",
     "__version__",
 ]
