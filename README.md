@@ -88,7 +88,7 @@ fused_results = weighted_convex_fuse(
 
 best_result = fused_results[0]
 assert best_result.item_id == "document-a"
-assert best_result.score == 0.62
+assert round(best_result.score, 2) == 0.62
 ```
 
 Every result includes immutable per-channel contribution records containing
