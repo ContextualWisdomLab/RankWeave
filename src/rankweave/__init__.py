@@ -1,10 +1,10 @@
-"""rankweave — language-agnostic retrieval fusion, evaluation, and tuning.
+"""rankweave — retrieval fusion, evaluation, comparison, and tuning.
 
 Pure-Python (stdlib-only) fusion of lexical, semantic, learned-sparse,
 and other retrieval channels, complete-list fusion, ranked-effectiveness
-evaluation, offline weight-policy tuning, strict TREC interchange, and Unicode
-NFC query normalization. Store-agnostic: bring your own channels; rankweave
-combines and evaluates their evidence.
+evaluation, paired statistical comparison, offline weight-policy tuning,
+strict TREC interchange, and Unicode NFC query normalization. Store-agnostic:
+bring your own channels; rankweave combines and evaluates their evidence.
 
 Two fusion strategies, research-grounded (see ``docs/research/``):
 
@@ -30,6 +30,27 @@ Quickstart::
     )
 """
 
+from rankweave.comparison import (
+    CANDIDATE_GREATER_ALTERNATIVE,
+    CANDIDATE_LESS_ALTERNATIVE,
+    DEFAULT_RANDOMIZATION_COUNT,
+    DEFAULT_RANDOM_SEED,
+    EXACT_RANDOMIZATION_METHOD,
+    EXACT_RANDOMIZATION_PAIR_LIMIT,
+    MONTE_CARLO_RANDOMIZATION_METHOD,
+    NDCG_AT_K_METRIC,
+    PRECISION_AT_K_METRIC,
+    RECALL_AT_K_METRIC,
+    RECIPROCAL_RANK_AT_K_METRIC,
+    SUPPORTED_COMPARISON_ALTERNATIVES,
+    SUPPORTED_COMPARISON_METRICS,
+    TWO_SIDED_ALTERNATIVE,
+    PairedRandomizationResult,
+    QueryMetricDifference,
+    RankingComparisonReport,
+    compare_ranking_reports,
+    compare_rankings,
+)
 from rankweave.evaluation import (
     AggregateRankingMetrics,
     QueryRankingMetrics,
@@ -87,35 +108,54 @@ from rankweave.tuning import (
     tune_weighted_reciprocal_rank_fusion,
 )
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 __all__ = [
     "AggregateRankingMetrics",
+    "CANDIDATE_GREATER_ALTERNATIVE",
+    "CANDIDATE_LESS_ALTERNATIVE",
     "CONVEX_COMBINATION_STRATEGY",
     "COSINE_DISTANCE_THEORETICAL_BOUNDS",
     "DEFAULT_MAX_QUERY_CHARACTER_LENGTH",
-    "MEAN_NDCG_OBJECTIVE",
-    "MEAN_PRECISION_OBJECTIVE",
-    "MEAN_RECALL_OBJECTIVE",
-    "MEAN_RECIPROCAL_RANK_OBJECTIVE",
-    "RECIPROCAL_RANK_STRATEGY",
-    "SUPPORTED_TUNING_OBJECTIVES",
-    "WORD_SIMILARITY_THEORETICAL_BOUNDS",
+    "DEFAULT_RANDOMIZATION_COUNT",
+    "DEFAULT_RANDOM_SEED",
+    "EXACT_RANDOMIZATION_METHOD",
+    "EXACT_RANDOMIZATION_PAIR_LIMIT",
     "FusedRankedItem",
     "FusedScoredItem",
     "FusedWeightedRankedItem",
     "FusionSettings",
+    "MEAN_NDCG_OBJECTIVE",
+    "MEAN_PRECISION_OBJECTIVE",
+    "MEAN_RECALL_OBJECTIVE",
+    "MEAN_RECIPROCAL_RANK_OBJECTIVE",
+    "MONTE_CARLO_RANDOMIZATION_METHOD",
+    "NDCG_AT_K_METRIC",
+    "PRECISION_AT_K_METRIC",
+    "PairedRandomizationResult",
+    "QueryMetricDifference",
     "QueryRankingMetrics",
+    "RECALL_AT_K_METRIC",
+    "RECIPROCAL_RANK_AT_K_METRIC",
+    "RECIPROCAL_RANK_STRATEGY",
+    "RankingComparisonReport",
     "RankingEvaluationReport",
     "RankingMetrics",
+    "SUPPORTED_COMPARISON_ALTERNATIVES",
+    "SUPPORTED_COMPARISON_METRICS",
+    "SUPPORTED_TUNING_OBJECTIVES",
+    "TWO_SIDED_ALTERNATIVE",
     "TrecQrelEntry",
     "TrecQrels",
     "TrecRun",
     "TrecRunEntry",
+    "WORD_SIMILARITY_THEORETICAL_BOUNDS",
     "WeightedChannelContribution",
     "WeightedRRFTuningReport",
     "WeightedRRFTuningTrial",
     "WeightedRankContribution",
+    "compare_ranking_reports",
+    "compare_rankings",
     "convex_combination_score",
     "evaluate_ranking",
     "evaluate_rankings",
