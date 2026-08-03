@@ -52,7 +52,7 @@ from rankweave.score_fusion import (
     weighted_convex_combination_score,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "CONVEX_COMBINATION_STRATEGY",

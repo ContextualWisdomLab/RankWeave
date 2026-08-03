@@ -30,6 +30,10 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   Changing a default requires citing the evidence.
 - **Complete quality gates.** Production docstrings and both line and
   branch coverage must remain at 100%.
+- **Release metadata stays synchronized.** A release must update
+  `pyproject.toml`, `rankweave.__version__`, the expected version test,
+  and `CHANGELOG.md` together. The built wheel must preserve `py.typed`
+  and pass an isolated installation smoke test.
 
 ## Develop
 
@@ -38,6 +42,7 @@ pip install -e ".[dev]"
 python -m ruff check .
 python -m coverage run -m pytest -q
 python -m coverage report
+python -m pip wheel . --no-deps --wheel-dir dist
 ```
 
 ## Layout
