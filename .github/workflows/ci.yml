@@ -60,6 +60,7 @@ jobs:
               wheel_members = set(wheel_file.namelist())
           required_members = {
               "rankweave/__init__.py",
+              "rankweave/evaluation.py",
               "rankweave/py.typed",
           }
           missing_members = required_members - wheel_members
@@ -79,5 +80,9 @@ jobs:
 
           assert version("rankweave") == rankweave.__version__
           assert rankweave.reciprocal_rank_fuse({"dense": ["document"]})
+          metrics = rankweave.evaluate_ranking(
+              ["document"], {"document": 1}, cutoff=1
+          )
+          assert metrics.ndcg_at_k == 1.0
           PY
       - run: .package-smoke/bin/python -m pip check
