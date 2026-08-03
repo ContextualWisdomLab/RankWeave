@@ -1,8 +1,9 @@
 # Research grounding — RankWeave
 
-RankWeave's defaults, metric conventions, tuning workflow, and interchange
-contracts are tied to published evidence or an authoritative reference
-implementation. This directory preserves that grounding with the code.
+RankWeave's defaults, metric conventions, significance comparison, tuning
+workflow, and interchange contracts are tied to published evidence or an
+authoritative reference implementation. This directory preserves that
+grounding with the code.
 
 ## Papers
 
@@ -12,6 +13,7 @@ implementation. This directory preserves that grounding with the code.
 | Cormack, Clarke & Büttcher (2009), *Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods*, SIGIR 2009 | RRF and the default `eta=60`. |
 | Samuel et al. (2025), *MMMORRF: Multimodal Multilingual Modularized Reciprocal Rank Fusion*, SIGIR 2025, DOI: 10.1145/3726302.3730157 | Evidence for weighted RRF when retrieval channels have different reliability. |
 | Järvelin & Kekäläinen (2002), *Cumulated Gain-based Evaluation of IR Techniques*, ACM TOIS 20(4), DOI: 10.1145/582415.582418 | Graded cumulative gain, logarithmic rank discounting, and ideal-ranking normalization. |
+| Smucker, Allan & Carterette (2007), *A Comparison of Statistical Significance Tests for Information Retrieval Evaluation*, CIKM 2007, DOI: 10.1145/1321440.1321528 | Paired topic-level randomization as a suitable transparent test for comparing IR systems. |
 
 Where a locally preserved PDF is absent, the source remains cite-only until
 redistribution permission is confirmed. Git LFS is intentionally not required.
@@ -47,6 +49,36 @@ is not claimed to be numerically identical to `trec_eval`'s default
 identity-gain configuration. Precision uses the requested cutoff denominator,
 reciprocal rank is cutoff-bound, and aggregate evaluation requires exact
 ranking/judgment query-set parity.
+
+## Paired significance protocol
+
+`compare_ranking_reports` aligns two systems by query identifier, computes
+candidate-minus-baseline metric differences, and applies paired Fisher sign
+randomization. `compare_rankings` first creates both complete evaluation
+reports through the same fail-closed evaluation contract.
+
+The test is grounded in the IR significance-study literature summarized by
+Smucker, Allan & Carterette. Their empirical comparison over TREC runs found
+little practical difference among randomization, bootstrap, and paired t-tests
+for the studied measures, while sign and Wilcoxon tests behaved less well.
+RankWeave chooses randomization because its paired exchangeability assumption
+and calculation can be exposed directly without a numerical dependency.
+
+The operational contract is:
+
+- require identical positive cutoffs and exactly matching unique query IDs;
+- align candidate values by query ID, never report position;
+- retain every baseline value, candidate value, and difference;
+- enumerate all sign assignments for at most 16 non-zero differences;
+- otherwise draw deterministic signs from a local `random.Random(seed)`;
+- apply the plus-one correction to Monte Carlo p-values;
+- expose two-sided and candidate-directed alternatives explicitly;
+- never mutate global random state.
+
+A p-value is evidence about the paired null hypothesis, not the magnitude or
+commercial importance of the observed effect. Consumers should report the mean
+difference and per-query evidence and should keep validation-set policy
+selection separate from one-time held-out test comparison.
 
 ## Tuning protocol
 
