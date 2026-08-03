@@ -65,7 +65,7 @@ from rankweave.score_fusion import (
     weighted_reciprocal_rank_fusion_score,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "AggregateRankingMetrics",

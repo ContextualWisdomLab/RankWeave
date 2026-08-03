@@ -6,6 +6,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-03
+
 ### Added
 - `evaluate_ranking` for precision@k, recall@k, reciprocal-rank@k, and
   exponential-gain nDCG@k over graded relevance judgments.
