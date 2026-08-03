@@ -61,6 +61,7 @@ jobs:
           required_members = {
               "rankweave/__init__.py",
               "rankweave/evaluation.py",
+              "rankweave/tuning.py",
               "rankweave/py.typed",
           }
           missing_members = required_members - wheel_members
@@ -84,5 +85,12 @@ jobs:
               ["document"], {"document": 1}, cutoff=1
           )
           assert metrics.ndcg_at_k == 1.0
+          tuning = rankweave.tune_weighted_reciprocal_rank_fusion(
+              {"query": {"dense": ["document"]}},
+              {"query": {"document": 1}},
+              {"dense-only": {"dense": 1.0}},
+              cutoff=1,
+          )
+          assert tuning.best_policy_id == "dense-only"
           PY
       - run: .package-smoke/bin/python -m pip check
