@@ -5,10 +5,10 @@
 `rankweave` decides *how to combine* scores from lexical, dense,
 learned-sparse, and other retrieval channels into one ranking. It ships
 research-grounded convex score fusion for two or more normalized channels,
-Reciprocal Rank Fusion for rank-only channels, and the query-side Unicode
-normalization that makes character-level lexical matching language-agnostic.
-It has **no dependencies** (stdlib only) and **no opinion about your store** —
-bring your own channels; rankweave fuses their evidence.
+complete-list Reciprocal Rank Fusion for rank-only channels, and the
+query-side Unicode normalization that makes character-level lexical matching
+language-agnostic. It has **no dependencies** (stdlib only) and **no opinion
+about your store** — bring your own channels; rankweave fuses their evidence.
 
 It is extracted, unchanged in behavior, from the Context Search engine of
 [naruon](https://github.com/ContextualWisdomLab/naruon), following the
@@ -71,6 +71,29 @@ Use `theoretical_min_max_normalize` for bounded scoring functions before
 calling the multi-channel helper. Missing or `None` channel scores contribute
 zero; weights must be non-negative and sum to one.
 
+To fuse complete rank-only result lists, pass item identifiers in rank order:
+
+```python
+from rankweave import reciprocal_rank_fuse
+
+fused_results = reciprocal_rank_fuse(
+    {
+        "lexical": ["document-a", "document-b"],
+        "dense": ["document-b", "document-c"],
+    },
+    limit=10,
+)
+
+best_result = fused_results[0]
+assert best_result.item_id == "document-b"
+assert best_result.channel_ranks == (("lexical", 2), ("dense", 1))
+```
+
+Each immutable result includes the fused score and its complete per-channel
+rank trail for diagnostics and auditability. Duplicate item identifiers in a
+single channel are rejected, and equal scores use deterministic first-seen
+input order.
+
 All numeric fusion inputs must be finite. `NaN` and positive or negative
 infinity raise `ValueError` rather than being clamped or propagated into a
 ranking score. Direct convex helpers require scores and alpha in `[0, 1]`;
@@ -85,6 +108,8 @@ RRF ranks and eta must be positive integers, not booleans or fractions.
 | `convex_combination_score(...)` | Two-channel TM2C2 over already-normalized `[0, 1]` scores. |
 | `weighted_convex_combination_score(scores, weights)` | N-channel convex fusion over already-normalized scores and explicit weights. |
 | `reciprocal_rank_fusion_score(ranks, eta=60)` | RRF over positive integer 1-based per-channel ranks. |
+| `reciprocal_rank_fuse(rankings, eta=60, limit=None)` | Fuse complete ranked item-ID lists with deterministic ordering and an audit trail. |
+| `FusedRankedItem` | Immutable complete-list RRF result (`item_id`, `score`, `channel_ranks`). |
 | `theoretical_min_max_normalize(score, bounds)` | Scale a score to `[0, 1]` using a scoring function's theoretical bounds. |
 | `normalize_search_text(text)` | NFC-compose + whitespace-collapse + length-cap a query. |
 | `WORD_SIMILARITY_THEORETICAL_BOUNDS`, `COSINE_DISTANCE_THEORETICAL_BOUNDS` | `(lower, upper)` tuples for the common lexical/dense pairing. |
