@@ -64,20 +64,27 @@ reviews and required checks.
 ## Required secret
 
 Create a repository or organization Actions secret named
-`COPILOT_GITHUB_TOKEN` containing a **user-to-server token** accepted by the
-GitHub Copilot agent-tasks API. A personal access token, OAuth user token, or
-GitHub App user-to-server token may be used. GitHub App installation tokens and
-the Actions `GITHUB_TOKEN` are not supported by that API.
+`COPILOT_GITHUB_TOKEN`. GitHub's public-preview Agent Tasks API accepts these
+user-to-server token types:
+
+- a fine-grained personal access token;
+- a GitHub App **user access token**.
+
+The token must be scoped to RankWeave with the repository permission
+**Agent tasks: read and write**. Listing the queue requires read access; starting
+a task requires read/write access. GitHub App installation access tokens and
+the Actions `GITHUB_TOKEN` are not supported. Starting tasks also requires the
+user and organization to have an eligible Copilot Business or Copilot
+Enterprise configuration with the cloud agent enabled for RankWeave.
+
+Both Agent Tasks requests send `X-GitHub-Api-Version: 2026-03-10`, the current
+version documented for this public-preview endpoint. Reassess the version,
+response shape, states, and token permissions whenever GitHub changes the
+preview contract.
 
 The workflow never falls back from `COPILOT_GITHUB_TOKEN` to `github.token` for
 agent task listing or creation. Without the secret, PR maintenance still runs,
 but new product development remains intentionally disabled and emits a warning.
-
-Minimum access must be limited to RankWeave and the operations required by the
-agent. When using issue assignment instead of the task endpoint, GitHub's
-current fine-grained-token guidance requires metadata read and Actions,
-contents, issues, and pull-request read/write access. Reassess permissions when
-the public-preview API changes.
 
 ## Operational verification
 
