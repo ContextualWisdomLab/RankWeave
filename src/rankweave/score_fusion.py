@@ -36,6 +36,12 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from rankweave._validation import (
+    _require_finite,
+    _require_positive_integer,
+    _require_unit_interval,
+)
+
 WORD_SIMILARITY_THEORETICAL_BOUNDS = (0.0, 1.0)
 COSINE_DISTANCE_THEORETICAL_BOUNDS = (0.0, 2.0)
 
@@ -45,12 +51,6 @@ RECIPROCAL_RANK_STRATEGY = "reciprocal_rank_fusion"
 _SUPPORTED_STRATEGY_NAMES = frozenset(
     {CONVEX_COMBINATION_STRATEGY, RECIPROCAL_RANK_STRATEGY}
 )
-
-
-def _require_finite(value: float, label: str) -> None:
-    """Reject IEEE non-finite values before comparisons or arithmetic."""
-    if not math.isfinite(value):
-        raise ValueError(f"{label} must be finite")
 
 
 @dataclass(frozen=True)
@@ -65,19 +65,16 @@ class FusionSettings:
     rank_constant_eta: int = 60
 
     def __post_init__(self) -> None:
+        """Validate the strategy and numeric parameter domains."""
         if self.strategy_name not in _SUPPORTED_STRATEGY_NAMES:
             raise ValueError(
                 "strategy_name must be one of "
                 f"{sorted(_SUPPORTED_STRATEGY_NAMES)}, got {self.strategy_name!r}"
             )
-        _require_finite(
+        _require_unit_interval(
             self.semantic_weight_alpha, "semantic_weight_alpha"
         )
-        if not 0.0 <= self.semantic_weight_alpha <= 1.0:
-            raise ValueError("semantic_weight_alpha must be within [0, 1]")
-        _require_finite(self.rank_constant_eta, "rank_constant_eta")
-        if self.rank_constant_eta < 1:
-            raise ValueError("rank_constant_eta must be >= 1")
+        _require_positive_integer(self.rank_constant_eta, "rank_constant_eta")
 
 
 def theoretical_min_max_normalize(
@@ -92,8 +89,11 @@ def theoretical_min_max_normalize(
     """
     lower_bound, upper_bound = bounds
     _require_finite(score, "score")
-    if not math.isfinite(lower_bound) or not math.isfinite(upper_bound):
-        raise ValueError("bounds must be finite")
+    try:
+        _require_finite(lower_bound, "bounds")
+        _require_finite(upper_bound, "bounds")
+    except ValueError as exc:
+        raise ValueError("bounds must be finite") from exc
     if upper_bound <= lower_bound:
         raise ValueError("bounds must satisfy upper > lower")
     normalized = (score - lower_bound) / (upper_bound - lower_bound)
@@ -109,14 +109,14 @@ def convex_combination_score(
 
     A channel absent for a candidate (e.g. no embedding stored yet)
     contributes its theoretical minimum, 0 — absent evidence is the
-    infimum, not a missing value to impute. Supplied values must be
-    finite.
+    infimum, not a missing value to impute. Supplied scores and the
+    semantic weight must be finite values in [0, 1].
     """
     if semantic_score is not None:
-        _require_finite(semantic_score, "semantic_score")
+        _require_unit_interval(semantic_score, "semantic_score")
     if lexical_score is not None:
-        _require_finite(lexical_score, "lexical_score")
-    _require_finite(semantic_weight_alpha, "semantic_weight_alpha")
+        _require_unit_interval(lexical_score, "lexical_score")
+    _require_unit_interval(semantic_weight_alpha, "semantic_weight_alpha")
     semantic_component = semantic_score if semantic_score is not None else 0.0
     lexical_component = lexical_score if lexical_score is not None else 0.0
     return (
@@ -155,13 +155,9 @@ def weighted_convex_combination_score(
         raise ValueError("channel weights must sum to 1")
     for channel_name, channel_score in channel_scores.items():
         if channel_score is not None:
-            _require_finite(
+            _require_unit_interval(
                 channel_score, f"score for channel {channel_name!r}"
             )
-            if not 0.0 <= channel_score <= 1.0:
-                raise ValueError(
-                    f"score for channel {channel_name!r} must be within [0, 1]"
-                )
 
     weighted_components = []
     for channel_name, channel_weight in channel_weights.items():
@@ -174,21 +170,16 @@ def weighted_convex_combination_score(
 def reciprocal_rank_fusion_score(
     channel_ranks: dict[str, int], rank_constant_eta: int = 60
 ) -> float:
-    """RRF over finite 1-based ranks: sum of 1 / (eta + rank)."""
-    _require_finite(rank_constant_eta, "rank_constant_eta")
-    if rank_constant_eta < 1:
-        raise ValueError("rank_constant_eta must be >= 1")
+    """RRF over positive integer 1-based ranks: sum of 1 / (eta + rank)."""
+    validated_eta = _require_positive_integer(
+        rank_constant_eta, "rank_constant_eta"
+    )
     fused_score = 0.0
     for channel_name, one_based_rank in channel_ranks.items():
-        _require_finite(
+        validated_rank = _require_positive_integer(
             one_based_rank, f"rank for channel {channel_name!r}"
         )
-        if one_based_rank < 1:
-            raise ValueError(
-                f"rank for channel {channel_name!r} must be >= 1,"
-                f" got {one_based_rank}"
-            )
-        fused_score += 1.0 / (rank_constant_eta + one_based_rank)
+        fused_score += 1.0 / (validated_eta + validated_rank)
     return fused_score
 
 

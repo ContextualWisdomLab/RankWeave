@@ -40,7 +40,7 @@ Source = "https://github.com/ContextualWisdomLab/rankweave"
 Issues = "https://github.com/ContextualWisdomLab/rankweave/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["coverage[toml]>=7.6", "pytest>=8", "ruff>=0.6"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rankweave"]
@@ -48,9 +48,35 @@ packages = ["src/rankweave"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
+[tool.coverage.run]
+branch = true
+source = ["rankweave"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = false
+
 [tool.ruff]
 line-length = 88
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "D106",
+    "D107",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]

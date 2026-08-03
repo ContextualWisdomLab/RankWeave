@@ -7,13 +7,27 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `weighted_convex_fuse`, immutable `FusedScoredItem` results, and
+  `WeightedChannelContribution` audit records for complete normalized-score
+  fusion with deterministic tie-breaking.
+- `reciprocal_rank_fuse` and immutable `FusedRankedItem` results for
+  complete-list RRF with deterministic tie-breaking and per-channel rank
+  audit trails.
 - `weighted_convex_combination_score` — fuse any number of normalized
   retrieval-channel scores with validated convex weights while preserving
   the existing missing-channel-as-infimum semantics.
+- CI gates for 100% line and branch coverage and complete production
+  docstrings.
 
 ### Fixed
+- Validate query text types and require a positive integer normalization
+  length cap instead of leaking downstream slicing or Unicode errors.
+- Reject booleans and non-real objects for score, weight, bound, rank, and
+  RRF-constant inputs with stable `ValueError` contracts.
 - Reject `NaN` and infinite scores, bounds, weights, ranks, and RRF
   constants instead of silently clamping or propagating invalid values.
+- Enforce the documented `[0, 1]` domain for direct convex fusion and
+  require positive integer RRF ranks and constants.
 
 ## [0.1.0] — 2026-07-11
 
