@@ -47,6 +47,12 @@ _SUPPORTED_STRATEGY_NAMES = frozenset(
 )
 
 
+def _require_finite(value: float, label: str) -> None:
+    """Reject IEEE non-finite values before comparisons or arithmetic."""
+    if not math.isfinite(value):
+        raise ValueError(f"{label} must be finite")
+
+
 @dataclass(frozen=True)
 class FusionSettings:
     """Tunable fusion parameters (immutable; construct one per query set)."""
@@ -64,8 +70,12 @@ class FusionSettings:
                 "strategy_name must be one of "
                 f"{sorted(_SUPPORTED_STRATEGY_NAMES)}, got {self.strategy_name!r}"
             )
+        _require_finite(
+            self.semantic_weight_alpha, "semantic_weight_alpha"
+        )
         if not 0.0 <= self.semantic_weight_alpha <= 1.0:
             raise ValueError("semantic_weight_alpha must be within [0, 1]")
+        _require_finite(self.rank_constant_eta, "rank_constant_eta")
         if self.rank_constant_eta < 1:
             raise ValueError("rank_constant_eta must be >= 1")
 
@@ -77,9 +87,13 @@ def theoretical_min_max_normalize(
 
     Using theoretical rather than observed bounds keeps the transform
     stable across queries and candidate sets (Bruch et al. 2023, §4.2).
-    Out-of-range inputs (floating-point drift) are clamped.
+    Out-of-range finite inputs (floating-point drift) are clamped;
+    NaN and infinities are rejected.
     """
     lower_bound, upper_bound = bounds
+    _require_finite(score, "score")
+    if not math.isfinite(lower_bound) or not math.isfinite(upper_bound):
+        raise ValueError("bounds must be finite")
     if upper_bound <= lower_bound:
         raise ValueError("bounds must satisfy upper > lower")
     normalized = (score - lower_bound) / (upper_bound - lower_bound)
@@ -95,8 +109,14 @@ def convex_combination_score(
 
     A channel absent for a candidate (e.g. no embedding stored yet)
     contributes its theoretical minimum, 0 — absent evidence is the
-    infimum, not a missing value to impute.
+    infimum, not a missing value to impute. Supplied values must be
+    finite.
     """
+    if semantic_score is not None:
+        _require_finite(semantic_score, "semantic_score")
+    if lexical_score is not None:
+        _require_finite(lexical_score, "lexical_score")
+    _require_finite(semantic_weight_alpha, "semantic_weight_alpha")
     semantic_component = semantic_score if semantic_score is not None else 0.0
     lexical_component = lexical_score if lexical_score is not None else 0.0
     return (
@@ -116,6 +136,7 @@ def weighted_convex_combination_score(
     ``channel_scores`` may omit channels or map them to ``None``; absent
     evidence contributes the theoretical minimum, 0. A score supplied
     without a corresponding weight is rejected as a configuration error.
+    All supplied scores and weights must be finite.
     """
     score_channels_without_weights = set(channel_scores) - set(channel_weights)
     if score_channels_without_weights:
@@ -123,16 +144,24 @@ def weighted_convex_combination_score(
             "channel scores contain channels without weights: "
             f"{sorted(score_channels_without_weights)!r}"
         )
-    if any(weight < 0.0 for weight in channel_weights.values()):
-        raise ValueError("channel weights must be non-negative")
+    for channel_name, channel_weight in channel_weights.items():
+        _require_finite(
+            channel_weight, f"weight for channel {channel_name!r}"
+        )
+        if channel_weight < 0.0:
+            raise ValueError("channel weights must be non-negative")
     total_weight = math.fsum(channel_weights.values())
     if not math.isclose(total_weight, 1.0, rel_tol=0.0, abs_tol=1e-12):
         raise ValueError("channel weights must sum to 1")
     for channel_name, channel_score in channel_scores.items():
-        if channel_score is not None and not 0.0 <= channel_score <= 1.0:
-            raise ValueError(
-                f"score for channel {channel_name!r} must be within [0, 1]"
+        if channel_score is not None:
+            _require_finite(
+                channel_score, f"score for channel {channel_name!r}"
             )
+            if not 0.0 <= channel_score <= 1.0:
+                raise ValueError(
+                    f"score for channel {channel_name!r} must be within [0, 1]"
+                )
 
     weighted_components = []
     for channel_name, channel_weight in channel_weights.items():
@@ -145,11 +174,15 @@ def weighted_convex_combination_score(
 def reciprocal_rank_fusion_score(
     channel_ranks: dict[str, int], rank_constant_eta: int = 60
 ) -> float:
-    """RRF over 1-based per-channel ranks: sum of 1 / (eta + rank)."""
+    """RRF over finite 1-based ranks: sum of 1 / (eta + rank)."""
+    _require_finite(rank_constant_eta, "rank_constant_eta")
     if rank_constant_eta < 1:
         raise ValueError("rank_constant_eta must be >= 1")
     fused_score = 0.0
     for channel_name, one_based_rank in channel_ranks.items():
+        _require_finite(
+            one_based_rank, f"rank for channel {channel_name!r}"
+        )
         if one_based_rank < 1:
             raise ValueError(
                 f"rank for channel {channel_name!r} must be >= 1,"
