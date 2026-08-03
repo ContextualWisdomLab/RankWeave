@@ -102,12 +102,18 @@ def _exponential_gain(relevance_grade: float) -> float:
 
 def _discounted_cumulative_gain(relevance_grades: Sequence[float]) -> float:
     """Return DCG with logarithmic rank discount and exponential gains."""
-    return math.fsum(
+    discounted_gains = (
         _exponential_gain(relevance_grade) / math.log2(one_based_rank + 1)
         for one_based_rank, relevance_grade in enumerate(
             relevance_grades, start=1
         )
     )
+    try:
+        return math.fsum(discounted_gains)
+    except OverflowError as exc:
+        raise ValueError(
+            "discounted cumulative gain is too large to represent"
+        ) from exc
 
 
 def evaluate_ranking(
