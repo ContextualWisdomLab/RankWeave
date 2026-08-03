@@ -6,6 +6,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-03
+
 ### Added
 - `tune_weighted_reciprocal_rank_fusion` for deterministic offline selection
   of fixed convex weighted-RRF policies on a judged validation query set.
