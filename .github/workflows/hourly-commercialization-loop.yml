@@ -6,13 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: write
-  checks: read
-  contents: write
-  id-token: write
-  issues: write
-  pull-requests: write
-  statuses: read
+  contents: read
 
 concurrency:
   group: rankweave-hourly-commercialization-loop
@@ -20,6 +14,12 @@ concurrency:
 
 jobs:
   inspect-pr-queue:
+    permissions:
+      actions: write
+      checks: read
+      contents: write
+      id-token: write
+      pull-requests: write
     uses: ContextualWisdomLab/.github/.github/workflows/pr-review-merge-scheduler.yml@5983b41ace75040c1d81818171ca7d0f3653254e
     with:
       base_branch: main
@@ -35,6 +35,12 @@ jobs:
   repair-review-feedback:
     needs: inspect-pr-queue
     if: ${{ always() }}
+    permissions:
+      actions: write
+      contents: read
+      issues: write
+      pull-requests: read
+      statuses: read
     uses: ContextualWisdomLab/.github/.github/workflows/pr-review-fix-scheduler.yml@21397126d708d2d536ccc1d68b0d333653ce9315
     with:
       target_repository: ContextualWisdomLab/RankWeave
@@ -47,6 +53,12 @@ jobs:
   revalidate-pr-queue:
     needs: repair-review-feedback
     if: ${{ always() }}
+    permissions:
+      actions: write
+      checks: read
+      contents: write
+      id-token: write
+      pull-requests: write
     uses: ContextualWisdomLab/.github/.github/workflows/pr-review-merge-scheduler.yml@5983b41ace75040c1d81818171ca7d0f3653254e
     with:
       base_branch: main
