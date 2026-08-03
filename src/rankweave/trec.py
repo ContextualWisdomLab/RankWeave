@@ -2,11 +2,44 @@
 
 import math
 import re
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 
+from rankweave._validation import _require_finite, _require_positive_integer
 from rankweave.evaluation import RankingEvaluationReport, evaluate_rankings
 
-_RUN_TAG_PATTERN = re.compile(r"[A-Za-z0-9_.-]{1,20}")
+_RUN_TAG_PATTERN = re.compile(r"[A-Za-z0-9]{1,12}")
+
+
+def _require_token(value: str, label: str) -> str:
+    """Require a non-empty text token without Unicode whitespace."""
+    if (
+        not isinstance(value, str)
+        or not value
+        or any(character.isspace() for character in value)
+    ):
+        raise ValueError(f"{label} must be a non-empty token without whitespace")
+    return value
+
+
+def _require_run_tag(value: str, label: str) -> str:
+    """Require a conservative NIST-compatible alphanumeric run tag."""
+    if not isinstance(value, str) or _RUN_TAG_PATTERN.fullmatch(value) is None:
+        raise ValueError(
+            f"{label} must contain 1 to 12 ASCII letters or digits"
+        )
+    return value
+
+
+def _snapshot_entries(entries: Iterable[object], label: str) -> tuple[object, ...]:
+    """Snapshot an iterable as a non-empty tuple with a stable error contract."""
+    try:
+        snapshot = tuple(entries)
+    except TypeError as exc:
+        raise ValueError(f"{label} must be an iterable of entries") from exc
+    if not snapshot:
+        raise ValueError(f"{label} must contain at least one entry")
+    return snapshot
 
 
 @dataclass(frozen=True)
@@ -18,12 +51,36 @@ class TrecQrelEntry:
     document_id: str
     relevance: float
 
+    def __post_init__(self) -> None:
+        """Validate and normalize one manually constructed qrels entry."""
+        _require_token(self.query_id, "query_id")
+        _require_token(self.iteration, "iteration")
+        _require_token(self.document_id, "document_id")
+        _require_finite(self.relevance, "relevance")
+        object.__setattr__(self, "relevance", float(self.relevance))
+
 
 @dataclass(frozen=True)
 class TrecQrels:
     """An immutable parsed TREC relevance-judgment file."""
 
     entries: tuple[TrecQrelEntry, ...]
+
+    def __post_init__(self) -> None:
+        """Snapshot entries and reject duplicate query-document judgments."""
+        entries = _snapshot_entries(self.entries, "qrels")
+        judged_documents: set[tuple[str, str]] = set()
+        for entry in entries:
+            if not isinstance(entry, TrecQrelEntry):
+                raise ValueError("qrels entries must be TrecQrelEntry values")
+            judgment_key = (entry.query_id, entry.document_id)
+            if judgment_key in judged_documents:
+                raise ValueError(
+                    "qrels contains duplicate judgment for query "
+                    f"{entry.query_id!r} and document {entry.document_id!r}"
+                )
+            judged_documents.add(judgment_key)
+        object.__setattr__(self, "entries", entries)
 
     def relevance_by_query(self) -> dict[str, dict[str, float]]:
         """Return evaluation judgments, omitting negative unjudged grades.
@@ -51,6 +108,18 @@ class TrecRunEntry:
     score: float
     run_id: str
 
+    def __post_init__(self) -> None:
+        """Validate and normalize one manually constructed run entry."""
+        _require_token(self.query_id, "query_id")
+        if self.iteration != "Q0":
+            raise ValueError("iteration must be Q0")
+        _require_token(self.document_id, "document_id")
+        validated_rank = _require_positive_integer(self.rank, "rank")
+        _require_finite(self.score, "score")
+        _require_run_tag(self.run_id, "run tag")
+        object.__setattr__(self, "rank", validated_rank)
+        object.__setattr__(self, "score", float(self.score))
+
 
 @dataclass(frozen=True)
 class TrecRun:
@@ -58,6 +127,36 @@ class TrecRun:
 
     run_id: str
     entries: tuple[TrecRunEntry, ...]
+
+    def __post_init__(self) -> None:
+        """Snapshot entries and reject inconsistent or duplicate run state."""
+        _require_run_tag(self.run_id, "run tag")
+        entries = _snapshot_entries(self.entries, "run")
+        documents_by_query: dict[str, set[str]] = {}
+        ranks_by_query: dict[str, set[int]] = {}
+        for entry in entries:
+            if not isinstance(entry, TrecRunEntry):
+                raise ValueError("run entries must be TrecRunEntry values")
+            if entry.run_id != self.run_id:
+                raise ValueError(
+                    "run tag must match every entry; "
+                    f"container={self.run_id!r}, entry={entry.run_id!r}"
+                )
+            query_documents = documents_by_query.setdefault(entry.query_id, set())
+            if entry.document_id in query_documents:
+                raise ValueError(
+                    f"run contains duplicate document {entry.document_id!r} "
+                    f"for query {entry.query_id!r}"
+                )
+            query_documents.add(entry.document_id)
+            query_ranks = ranks_by_query.setdefault(entry.query_id, set())
+            if entry.rank in query_ranks:
+                raise ValueError(
+                    f"run contains duplicate rank {entry.rank} for query "
+                    f"{entry.query_id!r}"
+                )
+            query_ranks.add(entry.rank)
+        object.__setattr__(self, "entries", entries)
 
     def rankings_by_query(self) -> dict[str, tuple[str, ...]]:
         """Return document IDs sorted by decreasing score per query.
@@ -79,7 +178,7 @@ class TrecRun:
         }
 
 
-def _iter_nonempty_lines(text: str, label: str):
+def _iter_nonempty_lines(text: str, label: str) -> Iterator[tuple[int, str]]:
     """Yield physical line numbers and stripped non-empty lines."""
     if not isinstance(text, str):
         raise ValueError(f"{label} must be text")
@@ -101,14 +200,13 @@ def _parse_finite_float(raw_value: str, label: str) -> float:
 
 
 def _parse_positive_rank(raw_rank: str, line_number: int) -> int:
-    """Parse a positive decimal TREC rank field."""
-    try:
-        parsed_rank = int(raw_rank)
-    except ValueError as exc:
+    """Parse a positive ASCII-decimal TREC rank field."""
+    if not raw_rank.isascii() or not raw_rank.isdecimal():
         raise ValueError(
             f"line {line_number} rank must be a positive integer"
-        ) from exc
-    if str(parsed_rank) != raw_rank or parsed_rank < 1:
+        )
+    parsed_rank = int(raw_rank)
+    if parsed_rank < 1:
         raise ValueError(
             f"line {line_number} rank must be a positive integer"
         )
@@ -158,7 +256,7 @@ def parse_trec_run(run_text: str) -> TrecRun:
 
     The expected columns are ``query Q0 document rank score run-tag``. The
     parser validates the literal ``Q0`` field, positive unique ranks, finite
-    scores, one document per query, and one NIST-compatible run tag.
+    scores, one document per query, and one conservative NIST run tag.
     """
     entries = []
     run_id: str | None = None
@@ -173,8 +271,10 @@ def parse_trec_run(run_text: str) -> TrecRun:
             raise ValueError(f"line {line_number} second field must be Q0")
         rank = _parse_positive_rank(raw_rank, line_number)
         score = _parse_finite_float(raw_score, f"line {line_number} score")
-        if _RUN_TAG_PATTERN.fullmatch(entry_run_id) is None:
-            raise ValueError(f"line {line_number} run tag is invalid")
+        try:
+            _require_run_tag(entry_run_id, f"line {line_number} run tag")
+        except ValueError as exc:
+            raise ValueError(f"line {line_number} run tag is invalid") from exc
         if run_id is None:
             run_id = entry_run_id
         elif entry_run_id != run_id:
@@ -216,7 +316,7 @@ def _format_float(value: float) -> str:
 
 
 def format_trec_qrels(qrels: TrecQrels) -> str:
-    """Serialize parsed qrels to canonical whitespace-delimited text."""
+    """Serialize validated qrels to canonical whitespace-delimited text."""
     if not isinstance(qrels, TrecQrels):
         raise ValueError("qrels must be TrecQrels")
     return "".join(
@@ -227,7 +327,7 @@ def format_trec_qrels(qrels: TrecQrels) -> str:
 
 
 def format_trec_run(run: TrecRun) -> str:
-    """Serialize a parsed run to canonical whitespace-delimited text."""
+    """Serialize a validated run to canonical whitespace-delimited text."""
     if not isinstance(run, TrecRun):
         raise ValueError("run must be TrecRun")
     return "".join(
