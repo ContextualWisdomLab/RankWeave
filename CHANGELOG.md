@@ -7,6 +7,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `weighted_convex_fuse`, immutable `FusedScoredItem` results, and
+  `WeightedChannelContribution` audit records for complete normalized-score
+  fusion with deterministic tie-breaking.
 - `reciprocal_rank_fuse` and immutable `FusedRankedItem` results for
   complete-list RRF with deterministic tie-breaking and per-channel rank
   audit trails.
