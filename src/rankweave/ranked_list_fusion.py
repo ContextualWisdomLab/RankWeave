@@ -4,10 +4,8 @@ from collections.abc import Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 
-from rankweave.score_fusion import (
-    _require_positive_integer,
-    reciprocal_rank_fusion_score,
-)
+from rankweave._validation import _require_positive_integer
+from rankweave.score_fusion import reciprocal_rank_fusion_score
 
 ItemIdentifier = TypeVar("ItemIdentifier", bound=Hashable)
 
