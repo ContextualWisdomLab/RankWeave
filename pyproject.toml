@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rankweave"
-version = "0.5.0"
+version = "0.6.0"
 description = "Language-agnostic retrieval fusion, evaluation, policy tuning, strict TREC interchange, and Unicode query normalization — pure-Python, store-agnostic."
 readme = "README.md"
 requires-python = ">=3.10"
