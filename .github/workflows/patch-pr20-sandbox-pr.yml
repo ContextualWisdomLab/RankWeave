@@ -27,6 +27,35 @@ jobs:
       - name: Apply the reviewed unprivileged sandbox repair
         run: |
           set -euo pipefail
+          python - <<'PATCH'
+          from pathlib import Path
+
+          path = Path('.github/scripts/apply_pr20_sandbox_patch.py')
+          source = path.read_text(encoding='utf-8')
+          old = '''    workflow = replace_once(
+              workflow,
+              \'\'\'            "$AUTOMATION_VENV/bin/python" - <<\'PY\'
+          \'\'\',
+              \'\'\'            /usr/bin/python3 -I -S - <<\'PY\'
+          \'\'\',
+              label="trusted PR metadata parser",
+          )
+          '''
+          new = '''    workflow = replace_once(
+              workflow,
+              \'\'\'          if [ -f PR_MESSAGE.md ]; then
+              "$AUTOMATION_VENV/bin/python" - <<\'PY\'
+          \'\'\',
+              \'\'\'          if [ -f PR_MESSAGE.md ]; then
+              /usr/bin/python3 -I -S - <<\'PY\'
+          \'\'\',
+              label="trusted PR metadata parser",
+          )
+          '''
+          if source.count(old) != 1:
+              raise SystemExit('trusted PR metadata patch shape drifted')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PATCH
           python .github/scripts/apply_pr20_sandbox_patch.py
 
       - name: Verify the repaired branch
