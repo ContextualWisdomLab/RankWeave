@@ -32,14 +32,35 @@ jobs:
 
           path = Path('.github/scripts/apply_pr20_sandbox_patch.py')
           source = path.read_text(encoding='utf-8')
-          old = '''        '          sudo chown -R "$SANDBOX_UID:$SANDBOX_GID"',
+
+          ownership_old = '''        '          sudo chown -R "$SANDBOX_UID:$SANDBOX_GID"',
                   '            "$validation_dist" "$validation_home" "$ruff_cache"',
           '''
-          new = '''        '          sudo chown -R "$SANDBOX_UID:$SANDBOX_GID" "$validation_dist" "$validation_home" "$ruff_cache"',
+          ownership_new = '''        '          sudo chown -R "$SANDBOX_UID:$SANDBOX_GID" "$validation_dist" "$validation_home" "$ruff_cache"',
           '''
-          if source.count(old) != 1:
+          if source.count(ownership_old) != 1:
               raise SystemExit('validation ownership command shape drifted')
-          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          source = source.replace(ownership_old, ownership_new, 1)
+
+          environment_old = '''        "            env",
+                  "            -i",
+          '''
+          environment_new = '''        "            env -i",
+          '''
+          if source.count(environment_old) != 2:
+              raise SystemExit('sandbox environment array shape drifted')
+          source = source.replace(environment_old, environment_new)
+
+          smoke_old = '''        '          "$SMOKE/bin/python" -c',
+                  "            'from importlib.metadata import version; import rankweave; assert version(\\"rankweave\\") == rankweave.__version__'",
+          '''
+          smoke_new = '''        "          \\\"$SMOKE/bin/python\\\" -c 'from importlib.metadata import version; import rankweave; assert version(\\\"rankweave\\\") == rankweave.__version__'",
+          '''
+          if source.count(smoke_old) != 1:
+              raise SystemExit('installed-wheel version smoke shape drifted')
+          source = source.replace(smoke_old, smoke_new, 1)
+
+          path.write_text(source, encoding='utf-8')
           PATCH
           python .github/scripts/apply_pr20_sandbox_patch.py
 
