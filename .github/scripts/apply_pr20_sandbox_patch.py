@@ -106,11 +106,11 @@ def _extend_workflow_contract_test() -> None:
     marker = "    assert 'strict UTF-8' in workflow\n"
     addition = (
         marker
-        + "    assert 'pr_message_backup=\"${RUNNER_TEMP}/agent-pr-message.md\"' in workflow\n"
-        + "    materializer = Path('.github/scripts/materialize_workspace.py').read_text(\n"
+        + "    assert 'pr_message_backup=\"${RUNNER_TEMP}/agent-pr-message.md\"' in workflow\n"  # noqa: E501
+        + "    materializer = Path('.github/scripts/materialize_workspace.py').read_text(\n"  # noqa: E501
         + "        encoding='utf-8'\n"
         + "    )\n"
-        + "    assert 'safe_mode = 0o755 if info.st_mode & stat.S_IXUSR else 0o644' in materializer\n"
+        + "    assert 'safe_mode = 0o755 if info.st_mode & stat.S_IXUSR else 0o644' in materializer\n"  # noqa: E501
     )
     path.write_text(
         _replace_once(
@@ -134,9 +134,11 @@ def _remove_temporary_repair_files() -> None:
 
 
 def main() -> int:
-    """Execute the reviewed repair, add final hardening, and clean up bootstrap files."""
+    """Execute the reviewed repair, harden it, and clean up bootstrap files."""
     source = _extract_patch_program(_historical_patch_source())
-    code = compile(source, f"{HISTORICAL_SOURCE_COMMIT}:{HISTORICAL_WORKFLOW_PATH}", "exec")
+    code = compile(
+        source, f"{HISTORICAL_SOURCE_COMMIT}:{HISTORICAL_WORKFLOW_PATH}", "exec"
+    )
     exec(code, {"__name__": "__main__"})
     _preserve_agent_pr_message()
     _sanitize_materialized_file_modes()
