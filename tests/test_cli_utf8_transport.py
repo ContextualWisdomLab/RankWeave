@@ -41,8 +41,7 @@ def test_family_cli_writes_utf8_bytes_when_text_stdout_is_ascii(tmp_path):
             "1",
         ],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         env=environment,
     )
 
