@@ -4,20 +4,20 @@ Operating guide for automated agents working in this repo.
 
 ## What this is
 
-`rankweave` is a **pure-Python, stdlib-only** library for
+`rankweave` is a **pure-Python, stdlib-only** library and command-line tool for
 language-agnostic hybrid-retrieval fusion, effectiveness evaluation, paired and
 family-wise statistical comparison, offline policy tuning, strict TREC
-interchange, and direct TREC benchmark comparison, extracted from
+interchange, and direct TREC benchmark comparison. It was extracted from
 [ContextualWisdomLab/naruon](https://github.com/ContextualWisdomLab/naruon)
 Context Search under the lab's ONE SOURCE MULTI USE convention
 (standalone product *and* submodule-importable).
 
 ## Hard rules
 
-- **No dependencies.** The library imports only the Python standard library.
+- **No dependencies.** The runtime imports only the Python standard library.
   Do not add a runtime dependency; if you think you need one, the feature
   probably belongs in the consumer, not here.
-- **Store-agnostic.** rankweave never talks to a database, embedding provider,
+- **Store-agnostic.** RankWeave never talks to a database, embedding provider,
   search index, or benchmark download service. It fuses scores, evaluates and
   compares rankings, selects offline policies, parses interchange artifacts,
   and normalizes query text. Keep SQL, HTTP, and ORM concerns out.
@@ -30,8 +30,8 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
 - **Research-grounded defaults, metrics, comparison, and selection.** Numeric
   defaults, metric definitions, significance procedures, gain/discount
   conventions, tuning objectives, and interchange assumptions trace to the
-  sources in `docs/research/`. Changing one requires evidence and hand-checked
-  regression tests.
+  APA 7th edition references in `docs/research/`. Changing one requires
+  evidence and hand-checked regression tests.
 - **Complete evaluation sets.** Aggregate evaluation, comparison, and tuning
   fail closed when ranking and judgment query IDs differ; omitted queries must
   never silently inflate metrics or significance.
@@ -58,6 +58,16 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   candidate run, and qrels artifact once; retain parsed artifacts; convert runs
   through `rankings_by_query`; convert qrels through `relevance_by_query`; and
   delegate to native comparison APIs.
+- **The CLI is an adapter, not a second engine.** `rankweave compare` delegates
+  to `compare_trec_runs`. Do not duplicate parsing, metric, query-alignment, or
+  randomization logic in `cli.py`.
+- **CLI transport is stable.** Success writes exactly one versioned UTF-8 JSON
+  document and a newline to stdout with exit `0`. Expected usage, file, UTF-8,
+  size, TREC, evaluation, and statistical errors write one stderr line, no
+  stdout, and exit `2`.
+- **CLI input is bounded.** Every artifact read requests no more than
+  `max_input_bytes + 1`. Never replace it with `read()`, `read_bytes()`, or any
+  other unbounded operation after a size check.
 - **Significance is not business value.** Documentation reports effect size
   with raw or adjusted p-values and never presents statistical significance as
   practical significance, independent test performance, or valuation.
@@ -85,7 +95,8 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   coverage remain at 100%.
 - **Release metadata stays synchronized.** A release updates `pyproject.toml`,
   `rankweave.__version__`, the expected version test, and `CHANGELOG.md`
-  together. The wheel preserves `py.typed` and passes isolated installation.
+  together. The wheel preserves `py.typed`, the CLI modules, and the installed
+  console script, and passes isolated installation smoke tests.
 
 ## Develop
 
@@ -108,6 +119,8 @@ python -m pip wheel . --no-deps --wheel-dir dist
 - `src/rankweave/trec_comparison.py` — direct three-artifact paired comparison.
 - `src/rankweave/trec_family_comparison.py` — named candidate-family
   comparison with Holm family-wise correction.
+- `src/rankweave/cli.py` — bounded input, JSON projection, and exit contracts.
+- `src/rankweave/__main__.py` — module entrypoint only.
 - `src/rankweave/query_normalization.py` — NFC query normalization.
 - `.github/workflows/hourly-commercialization-loop.yml` — hourly governed
   review/fix/revalidate/develop orchestration.
@@ -116,10 +129,11 @@ python -m pip wheel . --no-deps --wheel-dir dist
 - `docs/trec-interoperability.md` — interchange contracts.
 - `docs/trec-run-comparison.md` — direct pairwise TREC workflow.
 - `docs/trec-family-comparison.md` — candidate-family and Holm workflow.
+- `docs/cli.md` — installed command, JSON schema, and operator boundaries.
 - `docs/superpowers/specs/` and `docs/superpowers/plans/` — reviewed designs
   and executable implementation plans.
 - `tests/` — hand-computed behavior and contract tests.
-- `docs/research/` — paper, standard, and reference manifest.
+- `docs/research/` — APA 7th edition paper, standard, and reference manifest.
 
 ## Code-owner review gates — disabled (on hold)
 
