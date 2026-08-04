@@ -1,12 +1,14 @@
 # RankWeave
 
 **Dependency-free, store-agnostic retrieval fusion, evaluation, statistical
-comparison, tuning, and TREC benchmarking for Python 3.10+.**
+comparison, tuning, TREC benchmarking, and auditable CLI workflows for Python
+3.10+.**
 
 RankWeave combines lexical, dense, learned-sparse, graph, and other retrieval
 channels into deterministic rankings. It evaluates rankings, compares paired
 systems, controls family-wise error across candidate experiments, tunes fixed
-weighted-RRF policies, and reads standard TREC artifacts. The runtime uses only
+weighted-RRF policies, reads standard TREC artifacts, and exposes the same
+strict pairwise comparison contract to shell and CI users. The runtime uses only
 the Python standard library.
 
 RankWeave originated in the Context Search engine of
@@ -24,8 +26,10 @@ remains suitable both as a standalone package and as a small MSA module.
   and tune policies without a numerical runtime dependency.
 - **Strict TREC workflow:** parse, format, evaluate, compare two runs, or compare
   a named family of candidates against one baseline.
+- **Shell-ready evidence:** `rankweave compare` emits a versioned JSON audit
+  report without requiring Python glue.
 - **Fail-closed contracts:** malformed values, duplicate identifiers, missing
-  queries, and invalid artifacts raise stable `ValueError` exceptions.
+  queries, and invalid artifacts raise stable validation errors.
 - **Portable core:** Apache-2.0, typed, Python 3.10+, and stdlib-only runtime.
 
 ## Installation
@@ -43,6 +47,8 @@ git clone https://github.com/ContextualWisdomLab/RankWeave.git
 cd RankWeave
 pip install -e ".[dev]"
 ```
+
+The wheel installs both the Python package and the `rankweave` console command.
 
 ## Fuse retrieval channels
 
@@ -216,9 +222,9 @@ report = evaluate_trec_run(run_text, qrels_text, cutoff=10)
 TREC qrels require four fields and signed ASCII integer relevance in
 `[-127, 127]`. Runs require six fields, literal `Q0`, a positive rank, finite
 score, and one portable 1–20 character ASCII run tag containing only ASCII
-letters, digits, periods, underscores, or hyphens. Blank and `#` comment
-lines are ignored while physical error line numbers are preserved. Evaluation
-orders runs by decreasing score, not the submitted rank field.
+letters, digits, periods, underscores, or hyphens. Blank and `#` comment lines
+are ignored while physical error line numbers are preserved. Evaluation orders
+runs by decreasing score, not the submitted rank field.
 
 ## Compare two TREC runs directly
 
@@ -238,6 +244,33 @@ the complete paired statistical result. Identical run tags are allowed because
 tags are provenance rather than artifact identity.
 
 See [Direct TREC run comparison](docs/trec-run-comparison.md).
+
+## Run the same comparison from shell or CI
+
+```bash
+rankweave compare \
+  --baseline-run baseline.run \
+  --candidate-run candidate.run \
+  --qrels qrels.txt \
+  --cutoff 10 \
+  --alternative candidate-greater \
+  --pretty > comparison.json
+```
+
+The equivalent module invocation is `python -m rankweave compare ...`.
+Successful execution emits one UTF-8 JSON document with schema identifier
+`rankweave.trec-comparison.v1` and returns `0`. Expected usage, filesystem,
+UTF-8, size, TREC, evaluation, and statistical validation failures emit no JSON,
+write one `rankweave: error: ...` line to stderr, and return `2`.
+
+Inputs default to a 64 MiB limit per artifact. Each read requests at most the
+configured limit plus one byte, so a file that grows after its initial size
+check cannot trigger an unbounded in-memory read. A configured limit that is too
+large for the platform's binary read API is rejected as a validation error. The
+CLI accepts local files only and delegates all evaluation and randomization
+behavior to `compare_trec_runs`.
+
+See [RankWeave command-line interface](docs/cli.md).
 
 ## Compare a TREC candidate family with Holm correction
 

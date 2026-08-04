@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rankweave"
-version = "0.9.0"
-description = "Dependency-free retrieval fusion, evaluation, family-wise statistical comparison, policy tuning, and TREC benchmarking."
+version = "0.10.0"
+description = "Dependency-free retrieval fusion, evaluation, family-wise statistical comparison, policy tuning, TREC benchmarking, and auditable CLI workflows."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -27,6 +27,7 @@ keywords = [
     "trec",
     "trec-eval",
     "benchmark-comparison",
+    "command-line-interface",
     "interoperability",
     "ndcg",
     "dense-retrieval",
@@ -45,6 +46,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = []
+
+[project.scripts]
+rankweave = "rankweave.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/ContextualWisdomLab/rankweave"
