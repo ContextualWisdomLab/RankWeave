@@ -43,16 +43,21 @@ jobs:
           if source.count(start) != 1 or source.count(end) != 1:
               raise SystemExit('one-shot patch workflow shape drifted')
           block = source.split(start, 1)[1].split(end, 1)[0]
+          opener = "          python - <<'PY'\n"
+          closer = '\n          PY'
+          if block.count(opener) != 1 or not block.endswith(closer):
+              raise SystemExit('one-shot Python block shape drifted')
+          python_source = block.split(opener, 1)[1].rsplit(closer, 1)[0]
           lines = [
               line[10:] if line.startswith('          ') else line
-              for line in block.splitlines()
+              for line in python_source.splitlines()
           ]
-          Path('/tmp/apply-pr20-sandbox-patch.sh').write_text(
+          Path('/tmp/apply-pr20-sandbox-patch.py').write_text(
               '\n'.join(lines) + '\n',
               encoding='utf-8',
           )
           PY
-          bash /tmp/apply-pr20-sandbox-patch.sh
+          python /tmp/apply-pr20-sandbox-patch.py
           python - <<'PY'
           from pathlib import Path
 
