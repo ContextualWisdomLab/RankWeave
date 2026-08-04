@@ -1,11 +1,15 @@
 # RankWeave command-line interface
 
-RankWeave installs a dependency-free `rankweave` command for strict pairwise
-comparison of TREC run artifacts. The command is a thin adapter over
-`compare_trec_runs`; it does not maintain separate parsing, metric, query
-alignment, or randomization logic.
+RankWeave installs a dependency-free `rankweave` command for strict TREC
+comparison workflows. The CLI is a thin transport adapter over the Python API:
 
-## Invocation
+- `rankweave compare` delegates to `compare_trec_runs`;
+- `rankweave compare-family` delegates to `compare_trec_run_family`.
+
+It does not maintain separate TREC parsing, effectiveness metrics,
+query-alignment, randomization, or Holm-adjustment logic.
+
+## Pairwise comparison
 
 ```bash
 rankweave compare \
@@ -25,38 +29,16 @@ python -m rankweave compare \
   --cutoff 10
 ```
 
-## Options
+### Pairwise success schema
 
-| Option | Required | Default | Contract |
-|---|---:|---:|---|
-| `--baseline-run` | yes | — | Strict UTF-8 TREC run file. |
-| `--candidate-run` | yes | — | Strict UTF-8 TREC run file. |
-| `--qrels` | yes | — | Strict UTF-8 four-column qrels file. |
-| `--cutoff` | yes | — | Positive ASCII decimal integer. |
-| `--metric` | no | `ndcg_at_k` | One of RankWeave's supported comparison metrics. |
-| `--alternative` | no | `two-sided` | `two-sided`, `candidate-greater`, or `candidate-less`. |
-| `--randomizations` | no | `10000` | Positive ASCII decimal integer. |
-| `--seed` | no | `0` | Signed ASCII decimal integer. |
-| `--max-input-bytes` | no | `67108864` | Positive per-artifact byte ceiling representable by the platform read API. |
-| `--pretty` | no | false | Emit deterministic two-space JSON. |
-
-The command does not accept URLs, compressed archives, benchmark downloads, or
-shell expansion. It does not write an output file. Redirect or capture stdout in
-the calling orchestration layer.
-
-## Success output
-
-Success writes one UTF-8 JSON document followed by a newline to stdout and
-returns exit status `0`. Compact JSON is the default; `--pretty` changes only
-whitespace.
-
-The stable top-level schema identifier is:
+Success emits one UTF-8 JSON document followed by a newline. The stable schema
+identifier is:
 
 ```text
 rankweave.trec-comparison.v1
 ```
 
-Fields are emitted in this fixed order:
+Top-level fields are emitted in this order:
 
 1. `schema_version`
 2. `rankweave_version`
@@ -77,71 +59,145 @@ Fields are emitted in this fixed order:
 17. `query_differences`
 
 Each `query_differences` entry contains `query_id`, `baseline_value`,
-`candidate_value`, and candidate-minus-baseline `difference`. Unicode query
-identifiers remain readable rather than being ASCII-escaped.
+`candidate_value`, and candidate-minus-baseline `difference`.
 
-Example:
+## Candidate-family comparison
 
-```json
-{
-  "schema_version": "rankweave.trec-comparison.v1",
-  "rankweave_version": "0.10.0",
-  "baseline_run_id": "baseline",
-  "candidate_run_id": "candidate",
-  "cutoff": 1,
-  "metric_name": "ndcg_at_k",
-  "alternative": "candidate-greater",
-  "query_count": 1,
-  "nonzero_difference_count": 1,
-  "baseline_mean": 0.0,
-  "candidate_mean": 1.0,
-  "mean_difference": 1.0,
-  "p_value": 0.5,
-  "method": "exact",
-  "randomizations_evaluated": 2,
-  "random_seed": null,
-  "query_differences": [
-    {
-      "query_id": "q",
-      "baseline_value": 0.0,
-      "candidate_value": 1.0,
-      "difference": 1.0
-    }
-  ]
-}
+Use an explicitly ordered family when several candidate systems are compared
+with one baseline and one qrels artifact:
+
+```bash
+rankweave compare-family \
+  --baseline-run baseline.run \
+  --candidate lexical=artifacts/lexical.run \
+  --candidate hybrid=artifacts/hybrid.run \
+  --candidate reranked=artifacts/reranked.run \
+  --qrels qrels.txt \
+  --cutoff 10 \
+  --alternative candidate-greater \
+  --familywise-alpha 0.05
 ```
 
-The example illustrates the transport contract, not a benchmark-quality claim.
-Actual query evidence is retained in `query_differences`.
+The equivalent module invocation is:
 
-## Failure output
+```bash
+python -m rankweave compare-family \
+  --baseline-run baseline.run \
+  --candidate lexical=artifacts/lexical.run \
+  --candidate hybrid=artifacts/hybrid.run \
+  --qrels qrels.txt \
+  --cutoff 10
+```
+
+`--candidate` is repeatable. Its first `=` separates the candidate identifier
+from the local path, so later `=` characters remain part of the path. Candidate
+identifiers must be unique, printable Unicode strings without leading or
+trailing whitespace. Command-line order is preserved as statistical-family and
+tie-breaking evidence; RankWeave never discovers candidates by scanning a
+directory.
+
+### Candidate-family success schema
+
+Success emits one UTF-8 JSON document with schema identifier:
+
+```text
+rankweave.trec-family-comparison.v1
+```
+
+Top-level fields are emitted in this order:
+
+1. `schema_version`
+2. `rankweave_version`
+3. `baseline_run_id`
+4. `cutoff`
+5. `metric_name`
+6. `alternative`
+7. `familywise_alpha`
+8. `candidate_count`
+9. `candidates`
+
+Each candidate entry contains:
+
+1. `candidate_id`
+2. `candidate_run_id`
+3. `query_count`
+4. `nonzero_difference_count`
+5. `baseline_mean`
+6. `candidate_mean`
+7. `mean_difference`
+8. `raw_p_value`
+9. `holm_adjusted_p_value`
+10. `rejected_at_familywise_alpha`
+11. `method`
+12. `randomizations_evaluated`
+13. `random_seed`
+14. `query_differences`
+
+Candidate and query order remain the immutable Python API order. Unicode
+identifiers are emitted directly rather than as ASCII escape sequences.
+
+Holm adjustment controls false rejection across the candidate family supplied
+before results are inspected. It does not measure effect size, operational
+value, latency, cost, safety, or permission to deploy a candidate.
+
+## Shared options
+
+| Option | Required | Default | Contract |
+|---|---:|---:|---|
+| `--baseline-run` | yes | — | Strict UTF-8 six-column TREC run file. |
+| `--qrels` | yes | — | Strict UTF-8 four-column qrels file. |
+| `--cutoff` | yes | — | Positive ASCII decimal integer. |
+| `--metric` | no | `ndcg_at_k` | A supported RankWeave comparison metric. |
+| `--alternative` | no | `two-sided` | `two-sided`, `candidate-greater`, or `candidate-less`. |
+| `--randomizations` | no | `10000` | Positive ASCII decimal integer. |
+| `--seed` | no | `0` | Signed ASCII decimal integer. |
+| `--max-input-bytes` | no | `67108864` | Positive per-artifact byte ceiling. |
+| `--pretty` | no | false | Emit deterministic two-space JSON. |
+
+Pairwise comparison additionally requires `--candidate-run`. Candidate-family
+comparison additionally requires one or more `--candidate ID=PATH` options and
+accepts `--familywise-alpha`, which defaults to `0.05` and must be finite in
+`(0, 1]`.
+
+The CLI accepts local files only. It performs no URL fetch, decompression,
+globbing, benchmark download, database access, or provider call. It does not
+write an output file; redirect or capture stdout in the calling orchestration
+layer.
+
+## Output and failure contract
+
+Compact JSON is the default. `--pretty` changes whitespace only. A successful
+command writes exactly one JSON document plus a newline to stdout and exits
+with status `0`.
 
 Expected usage, filesystem, UTF-8, size, TREC, evaluation, and statistical
-validation failures return exit status `2`, write no stdout, and emit one line
-to stderr:
+validation failures write no stdout, emit one line to stderr, and return status
+`2`:
 
 ```text
 rankweave: error: <specific message>
 ```
 
-Lower-level parser and comparison messages remain visible after the stable
-prefix. Unexpected programmer errors are not converted into success-like JSON.
+Candidate-specific TREC or evaluation errors retain the candidate identifier
+and the precise lower-level validation message. Unexpected programmer defects
+are not converted into success-like JSON.
 
 ## Resource boundary
 
-Each artifact is checked before reading and then read with an explicit
-`max_input_bytes + 1` ceiling. The second check rejects a file that grows after
-its initial size observation without first loading an unbounded payload into
-memory. The default limit is 64 MiB per artifact and can be lowered by the
-caller. A configured ceiling that cannot be represented by the platform's
-binary read API is rejected as an expected validation failure instead of
-escaping as an `OverflowError`.
+Every baseline, candidate, and qrels artifact is checked before reading and is
+then read with an explicit `max_input_bytes + 1` ceiling. The second check
+rejects a file that grows after its initial size observation without first
+loading an unbounded payload. The default limit is 64 MiB **per artifact** and
+can be lowered by the caller. A ceiling that cannot be represented by the
+platform binary-read API becomes an expected validation failure.
 
-The CLI is intentionally synchronous. A service that accepts untrusted uploads
-should enforce its own request timeout, tenant quota, filesystem isolation, and
-job concurrency before invoking RankWeave.
+The commands are synchronous. A service accepting untrusted uploads should
+apply its own request timeout, tenant quota, filesystem isolation, concurrency
+limit, and durable-job policy before invoking RankWeave.
 
-## CI example
+## CI examples
+
+Pairwise comparison:
 
 ```bash
 set -euo pipefail
@@ -153,28 +209,32 @@ rankweave compare \
   --cutoff 20 \
   --alternative candidate-greater \
   --pretty > artifacts/comparison.json
-
-python - <<'PY'
-import json
-from pathlib import Path
-
-report = json.loads(Path("artifacts/comparison.json").read_text(encoding="utf-8"))
-assert report["schema_version"] == "rankweave.trec-comparison.v1"
-print(report["mean_difference"], report["p_value"])
-PY
 ```
 
-A p-value is not a deployment gate by itself. Consumers should define practical
-effect, latency, cost, safety, and held-out quality thresholds separately.
+Candidate-family comparison:
+
+```bash
+set -euo pipefail
+
+rankweave compare-family \
+  --baseline-run artifacts/baseline.run \
+  --candidate model-a=artifacts/model-a.run \
+  --candidate model-b=artifacts/model-b.run \
+  --qrels artifacts/qrels.txt \
+  --cutoff 20 \
+  --alternative candidate-greater \
+  --familywise-alpha 0.05 \
+  --pretty > artifacts/family-comparison.json
+```
+
+A deployment gate should combine held-out retrieval effect, uncertainty,
+latency, cost, safety, and product-value thresholds. Neither a raw nor an
+adjusted p-value is sufficient by itself.
 
 ## Compatibility
 
-The JSON schema is versioned independently from the package version. Additive
-package releases may keep `rankweave.trec-comparison.v1`; an incompatible JSON
-change requires a new schema identifier. Parsed TREC records and complete
-internal dataclasses remain available through the Python API rather than being
-reconstructed from the CLI projection.
-
-Candidate-family CLI support is deliberately outside the `0.10.0` surface. Use
-`compare_trec_run_family` from Python when Holm-adjusted family-wise evidence is
-required.
+The JSON schemas are versioned independently from the package. Additive package
+releases may retain the `v1` identifiers; an incompatible transport change
+requires a new schema identifier. Full parsed TREC artifacts and immutable
+comparison reports remain available through the Python API rather than being
+reconstructed from the CLI projections.

@@ -59,15 +59,21 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   through `rankings_by_query`; convert qrels through `relevance_by_query`; and
   delegate to native comparison APIs.
 - **The CLI is an adapter, not a second engine.** `rankweave compare` delegates
-  to `compare_trec_runs`. Do not duplicate parsing, metric, query-alignment, or
-  randomization logic in `cli.py`.
+  to `compare_trec_runs`, and `rankweave compare-family` delegates to
+  `compare_trec_run_family`. Do not duplicate parsing, metric, query-alignment,
+  randomization, or Holm logic in `cli.py`.
+- **CLI families are explicit and ordered.** Parse repeatable `--candidate
+  ID=PATH` inputs in command-line order. Reject empty, duplicate, non-printable,
+  or whitespace-padded candidate IDs. Never scan a directory or use an
+  unordered collection to define the statistical family.
 - **CLI transport is stable.** Success writes exactly one versioned UTF-8 JSON
   document and a newline to stdout with exit `0`. Expected usage, file, UTF-8,
   size, TREC, evaluation, and statistical errors write one stderr line, no
-  stdout, and exit `2`.
+  stdout, and exit `2`. Pairwise and family schemas are independently versioned.
 - **CLI input is bounded.** Every artifact read requests no more than
   `max_input_bytes + 1`. Never replace it with `read()`, `read_bytes()`, or any
-  other unbounded operation after a size check.
+  other unbounded operation after a size check. The limit applies separately to
+  the baseline, qrels, and every candidate artifact.
 - **Significance is not business value.** Documentation reports effect size
   with raw or adjusted p-values and never presents statistical significance as
   practical significance, independent test performance, or valuation.
@@ -114,7 +120,8 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
 - **Release metadata stays synchronized.** A release updates `pyproject.toml`,
   `rankweave.__version__`, the expected version test, and `CHANGELOG.md`
   together. The wheel preserves `py.typed`, the CLI modules, and the installed
-  console script, and passes isolated installation smoke tests.
+  console script, and passes isolated installation smoke tests for both console
+  and module entrypoints.
 
 ## Develop
 
@@ -137,7 +144,8 @@ python -m pip wheel . --no-deps --wheel-dir dist
 - `src/rankweave/trec_comparison.py` — direct three-artifact paired comparison.
 - `src/rankweave/trec_family_comparison.py` — named candidate-family
   comparison with Holm family-wise correction.
-- `src/rankweave/cli.py` — bounded input, JSON projection, and exit contracts.
+- `src/rankweave/cli.py` — bounded pairwise/family input, JSON projection, and
+  exit contracts.
 - `src/rankweave/__main__.py` — module entrypoint only.
 - `src/rankweave/query_normalization.py` — NFC query normalization.
 - `.github/workflows/hourly-commercialization-loop.yml` — hourly governed
@@ -147,7 +155,7 @@ python -m pip wheel . --no-deps --wheel-dir dist
 - `docs/trec-interoperability.md` — interchange contracts.
 - `docs/trec-run-comparison.md` — direct pairwise TREC workflow.
 - `docs/trec-family-comparison.md` — candidate-family and Holm workflow.
-- `docs/cli.md` — installed command, JSON schema, and operator boundaries.
+- `docs/cli.md` — installed commands, JSON schemas, and operator boundaries.
 - `docs/superpowers/specs/` and `docs/superpowers/plans/` — reviewed designs
   and executable implementation plans.
 - `tests/` — hand-computed behavior and contract tests.

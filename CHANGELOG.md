@@ -4,20 +4,26 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
-### Security
-- Model-authored red and final tests now run as the unprivileged `nobody` user inside network and PID namespaces with all capability sets removed and `no_new_privs` enabled. Trusted validation tooling is root-owned and read-only before untrusted Python executes.
-- Autonomous text boundaries now require strict UTF-8 in addition to regular-file, symlink, NUL, file-count, and byte limits. Ignored PR metadata is preserved across cleanup and parsed with isolated system Python only after validation.
+## [0.11.0] — 2026-08-05
+
+### Added
+- The `rankweave compare-family` console command and equivalent `python -m rankweave compare-family` module entrypoint for comparing one baseline TREC run with an explicitly ordered, named candidate family.
+- Stable UTF-8 JSON output contract `rankweave.trec-family-comparison.v1`, retaining candidate run provenance, per-query differences, effect sizes, raw p-values, Holm-adjusted p-values, and family-wise decisions.
+- Repeatable `--candidate ID=PATH` inputs, explicit `--familywise-alpha`, deterministic family order, compact and pretty JSON, strict bounded reads for every artifact, and complete argument/error-contract coverage.
+- Installed-wheel smoke coverage for both console and module candidate-family commands.
 
 ### Changed
-- Replace the inactive Copilot Agent Tasks product-development stage with a hash-pinned OpenCode workflow using the official NVIDIA provider and `NVIDIA_NIM_API_KEY`.
-- Split autonomous development into a test/design-only red phase and a bounded implementation phase; workflow-owned pytest execution must prove a real failure before production edits are allowed.
-- Recheck both the open-PR queue and exact `main` SHA immediately before creating one generated pull request.
+- Shell, CI, container, and non-Python orchestrators can consume `compare_trec_run_family` without writing Python glue or reimplementing Holm correction.
+- The hourly commercialization loop replaces the inactive Copilot Agent Tasks product-development stage with a hash-pinned OpenCode workflow using the official NVIDIA provider and `NVIDIA_NIM_API_KEY`.
+- Autonomous development is split into a test/design-only red phase and a bounded implementation phase; workflow-owned pytest execution must prove a real failure before production edits are allowed.
+- The automation rechecks both the open-PR queue and exact `main` SHA immediately before creating one generated pull request.
 
 ### Security
-- Scope the NVIDIA credential only to static OpenCode steps and remove GitHub/OIDC credentials from agent processes.
-- Deny Bash, web access, external directories, LSP, subagents, skills, and protected-path edits during model authoring.
-- Reject workflow, ownership, security, environment, Git-submodule, binary, symlink, oversized, excessively broad, or non-production autonomous diffs.
-- Validate model-authored code with no network, an empty inherited environment, isolated PID and `/proc` namespaces, offline wheel installation, and pre/post workspace-manifest equality.
+- Model-authored red and final tests run as the unprivileged `nobody` user inside network and PID namespaces with all capability sets removed and `no_new_privs` enabled. Trusted validation tooling is root-owned and read-only before untrusted Python executes.
+- NVIDIA credentials are scoped only to static OpenCode steps, while GitHub and OIDC credentials are removed from agent processes. Bash, web access, external directories, LSP, subagents, skills, and protected-path edits are denied during model authoring.
+- Autonomous text boundaries require strict UTF-8 in addition to regular-file, symlink, NUL, file-count, and byte limits. Workflow, ownership, security, environment, Git-submodule, binary, oversized, excessively broad, and non-production diffs fail closed.
+- Model-authored code is validated without network access, with an empty inherited environment, isolated PID and `/proc` namespaces, offline wheel installation, and pre/post workspace-manifest equality.
+- Ignored PR metadata is preserved across cleanup and parsed with isolated system Python only after validation; a separate OIDC-exchanged GitHub App token is obtained only after validation and TOCTOU checks pass.
 
 ## [0.10.0] — 2026-08-04
 
@@ -86,7 +92,7 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 ## [0.5.0] — 2026-08-03
 
 ### Added
-- `tune_weighted_reciprocal_rank_fusion` for deterministic offline selection of fixed weighted-RRF policies on a judged validation query set.
+- `tune_weighted_reciprocal_rank_fusion` for deterministic offline selection of fixed convex weighted-RRF policies on a judged validation query set.
 - Immutable `WeightedRRFTuningTrial` and `WeightedRRFTuningReport` records containing every candidate policy, complete evaluation evidence, objective values, and the selected policy.
 - Explicit tuning objectives for macro nDCG, reciprocal rank, recall, and precision, with first-candidate deterministic tie-breaking.
 

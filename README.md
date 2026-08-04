@@ -7,9 +7,9 @@ comparison, tuning, TREC benchmarking, and auditable CLI workflows for Python
 RankWeave combines lexical, dense, learned-sparse, graph, and other retrieval
 channels into deterministic rankings. It evaluates rankings, compares paired
 systems, controls family-wise error across candidate experiments, tunes fixed
-weighted-RRF policies, reads standard TREC artifacts, and exposes the same
-strict pairwise comparison contract to shell and CI users. The runtime uses only
-the Python standard library.
+weighted-RRF policies, reads standard TREC artifacts, and exposes both pairwise
+and candidate-family comparison contracts to shell and CI users. The runtime
+uses only the Python standard library.
 
 RankWeave originated in the Context Search engine of
 [ContextualWisdomLab/naruon](https://github.com/ContextualWisdomLab/naruon) and
@@ -26,8 +26,8 @@ remains suitable both as a standalone package and as a small MSA module.
   and tune policies without a numerical runtime dependency.
 - **Strict TREC workflow:** parse, format, evaluate, compare two runs, or compare
   a named family of candidates against one baseline.
-- **Shell-ready evidence:** `rankweave compare` emits a versioned JSON audit
-  report without requiring Python glue.
+- **Shell-ready evidence:** `rankweave compare` and `rankweave compare-family`
+  emit versioned JSON audit reports without requiring Python glue.
 - **Fail-closed contracts:** malformed values, duplicate identifiers, missing
   queries, and invalid artifacts raise stable validation errors.
 - **Portable core:** Apache-2.0, typed, Python 3.10+, and stdlib-only runtime.
@@ -245,7 +245,7 @@ tags are provenance rather than artifact identity.
 
 See [Direct TREC run comparison](docs/trec-run-comparison.md).
 
-## Run the same comparison from shell or CI
+## Run a pairwise comparison from shell or CI
 
 ```bash
 rankweave compare \
@@ -262,15 +262,6 @@ Successful execution emits one UTF-8 JSON document with schema identifier
 `rankweave.trec-comparison.v1` and returns `0`. Expected usage, filesystem,
 UTF-8, size, TREC, evaluation, and statistical validation failures emit no JSON,
 write one `rankweave: error: ...` line to stderr, and return `2`.
-
-Inputs default to a 64 MiB limit per artifact. Each read requests at most the
-configured limit plus one byte, so a file that grows after its initial size
-check cannot trigger an unbounded in-memory read. A configured limit that is too
-large for the platform's binary read API is rejected as a validation error. The
-CLI accepts local files only and delegates all evaluation and randomization
-behavior to `compare_trec_runs`.
-
-See [RankWeave command-line interface](docs/cli.md).
 
 ## Compare a TREC candidate family with Holm correction
 
@@ -318,6 +309,36 @@ controls false rejections within the supplied family; it does not measure lift
 or justify automatic deployment.
 
 See [TREC candidate-family comparison](docs/trec-family-comparison.md).
+
+## Run the candidate family from shell or CI
+
+```bash
+rankweave compare-family \
+  --baseline-run baseline.run \
+  --candidate model-a=artifacts/model-a.run \
+  --candidate model-b=artifacts/model-b.run \
+  --qrels qrels.txt \
+  --cutoff 10 \
+  --alternative candidate-greater \
+  --familywise-alpha 0.05 \
+  --pretty > family-comparison.json
+```
+
+The equivalent module invocation is
+`python -m rankweave compare-family ...`. Repeatable `--candidate ID=PATH`
+options define the complete family and preserve command-line order. Success
+emits `rankweave.trec-family-comparison.v1` JSON with each candidate's effect,
+raw p-value, Holm-adjusted p-value, family-wise decision, run provenance, and
+complete per-query differences.
+
+Both CLI workflows accept local files only and delegate all parsing,
+evaluation, randomization, and adjustment behavior to the native Python APIs.
+Inputs default to a 64 MiB limit **per artifact**. Each read requests at most the
+configured limit plus one byte, so a file that grows after its initial size
+check cannot trigger an unbounded in-memory read. A configured limit that is too
+large for the platform's binary read API is rejected as a validation error.
+
+See [RankWeave command-line interface](docs/cli.md).
 
 ## Input and determinism guarantees
 
