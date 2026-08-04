@@ -1,0 +1,638 @@
+name: Patch PR 20 sandbox hardening
+
+on:
+  push:
+    branches:
+      - nim/hourly-commercialization-loop
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-pr20-sandbox-hardening
+  cancel-in-progress: true
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Apply sandbox hardening and remove this workflow
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          from pathlib import Path
+
+          ROOT = Path.cwd()
+          WORKFLOW = ROOT / ".github/workflows/hourly-commercialization-loop.yml"
+          TESTS = ROOT / "tests/test_hourly_commercialization_workflow.py"
+
+
+          def replace_once(text: str, old: str, new: str, *, label: str) -> str:
+              """Replace one exact fragment and fail closed on drift."""
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(
+                      f"{label}: expected exactly one fragment, found {count}"
+                  )
+              return text.replace(old, new, 1)
+
+
+          workflow = WORKFLOW.read_text(encoding="utf-8")
+          workflow = replace_once(
+              workflow,
+              '''          venv="${RUNNER_TEMP}/rankweave-automation-venv"
+          python -m venv "$venv"
+          "$venv/bin/python" -m pip install --upgrade pip
+          "$venv/bin/python" -m pip install -e ".[dev]" hatchling
+          echo "AUTOMATION_VENV=$venv" >>"$GITHUB_ENV"
+          echo "AUTOMATION_BASE_SHA=$(git rev-parse HEAD)" >>"$GITHUB_ENV"
+''',
+              '''          venv="/tmp/rankweave-automation-venv-${GITHUB_RUN_ID}"
+          sudo rm -rf "$venv"
+          python -m venv "$venv"
+          "$venv/bin/python" -m pip install --upgrade pip
+          "$venv/bin/python" -m pip install -e ".[dev]" hatchling
+          sudo chown -R root:root "$venv"
+          sudo chmod -R a-w "$venv"
+          sandbox_uid="$(id -u nobody)"
+          sandbox_gid="$(id -g nobody)"
+          command -v setpriv >/dev/null
+          echo "AUTOMATION_VENV=$venv" >>"$GITHUB_ENV"
+          echo "AUTOMATION_BASE_SHA=$(git rev-parse HEAD)" >>"$GITHUB_ENV"
+          echo "SANDBOX_UID=$sandbox_uid" >>"$GITHUB_ENV"
+          echo "SANDBOX_GID=$sandbox_gid" >>"$GITHUB_ENV"
+''',
+              label="trusted tooling isolation",
+          )
+          workflow = replace_once(
+              workflow,
+              '''          sudo unshare --net --pid --fork --mount-proc true
+''',
+              '''          sudo unshare --net --pid --fork --mount-proc \
+            setpriv \
+              --reuid="$SANDBOX_UID" \
+              --regid="$SANDBOX_GID" \
+              --clear-groups \
+              --no-new-privs \
+              --bounding-set=-all \
+              --inh-caps=-all \
+              --ambient-caps=-all \
+              true
+''',
+              label="namespace primitive privilege drop",
+          )
+          workflow = replace_once(
+              workflow,
+              '''              if b"\\0" in data:
+                  raise SystemExit(f"red phase file contains a NUL byte: {path_text}")
+              total_bytes += info.st_size
+''',
+              '''              if b"\\0" in data:
+                  raise SystemExit(f"red phase file contains a NUL byte: {path_text}")
+              try:
+                  data.decode("utf-8", errors="strict")
+              except UnicodeDecodeError as exc:
+                  raise SystemExit(
+                      f"red phase file is not strict UTF-8: {path_text}"
+                  ) from exc
+              total_bytes += info.st_size
+''',
+              label="red phase UTF-8 boundary",
+          )
+          workflow = replace_once(
+              workflow,
+              '''          set +e
+          sudo unshare --net --pid --fork --mount-proc \
+            env -i \
+              PATH="${AUTOMATION_VENV}/bin:/usr/bin:/bin" \
+              HOME="${RUNNER_TEMP}/red-sandbox-home" \
+              WORKSPACE="$GITHUB_WORKSPACE" \
+              PYTHONDONTWRITEBYTECODE=1 \
+              bash --noprofile --norc -c \
+              'cd "$WORKSPACE" && python -m pytest -q -p no:cacheprovider' \
+            >"${RUNNER_TEMP}/red-test-output.txt" 2>&1
+          red_status=$?
+''',
+              '''          red_workspace="/tmp/rankweave-red-workspace-${GITHUB_RUN_ID}"
+          red_home="/tmp/rankweave-red-home-${GITHUB_RUN_ID}"
+          sudo rm -rf "$red_workspace" "$red_home"
+          "$AUTOMATION_VENV/bin/python" \
+            "$GITHUB_WORKSPACE/.github/scripts/materialize_workspace.py" \
+            --source "$GITHUB_WORKSPACE" \
+            --destination "$red_workspace"
+          mkdir -p "$red_home"
+          sudo chown -R "$SANDBOX_UID:$SANDBOX_GID" \
+            "$red_workspace" "$red_home"
+
+          set +e
+          sudo unshare --net --pid --fork --mount-proc \
+            setpriv \
+              --reuid="$SANDBOX_UID" \
+              --regid="$SANDBOX_GID" \
+              --clear-groups \
+              --no-new-privs \
+              --bounding-set=-all \
+              --inh-caps=-all \
+              --ambient-caps=-all \
+              env -i \
+                PATH="${AUTOMATION_VENV}/bin:/usr/bin:/bin" \
+                HOME="$red_home" \
+                WORKSPACE="$red_workspace" \
+                PYTHONPATH="$red_workspace/src" \
+                PYTHONDONTWRITEBYTECODE=1 \
+                bash --noprofile --norc -c \
+                'cd "$WORKSPACE" && python -m pytest -q -p no:cacheprovider' \
+            >"${RUNNER_TEMP}/red-test-output.txt" 2>&1
+          red_status=$?
+''',
+              label="red phase disposable sandbox",
+          )
+          workflow = replace_once(
+              workflow,
+              '''              if b"\\0" in data:
+                  raise SystemExit(f"NUL byte found in {path_text}")
+              total_bytes += info.st_size
+''',
+              '''              if b"\\0" in data:
+                  raise SystemExit(f"NUL byte found in {path_text}")
+              try:
+                  data.decode("utf-8", errors="strict")
+              except UnicodeDecodeError as exc:
+                  raise SystemExit(
+                      f"changed file is not strict UTF-8: {path_text}"
+                  ) from exc
+              total_bytes += info.st_size
+''',
+              label="proposal UTF-8 boundary",
+          )
+          workflow = replace_once(
+              workflow,
+              '''          print(json.dumps(manifest, sort_keys=True))
+          PY
+
+      - name: Validate untrusted changes without network or inherited environment
+''',
+              '''          print(json.dumps(manifest, sort_keys=True))
+          PY
+
+          validation_workspace="/tmp/rankweave-validation-workspace-${GITHUB_RUN_ID}"
+          sudo rm -rf "$validation_workspace"
+          "$AUTOMATION_VENV/bin/python" \
+            "$GITHUB_WORKSPACE/.github/scripts/materialize_workspace.py" \
+            --source "$GITHUB_WORKSPACE" \
+            --destination "$validation_workspace"
+          echo "VALIDATION_WORKSPACE=$validation_workspace" >>"$GITHUB_ENV"
+
+      - name: Validate untrusted changes without network or inherited environment
+''',
+              label="validation workspace materialization",
+          )
+          workflow = replace_once(
+              workflow,
+              '''          validation_dist="${RUNNER_TEMP}/validation-dist"
+          validation_smoke="${RUNNER_TEMP}/validation-smoke"
+          rm -rf "$validation_dist" "$validation_smoke"
+          mkdir -p "$validation_dist" "${RUNNER_TEMP}/validation-home"
+
+          sudo unshare --net --pid --fork --mount-proc \
+            env -i \
+              PATH="${AUTOMATION_VENV}/bin:/usr/bin:/bin" \
+              HOME="${RUNNER_TEMP}/validation-home" \
+              WORKSPACE="$GITHUB_WORKSPACE" \
+              DIST="$validation_dist" \
+              SMOKE="$validation_smoke" \
+              COVERAGE_FILE="${RUNNER_TEMP}/validation.coverage" \
+              PYTHONDONTWRITEBYTECODE=1 \
+              PIP_DISABLE_PIP_VERSION_CHECK=1 \
+              PIP_NO_INDEX=1 \
+              bash --noprofile --norc -c '
+''',
+              '''          validation_sandbox="/tmp/rankweave-validation-sandbox-${GITHUB_RUN_ID}"
+          validation_dist="$validation_sandbox/dist"
+          validation_smoke="$validation_sandbox/smoke"
+          validation_home="$validation_sandbox/home"
+          sudo rm -rf "$validation_sandbox"
+          mkdir -p "$validation_dist" "$validation_home"
+          sudo chown -R "$SANDBOX_UID:$SANDBOX_GID" \
+            "$VALIDATION_WORKSPACE" "$validation_sandbox"
+
+          sudo unshare --net --pid --fork --mount-proc \
+            setpriv \
+              --reuid="$SANDBOX_UID" \
+              --regid="$SANDBOX_GID" \
+              --clear-groups \
+              --no-new-privs \
+              --bounding-set=-all \
+              --inh-caps=-all \
+              --ambient-caps=-all \
+              env -i \
+                PATH="${AUTOMATION_VENV}/bin:/usr/bin:/bin" \
+                HOME="$validation_home" \
+                WORKSPACE="$VALIDATION_WORKSPACE" \
+                PYTHONPATH="$VALIDATION_WORKSPACE/src" \
+                DIST="$validation_dist" \
+                SMOKE="$validation_smoke" \
+                COVERAGE_FILE="$validation_sandbox/.coverage" \
+                PYTHONDONTWRITEBYTECODE=1 \
+                PIP_DISABLE_PIP_VERSION_CHECK=1 \
+                PIP_NO_INDEX=1 \
+                bash --noprofile --norc -c '
+''',
+              label="final disposable sandbox",
+          )
+          workflow = replace_once(
+              workflow,
+              '''          if [ -f PR_MESSAGE.md ]; then
+            "$AUTOMATION_VENV/bin/python" - <<'PY'
+''',
+              '''          if [ -f PR_MESSAGE.md ]; then
+            /usr/bin/python3 - <<'PY'
+''',
+              label="credentialed parser interpreter",
+          )
+          WORKFLOW.write_text(workflow, encoding="utf-8")
+
+          helper = r'''#!/usr/bin/env python3
+          """Materialize Git-visible regular files into a disposable git-free tree."""
+
+          from __future__ import annotations
+
+          import argparse
+          import os
+          import shutil
+          import stat
+          import subprocess
+          from pathlib import Path, PurePosixPath
+          from typing import Sequence
+
+
+          class WorkspaceMaterializationError(ValueError):
+              """Raised when a source tree cannot be copied safely."""
+
+
+          def _decode_git_path(raw_path: bytes) -> str:
+              """Decode and validate one NUL-delimited Git path."""
+              try:
+                  path_text = raw_path.decode("utf-8", errors="strict")
+              except UnicodeDecodeError as exc:
+                  raise WorkspaceMaterializationError(
+                      "Git returned a path that is not strict UTF-8"
+                  ) from exc
+              path = PurePosixPath(path_text)
+              if (
+                  not path_text
+                  or path.is_absolute()
+                  or ".." in path.parts
+                  or path.parts[0] == ".git"
+              ):
+                  raise WorkspaceMaterializationError(
+                      f"Git returned an unsafe path: {path_text!r}"
+                  )
+              return path_text
+
+
+          def _git_visible_paths(source: Path) -> tuple[str, ...]:
+              """Return tracked and non-ignored untracked paths from ``source``."""
+              result = subprocess.run(
+                  [
+                      "git",
+                      "-C",
+                      str(source),
+                      "ls-files",
+                      "--cached",
+                      "--others",
+                      "--exclude-standard",
+                      "-z",
+                  ],
+                  check=True,
+                  stdout=subprocess.PIPE,
+              )
+              return tuple(
+                  _decode_git_path(raw_path)
+                  for raw_path in result.stdout.split(b"\0")
+                  if raw_path
+              )
+
+
+          def materialize_workspace(source: Path, destination: Path) -> tuple[str, ...]:
+              """Copy Git-visible regular files without copying repository metadata."""
+              source = source.resolve(strict=True)
+              destination = destination.resolve(strict=False)
+              if (
+                  source == destination
+                  or source in destination.parents
+                  or destination in source.parents
+              ):
+                  raise WorkspaceMaterializationError(
+                      "source and destination must be separate, non-nested trees"
+                  )
+              if destination.exists():
+                  raise WorkspaceMaterializationError(
+                      f"destination already exists: {destination}"
+                  )
+
+              paths = _git_visible_paths(source)
+              destination.mkdir(parents=True, exist_ok=False)
+              try:
+                  for path_text in paths:
+                      path = PurePosixPath(path_text)
+                      source_path = source.joinpath(*path.parts)
+                      info = source_path.lstat()
+                      if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+                          raise WorkspaceMaterializationError(
+                              f"source path is not a regular file: {path_text}"
+                          )
+                      resolved = source_path.resolve(strict=True)
+                      if resolved != source and source not in resolved.parents:
+                          raise WorkspaceMaterializationError(
+                              f"source path escapes the repository: {path_text}"
+                          )
+                      target = destination.joinpath(*path.parts)
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      target.write_bytes(source_path.read_bytes())
+                      os.chmod(target, stat.S_IMODE(info.st_mode))
+              except BaseException:
+                  shutil.rmtree(destination, ignore_errors=True)
+                  raise
+              return paths
+
+
+          def build_parser() -> argparse.ArgumentParser:
+              """Build the command-line parser for workspace materialization."""
+              parser = argparse.ArgumentParser(
+                  description=(
+                      "Copy tracked and non-ignored untracked regular files into "
+                      "a git-free disposable directory."
+                  )
+              )
+              parser.add_argument("--source", required=True, type=Path)
+              parser.add_argument("--destination", required=True, type=Path)
+              return parser
+
+
+          def main(argv: Sequence[str] | None = None) -> int:
+              """Materialize a workspace and return a process exit code."""
+              arguments = build_parser().parse_args(argv)
+              paths = materialize_workspace(
+                  arguments.source,
+                  arguments.destination,
+              )
+              print(f"materialized {len(paths)} Git-visible files")
+              return 0
+
+
+          if __name__ == "__main__":
+              raise SystemExit(main())
+          '''
+          helper = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in helper.splitlines()
+          ).lstrip()
+          helper_path = ROOT / ".github/scripts/materialize_workspace.py"
+          helper_path.parent.mkdir(parents=True, exist_ok=True)
+          helper_path.write_text(helper, encoding="utf-8")
+
+          helper_tests = r'''from __future__ import annotations
+
+          import importlib.util
+          import os
+          import subprocess
+          from pathlib import Path
+
+          import pytest
+
+          PROJECT_ROOT = Path(__file__).resolve().parents[1]
+          MODULE_PATH = PROJECT_ROOT / ".github/scripts/materialize_workspace.py"
+          SPEC = importlib.util.spec_from_file_location(
+              "rankweave_materialize_workspace",
+              MODULE_PATH,
+          )
+          assert SPEC is not None and SPEC.loader is not None
+          MATERIALIZER = importlib.util.module_from_spec(SPEC)
+          SPEC.loader.exec_module(MATERIALIZER)
+
+
+          def _git(repository: Path, *arguments: str) -> None:
+              subprocess.run(
+                  ["git", "-C", str(repository), *arguments],
+                  check=True,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE,
+              )
+
+
+          def _repository(tmp_path: Path) -> Path:
+              repository = tmp_path / "repository"
+              repository.mkdir()
+              _git(repository, "init")
+              _git(repository, "config", "user.name", "Test")
+              _git(repository, "config", "user.email", "test@example.com")
+              return repository
+
+
+          def test_materialize_workspace_copies_visible_files_only(tmp_path: Path) -> None:
+              repository = _repository(tmp_path)
+              tracked = repository / "tracked.txt"
+              executable = repository / "bin/tool.py"
+              untracked = repository / "untracked.md"
+              ignored = repository / "ignored.log"
+              tracked.write_text("tracked\n", encoding="utf-8")
+              executable.parent.mkdir()
+              executable.write_text("print('ok')\n", encoding="utf-8")
+              executable.chmod(0o755)
+              untracked.write_text("untracked\n", encoding="utf-8")
+              ignored.write_text("ignored\n", encoding="utf-8")
+              (repository / ".gitignore").write_text("*.log\n", encoding="utf-8")
+              _git(repository, "add", "tracked.txt", "bin/tool.py", ".gitignore")
+              _git(repository, "commit", "-m", "base")
+
+              destination = tmp_path / "copy"
+              paths = MATERIALIZER.materialize_workspace(repository, destination)
+
+              assert set(paths) == {
+                  ".gitignore",
+                  "bin/tool.py",
+                  "tracked.txt",
+                  "untracked.md",
+              }
+              assert (destination / "tracked.txt").read_text(encoding="utf-8") == "tracked\n"
+              assert os.access(destination / "bin/tool.py", os.X_OK)
+              assert not (destination / "ignored.log").exists()
+              assert not (destination / ".git").exists()
+
+
+          def test_materialize_workspace_rejects_symlinks(tmp_path: Path) -> None:
+              repository = _repository(tmp_path)
+              target = repository / "target.txt"
+              link = repository / "link.txt"
+              target.write_text("target\n", encoding="utf-8")
+              link.symlink_to(target.name)
+              _git(repository, "add", "target.txt", "link.txt")
+              _git(repository, "commit", "-m", "base")
+
+              with pytest.raises(
+                  MATERIALIZER.WorkspaceMaterializationError,
+                  match="not a regular file",
+              ):
+                  MATERIALIZER.materialize_workspace(
+                      repository,
+                      tmp_path / "copy",
+                  )
+
+
+          def test_materialize_workspace_rejects_nested_or_existing_destinations(
+              tmp_path: Path,
+          ) -> None:
+              repository = _repository(tmp_path)
+              (repository / "tracked.txt").write_text("tracked\n", encoding="utf-8")
+              _git(repository, "add", "tracked.txt")
+              _git(repository, "commit", "-m", "base")
+
+              with pytest.raises(
+                  MATERIALIZER.WorkspaceMaterializationError,
+                  match="separate, non-nested",
+              ):
+                  MATERIALIZER.materialize_workspace(
+                      repository,
+                      repository / "copy",
+                  )
+
+              existing = tmp_path / "existing"
+              existing.mkdir()
+              with pytest.raises(
+                  MATERIALIZER.WorkspaceMaterializationError,
+                  match="already exists",
+              ):
+                  MATERIALIZER.materialize_workspace(repository, existing)
+
+
+          def test_materialize_workspace_cli_reports_count(
+              tmp_path: Path,
+              capsys: pytest.CaptureFixture[str],
+          ) -> None:
+              repository = _repository(tmp_path)
+              (repository / "tracked.txt").write_text("tracked\n", encoding="utf-8")
+              _git(repository, "add", "tracked.txt")
+              _git(repository, "commit", "-m", "base")
+              destination = tmp_path / "copy"
+
+              assert MATERIALIZER.main(
+                  [
+                      "--source",
+                      str(repository),
+                      "--destination",
+                      str(destination),
+                  ]
+              ) == 0
+              assert capsys.readouterr().out == "materialized 1 Git-visible files\n"
+          '''
+          helper_tests = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in helper_tests.splitlines()
+          ).lstrip()
+          (ROOT / "tests/test_materialize_workspace.py").write_text(
+              helper_tests,
+              encoding="utf-8",
+          )
+
+          tests = TESTS.read_text(encoding="utf-8")
+          tests += r'''
+
+          def test_untrusted_execution_uses_disposable_unprivileged_trees():
+              workflow = _workflow_text()
+
+              assert 'venv="/tmp/rankweave-automation-venv-${GITHUB_RUN_ID}"' in workflow
+              assert 'sudo chown -R root:root "$venv"' in workflow
+              assert 'sudo chmod -R a-w "$venv"' in workflow
+              assert workflow.count('setpriv \\') == 3
+              assert workflow.count('--reuid="$SANDBOX_UID"') == 3
+              assert workflow.count('--regid="$SANDBOX_GID"') == 3
+              assert workflow.count('--no-new-privs') == 3
+              assert workflow.count('--bounding-set=-all') == 3
+              assert 'WORKSPACE="$red_workspace"' in workflow
+              assert 'PYTHONPATH="$red_workspace/src"' in workflow
+              assert 'WORKSPACE="$VALIDATION_WORKSPACE"' in workflow
+              assert 'PYTHONPATH="$VALIDATION_WORKSPACE/src"' in workflow
+              assert '.github/scripts/materialize_workspace.py' in workflow
+              assert 'if [ -f PR_MESSAGE.md ]; then\n            /usr/bin/python3' in workflow
+              assert 'strict UTF-8' in workflow
+          '''
+          tests += "\n"
+          tests = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in tests.splitlines()
+          )
+          TESTS.write_text(tests, encoding="utf-8")
+
+          changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+          changelog = replace_once(
+              changelog,
+              "## [Unreleased]\n",
+              """## [Unreleased]\n\n### Security\n- Autonomous red and final tests now execute as the unprivileged `nobody` user inside network/PID namespaces and disposable git-free workspaces. The validation virtual environment is root-owned and read-only, so generated code cannot replace trusted tooling before the GitHub App token is exchanged.\n- Autonomous text boundaries now require strict UTF-8 in addition to regular-file, symlink, NUL, file-count, and byte limits.\n""",
+              label="changelog security section",
+          )
+          (ROOT / "CHANGELOG.md").write_text(changelog, encoding="utf-8")
+
+          agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+          agents = replace_once(
+              agents,
+              """- **Central automation trust boundary.** Repository workflows call reusable\n  PR-governance workflows only at immutable central commit SHAs. Autonomous\n  development uses the official OpenCode NVIDIA provider with a step-scoped\n  `NVIDIA_NIM_API_KEY`; generated tests and code never receive GitHub or OIDC\n  credentials. A separate OIDC-exchanged GitHub App token is used only after\n  offline validation to create the resulting PR.\n""",
+              """- **Central automation trust boundary.** Repository workflows call reusable\n  PR-governance workflows only at immutable central commit SHAs. Autonomous\n  development uses the official OpenCode NVIDIA provider with a step-scoped\n  `NVIDIA_NIM_API_KEY`; generated tests and code never receive GitHub or OIDC\n  credentials. Generated tests execute as an unprivileged user in disposable\n  git-free copies with root-owned read-only validation tooling. A separate\n  OIDC-exchanged GitHub App token is used only after isolated offline validation\n  to create the resulting PR.\n""",
+              label="agent trust boundary",
+          )
+          (ROOT / "AGENTS.md").write_text(agents, encoding="utf-8")
+
+          readme = (ROOT / "README.md").read_text(encoding="utf-8")
+          readme = replace_once(
+              readme,
+              """The authoring model never receives GitHub or OIDC credentials. Generated\nchanges pass a genuine workflow-owned red test, deterministic text-only diff\nlimits, protected-path checks, and network-isolated full validation before a\nseparate OIDC-exchanged GitHub App token may create one PR.\n""",
+              """The authoring model never receives GitHub or OIDC credentials. Generated\nchanges pass a genuine workflow-owned red test, deterministic text-only diff\nlimits, and protected-path checks. Red and final tests run as an unprivileged\nuser in disposable git-free copies with root-owned read-only tooling and no\nnetwork. Only after that isolated validation may a separate OIDC-exchanged\nGitHub App token create one PR.\n""",
+              label="README sandbox boundary",
+          )
+          (ROOT / "README.md").write_text(readme, encoding="utf-8")
+
+          operations_path = ROOT / "docs/operations/hourly-commercialization-loop.md"
+          operations = operations_path.read_text(encoding="utf-8")
+          operations += """\n## Disposable unprivileged execution boundary\n\nGenerated pytest code is never executed in the credentialed repository tree or\nwith root privileges. The workflow materializes tracked plus non-ignored\nuntracked regular files into a git-free directory, changes ownership of that\ncopy to the `nobody` account, drops all capability sets with `setpriv`, enables\n`no_new_privs`, and then enters the network/PID namespace. The trusted\nvalidation virtual environment lives under `/tmp`, is owned by root, and is\nread-only. This prevents generated code from replacing `python`, `pytest`,\n`coverage`, `ruff`, or `pip` before the later GitHub App token step.\n\nThe red and final sandboxes receive only an empty environment plus explicit\npaths, HOME, PYTHONPATH, and validation controls. The proposal tree remains\nuntouched and is re-hashed after validation. PR-message parsing uses the runner's\nsystem Python rather than the validation environment.\n"""
+          operations_path.write_text(operations, encoding="utf-8")
+
+          design_path = ROOT / "docs/superpowers/specs/2026-08-04-nim-commercialization-loop-design.md"
+          design = design_path.read_text(encoding="utf-8")
+          design += """\n## Untrusted test execution isolation\n\nThe model-authored tests are treated as executable hostile input. Both the red\nproof and final validation run from disposable, git-free materializations rather\nthan the proposal workspace. Namespace setup occurs with `sudo`, but `setpriv`\nimmediately changes to the unprivileged `nobody` UID/GID, clears supplementary\ngroups and all capability sets, and enables `no_new_privs` before Python starts.\nThe validation virtual environment is root-owned and read-only. Consequently,\ngenerated tests cannot mutate repository metadata or replace an interpreter that\nwill later run with the PR-creation token.\n"""
+          design_path.write_text(design, encoding="utf-8")
+
+          one_shot = ROOT / ".github/workflows/patch-pr20-sandbox.yml"
+          one_shot.unlink()
+          PY
+
+      - name: Verify the repaired branch
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+          python -m ruff check .
+          python -m coverage run -m pytest -q
+          python -m coverage report
+          python .github/scripts/materialize_workspace.py --help >/dev/null
+
+      - name: Commit and push the verified repair
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git -c core.hooksPath=/dev/null commit \
+            -m "security: isolate autonomous tests from trusted credentials"
+          git -c core.hooksPath=/dev/null push \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/nim/hourly-commercialization-loop"
