@@ -335,15 +335,27 @@ See [TREC candidate-family comparison](docs/trec-family-comparison.md).
 The default branch runs an hourly workflow at minute 17:
 
 `PR review/merge scan → review-feedback repair → exact-head revalidation → one
-bounded buyer-visible product task when both queues are empty`.
+bounded buyer-visible product proposal when the governed PR queue is empty`.
 
-PR governance uses commit-pinned reusable workflows from the organization's
-central `.github` repository. New Copilot agent tasks require a user-to-server
-secret named `COPILOT_GITHUB_TOKEN` with repository-scoped Agent Tasks
-read/write permission. Missing credentials or uncertain queue state blocks new
-product work but does not disable PR maintenance.
+PR inspection, review repair, and merge decisions use immutable reusable
+workflows from the organization's central `.github` repository. The local
+product stage uses a hash-pinned OpenCode binary with the official NVIDIA
+provider and a step-scoped `NVIDIA_NIM_API_KEY` secret. It cannot use Bash,
+fetch the web, read untrusted GitHub issues or PRs, access external paths, or
+hold a GitHub token while authoring.
 
-See [Hourly commercialization loop](docs/operations/hourly-commercialization-loop.md).
+The workflow first permits edits only to tests and a design specification, then
+runs pytest without network or inherited credentials and requires a genuine
+failed test. Only then may the agent implement one bounded production change.
+A deterministic gate rejects protected, binary, symlink, oversized, or overly
+broad diffs. Ruff, the complete tests, 100% line/branch coverage, wheel build,
+offline installation, import smoke, and `pip check` run in a network-isolated
+process. Before opening one PR, the workflow rechecks both the open-PR queue and
+the exact `main` commit; stale or competing work is discarded. Generated work
+is never self-approved, merged, published, or released.
+
+See [Hourly commercialization loop](docs/operations/hourly-commercialization-loop.md)
+for the credential, sandbox, failure, and operating contracts.
 
 ## Research and standards
 

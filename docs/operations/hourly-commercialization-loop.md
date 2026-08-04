@@ -17,8 +17,9 @@ Each run performs four jobs in order:
 3. **Revalidate the PR queue.** Call the merge scheduler again so a repaired or
    newly approved current head is reconsidered under the same checks.
 4. **Develop the next product gap.** Only when every governance job succeeded,
-   no PR is open, and no nonterminal Copilot cloud-agent task exists, create
-   one task that opens one bounded PR.
+   no PR is open, and `NVIDIA_NIM_API_KEY` exists, author one design, prove a
+   failing test, implement the bounded increment, validate it without network
+   or inherited credentials, and open one pull request.
 
 The reusable workflows are referenced at immutable commits:
 
@@ -30,80 +31,187 @@ The reusable workflows are referenced at immutable commits:
 
 This prevents a privileged scheduled run from silently changing behavior
 because the central `main` branch moved. Updating either central policy
-requires an explicit reviewed SHA change in RankWeave. The caller grants the
-union of permissions required by the two pinned governance workflows; the
-local product-development job overrides that token with `contents: read` and
-`pull-requests: read` only.
+requires an explicit reviewed SHA change in RankWeave.
 
-## Single-flight and fail-closed behavior
+## Product-development trust zones
+
+The local development job is separated into four trust zones.
+
+### 1. Trusted base verification
+
+The workflow checks out `main` with `persist-credentials: false`, records the
+exact commit, prepares an isolated development virtual environment, and runs
+Ruff, the full test suite, and the configured 100% line/branch coverage gate.
+It also proves that the runner can create a network and PID namespace. A broken
+base or unavailable isolation primitive blocks model execution.
+
+### 2. Test-first authoring
+
+The hash-pinned OpenCode binary uses the official built-in NVIDIA provider. Its
+first phase may edit only `tests/` and `docs/superpowers/specs/`. The following
+tools and surfaces are explicitly denied:
+
+- Bash and arbitrary code execution;
+- web search and URL fetching;
+- external directories;
+- LSP execution;
+- subagents, skills, questions, and doom-loop retries;
+- `.git`, environment files, and the OpenCode control file.
+
+The prompt also forbids reading GitHub issues or pull requests. Those are
+untrusted prompt surfaces and are not needed to select a gap from the trusted
+repository itself.
+
+After authoring, the workflow verifies the changed paths and runs pytest in a
+network-isolated process with `env -i` and a fresh `/proc`. Pytest must exit
+with status `1` and report an actual failed test. A passing suite, collection
+error, invocation error, rename, deletion, or out-of-scope edit does not satisfy
+the red gate.
+
+### 3. Implementation and deterministic validation
+
+The verified red state is committed locally only so model fallback can return
+to a known tree. The implementation phase may edit normal product,
+documentation, version, and package files, but it still cannot execute Bash,
+use the web, touch external directories, or edit `.github/`, `.git/`, or agent
+control files.
+
+A deterministic post-agent gate rejects:
+
+- workflow, ownership, security, environment, or Git-submodule changes;
+- rename, copy, merge-conflict, symlink, submodule, or non-regular state;
+- binary/NUL-bearing or unsupported file types;
+- more than 25 changed files;
+- any file larger than 256 KiB;
+- more than 1 MiB of changed-file content;
+- proposals without a production `src/rankweave/*.py` change.
+
+The accepted proposal then runs, with no provider or GitHub credential and no
+network access:
+
+```text
+Ruff
+→ all pytest tests
+→ 100% line and branch coverage
+→ wheel build without network or build isolation
+→ isolated wheel installation
+→ import/version smoke test
+→ pip check
+```
+
+A manifest taken immediately before validation must match the manifest after
+validation. Model-authored tests or import code therefore cannot alter the
+proposal as a validation side effect.
+
+### 4. GitHub mutation
+
+Only the final static packaging step receives the built-in GitHub token. It
+rechecks that no PR appeared during authoring and that live `main` still equals
+the recorded checkout commit. If either condition changed, the proposal is
+discarded without pushing a branch.
+
+The model-authored PR title and body are length- and character-bounded. The
+workflow removes the message file, squashes the local red/green history to one
+commit, disables Git hooks for commit and push, creates a run-unique branch,
+and opens one PR. It never approves, merges, tags, publishes, or releases that
+PR.
+
+## Credential boundary
+
+Configure a repository or organization Actions secret named
+`NVIDIA_NIM_API_KEY` with an NVIDIA API key for the official OpenCode NVIDIA
+provider. The key is step-scoped only to:
+
+- the static eligibility check;
+- the red authoring OpenCode process;
+- the implementation OpenCode process.
+
+It is not a job-level environment variable and is absent from every process
+that executes model-authored Python. The OpenCode processes explicitly remove
+`GH_TOKEN`, `GITHUB_TOKEN`, and OIDC request variables. Their tool permissions
+deny command execution and web access, so the provider key is not exposed to
+model-authored shell or network operations.
+
+The GitHub token is present only in the two static queue/base checks and the
+final branch/PR creation step. No model-authored program is executed in those
+steps.
+
+## Model and binary configuration
+
+OpenCode is pinned to version `1.17.13`; its Linux archive must match the
+reviewed SHA-256 digest before installation. The current ordered model fallback
+is:
+
+1. `nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5`;
+2. `nvidia/nvidia/nemotron-3-super-120b-a12b`;
+3. `nvidia/deepseek-ai/deepseek-v4-pro`.
+
+A model has five minutes for the test-design phase and ten minutes for the
+implementation phase. Partial work from a failed model is discarded before the
+next candidate. The overall job has a 55-minute timeout so the next hourly run
+cannot accumulate behind an unbounded agent session.
+
+The model list is routing configuration, not a benchmark or scientific claim.
+Review model availability, licenses, and OpenCode compatibility whenever this
+list or OpenCode version changes.
+
+## Single-flight and TOCTOU behavior
 
 The workflow uses one concurrency group with `cancel-in-progress: true`, so a
 new hourly run replaces a stale previous orchestration instead of building an
 unbounded queue.
 
-Product development starts only after all governance jobs succeeded and both
-queue gates pass:
+The open-PR gate runs twice:
 
-- `GET /repos/ContextualWisdomLab/RankWeave/pulls?state=open` returns no open
-  pull request;
-- every paginated page from
-  `GET /agents/repos/ContextualWisdomLab/RankWeave/tasks` contains no task in
-  `queued`, `in_progress`, `idle`, `waiting_for_user`, or an unknown state.
+- before checkout and authoring;
+- immediately before branch creation.
 
-Unknown task response shapes, pagination failures, task-inventory API failures,
-missing credentials, failed PR-governance jobs, and unrecognized task states
-all block task creation. Completed, failed, timed-out, and cancelled tasks are
-terminal, but an open PR still owns the queue regardless of task state.
+The final step also compares live `main` with the exact recorded base SHA. An
+external PR or base-branch update therefore wins the queue, and stale generated
+work is discarded rather than rebased, force-pushed, or opened against a
+changed base.
 
-The generated prompt requires exactly one buyer-visible product gap, test-first
-implementation, complete docstrings, 100% line and branch coverage, preserved
-stdlib-only and store-agnostic boundaries, documentation and changelog updates,
-and one PR. The task is explicitly forbidden from self-merging or bypassing
-reviews and required checks.
+## Fail-closed outcomes
 
-## Required secret
+PR maintenance still runs when product development is disabled. No generated
+branch or PR is created after any of these conditions:
 
-Create a repository or organization Actions secret named
-`COPILOT_GITHUB_TOKEN`. GitHub's public-preview Agent Tasks API accepts these
-user-to-server token types:
+- failed central governance job;
+- missing NVIDIA secret;
+- open PR at either queue check;
+- base branch movement;
+- failed trusted-base validation;
+- missing network/PID namespace support;
+- OpenCode checksum or all-model failure;
+- out-of-scope red edit or absence of a real failed test;
+- protected, binary, symlink, oversized, or overly broad diff;
+- final lint, test, coverage, build, installation, import, or dependency
+  failure;
+- validation-time workspace mutation;
+- invalid or oversized PR title/body.
 
-- a fine-grained personal access token;
-- a GitHub App **user access token**.
-
-The token must be scoped to RankWeave with the repository permission
-**Agent tasks: read and write**. Listing the queue requires read access; starting
-a task requires read/write access. GitHub App installation access tokens and
-the Actions `GITHUB_TOKEN` are not supported. Starting tasks also requires the
-user and organization to have an eligible Copilot Business or Copilot
-Enterprise configuration with the cloud agent enabled for RankWeave.
-
-Both Agent Tasks requests send `X-GitHub-Api-Version: 2026-03-10`, the current
-version documented for this public-preview endpoint. Reassess the version,
-response shape, states, and token permissions whenever GitHub changes the
-preview contract.
-
-The workflow never falls back from `COPILOT_GITHUB_TOKEN` to `github.token` for
-agent task listing or creation. Without the secret, PR maintenance still runs,
-but new product development remains intentionally disabled and emits a warning.
+The next hourly run begins from the then-current protected `main` branch.
 
 ## Operational verification
 
 After merging the workflow:
 
-1. Open **Actions → Hourly RankWeave Commercialization Loop** and run it
-   manually.
-2. Confirm inspect and revalidation use the pinned merge-policy SHA and review
-   repair uses the separately pinned immutable-source SHA.
-3. Confirm the called governance jobs can request reviews, dispatch repair,
-   update branches, and enable or perform policy-compliant merges.
-4. With an open PR, confirm the product-development gate reports
-   `eligible=false` and creates no task.
-5. With no open PR but an active task on a later pagination page, confirm it
-   creates no duplicate.
-6. With both queues empty and the secret configured, confirm one cloud-agent
-   task is created with `base_ref=main` and `create_pull_request=true`.
-7. Confirm the resulting PR enters the normal central review/check/merge loop
-   and is not merged by the agent that authored it.
+1. Confirm the three central governance jobs use their immutable SHAs.
+2. Run the workflow manually with an open PR and confirm the development gate
+   reports `eligible=false`.
+3. Remove the open PR while leaving `NVIDIA_NIM_API_KEY` absent and confirm PR
+   maintenance succeeds while development emits a fail-closed warning.
+4. Configure the secret and confirm the base Ruff/tests/coverage and namespace
+   preflight run before OpenCode.
+5. Inspect the red phase and confirm only tests/design changed and pytest exit
+   status `1` was required.
+6. Inspect final validation and confirm it ran under `unshare`, `env -i`, no
+   network, no inherited provider/GitHub credential, and a stable workspace
+   manifest.
+7. Confirm exactly one branch and PR are created only when both queue checks
+   and the exact-base check remain clear.
+8. Confirm the generated PR enters the ordinary central review/check/merge loop
+   and is not approved or merged by its authoring workflow.
 
 ## Scope
 
@@ -111,3 +219,6 @@ This loop is software-delivery automation, not proof of market value. It keeps
 technical gaps moving through a governed queue. Buyer adoption, validated
 retrieval lift, operating economics, support readiness, and commercial due
 diligence still require external evidence before any valuation claim is made.
+
+The full security and state-machine design is recorded in
+[`docs/superpowers/specs/2026-08-04-nim-commercialization-loop-design.md`](../superpowers/specs/2026-08-04-nim-commercialization-loop-design.md).
