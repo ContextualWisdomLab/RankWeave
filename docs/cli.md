@@ -37,7 +37,7 @@ python -m rankweave compare \
 | `--alternative` | no | `two-sided` | `two-sided`, `candidate-greater`, or `candidate-less`. |
 | `--randomizations` | no | `10000` | Positive ASCII decimal integer. |
 | `--seed` | no | `0` | Signed ASCII decimal integer. |
-| `--max-input-bytes` | no | `67108864` | Positive per-artifact byte ceiling. |
+| `--max-input-bytes` | no | `67108864` | Positive per-artifact byte ceiling representable by the platform read API. |
 | `--pretty` | no | false | Emit deterministic two-space JSON. |
 
 The command does not accept URLs, compressed archives, benchmark downloads, or
@@ -133,7 +133,9 @@ Each artifact is checked before reading and then read with an explicit
 `max_input_bytes + 1` ceiling. The second check rejects a file that grows after
 its initial size observation without first loading an unbounded payload into
 memory. The default limit is 64 MiB per artifact and can be lowered by the
-caller.
+caller. A configured ceiling that cannot be represented by the platform's
+binary read API is rejected as an expected validation failure instead of
+escaping as an `OverflowError`.
 
 The CLI is intentionally synchronous. A service that accepts untrusted uploads
 should enforce its own request timeout, tenant quota, filesystem isolation, and
