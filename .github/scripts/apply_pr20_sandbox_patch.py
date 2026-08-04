@@ -20,7 +20,7 @@ def _historical_patch_source() -> str:
 
 
 def _extract_patch_program(workflow_source: str) -> str:
-    """Extract and dedent the Python patch program from the historical workflow."""
+    """Extract and dedent the outer Python program from the historical workflow."""
     step_start = (
         "      - name: Apply sandbox hardening and remove this workflow\n"
         "        run: |\n"
@@ -31,8 +31,8 @@ def _extract_patch_program(workflow_source: str) -> str:
     run_block = workflow_source.split(step_start, 1)[1].split(step_end, 1)[0]
     opener = "          python - <<'PY'\n"
     closer = "\n          PY"
-    if run_block.count(opener) != 1 or not run_block.endswith(closer):
-        raise RuntimeError("historical one-shot Python block shape drifted")
+    if opener not in run_block or closer not in run_block:
+        raise RuntimeError("historical one-shot Python boundary is missing")
     python_source = run_block.split(opener, 1)[1].rsplit(closer, 1)[0]
     dedented_lines = [
         line[10:] if line.startswith("          ") else line
