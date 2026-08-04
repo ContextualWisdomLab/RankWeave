@@ -64,6 +64,7 @@ jobs:
               "rankweave/evaluation.py",
               "rankweave/trec.py",
               "rankweave/trec_comparison.py",
+              "rankweave/trec_family_comparison.py",
               "rankweave/tuning.py",
               "rankweave/py.typed",
           }
@@ -121,5 +122,21 @@ jobs:
           assert trec_comparison.baseline_run.run_id == "baseline"
           assert trec_comparison.candidate_run.run_id == "candidate"
           assert trec_comparison.comparison.significance.mean_difference == 1.0
+          family = rankweave.compare_trec_run_family(
+              "q Q0 other 1 0.9 baseline\n"
+              "q Q0 document 2 0.2 baseline\n",
+              {
+                  "candidate": (
+                      "q Q0 document 1 0.9 candidate\n"
+                      "q Q0 other 2 0.2 candidate\n"
+                  )
+              },
+              "q 0 document 1\nq 0 other 0\n",
+              cutoff=1,
+              alternative=rankweave.CANDIDATE_GREATER_ALTERNATIVE,
+          )
+          assert family.candidates[0].candidate_id == "candidate"
+          assert family.candidates[0].raw_p_value == 0.5
+          assert family.candidates[0].holm_adjusted_p_value == 0.5
           PY
       - run: .package-smoke/bin/python -m pip check
