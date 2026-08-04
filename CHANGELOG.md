@@ -4,7 +4,7 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
-## [0.11.0] — 2026-08-04
+## [0.11.0] — 2026-08-05
 
 ### Added
 - The `rankweave compare-family` console command and equivalent `python -m rankweave compare-family` module entrypoint for comparing one baseline TREC run with an explicitly ordered, named candidate family.
