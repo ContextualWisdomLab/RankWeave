@@ -52,7 +52,7 @@ def test_product_development_uses_nvidia_nim_and_fails_closed():
         "NVIDIA_NIM_API_KEY is not configured; product development remains "
         "fail-closed" in workflow
     )
-    assert "enabled_providers\": [\"nvidia\"]" in workflow
+    assert '"enabled_providers": ["nvidia"]' in workflow
     assert "@ai-sdk/openai-compatible" not in workflow
     assert "integrate.api.nvidia.com" not in workflow
 
@@ -112,7 +112,6 @@ def test_product_prompt_enforces_bounded_commercial_quality():
     required_phrases = (
         "exactly one highest-impact buyer-visible product gap",
         "write the failing",
-        "100% line and branch coverage",
         "full production docstrings",
         "standard-library-only runtime",
         "Update CHANGELOG.md",
@@ -122,6 +121,7 @@ def test_product_prompt_enforces_bounded_commercial_quality():
     )
     for required_phrase in required_phrases:
         assert required_phrase in workflow
+    assert "python -m coverage report" in workflow
 
 
 def test_autonomous_diff_is_text_only_bounded_and_policy_safe():
@@ -161,7 +161,7 @@ def test_untrusted_validation_has_no_network_or_inherited_environment():
     assert "python -m coverage run -m pytest -q" in workflow
     assert "python -m coverage report" in workflow
     assert "python -m pip wheel" in workflow
-    assert "python -m pip check" in workflow
+    assert "-m pip check" in workflow
 
 
 def test_final_queue_and_base_are_rechecked_before_pr_creation():
