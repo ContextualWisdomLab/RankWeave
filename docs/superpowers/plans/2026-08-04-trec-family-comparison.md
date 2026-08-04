@@ -37,7 +37,8 @@ coverage, Ruff, Hatchling.
 - Expects `TrecCandidateComparison`, `TrecRunFamilyComparisonReport`, and
   `compare_trec_run_family`.
 
-- [x] Pin three hand-checked raw p-values and their Holm-adjusted values.
+- [x] Pin three hand-checked effect sizes, raw p-values, and their Holm-adjusted
+  values together without treating significance as practical importance.
 - [x] Pin alpha rejection flags, insertion order, tie order, identical tags,
   exact and Monte Carlo pass-through, and immutability.
 - [x] Pin empty/non-mapping candidates, invalid alpha, malformed artifact, and
