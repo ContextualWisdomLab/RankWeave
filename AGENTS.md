@@ -84,13 +84,31 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   and `#` comment lines are ignored without losing physical line numbers. Run
   rankings use descending score; exact score ties preserve input order.
 - **Central automation trust boundary.** Repository workflows call reusable
-  PR-governance workflows only at immutable central commit SHAs. Agent-task
-  creation requires a user-to-server `COPILOT_GITHUB_TOKEN`; never fall back to
-  the workflow token, and fail closed when inventory cannot be read.
-- **Single-flight autonomous development.** The hourly product loop starts work
-  only when no PR and no nonterminal Copilot task exists. Each task selects one
-  bounded buyer-visible gap and opens one PR; agents never self-merge or bypass
-  required checks.
+  PR-governance workflows only at immutable central commit SHAs. The hourly
+  product-development stage uses a hash-pinned OpenCode binary and the official
+  built-in NVIDIA provider; do not replace either with an unpinned installer,
+  moving branch, or dynamically selected custom provider package.
+- **Provider credentials are authoring-only.** `NVIDIA_NIM_API_KEY` is scoped to
+  static OpenCode steps. No provider key, GitHub token, or OIDC request token may
+  be present in a process that executes model-authored Python.
+- **Autonomous tools are non-executing.** OpenCode authoring phases deny Bash,
+  web access, external directories, LSP, subagents, skills, and questions. The
+  model may edit bounded repository files; deterministic workflow steps alone
+  execute tests, build artifacts, create branches, and open PRs.
+- **Autonomous TDD is evidence-backed.** The first phase may edit only tests and
+  design specifications. A network-isolated, sanitized pytest process must
+  produce a genuine failed test before production edits are allowed.
+- **Autonomous diffs are bounded.** Never permit generated changes to workflow,
+  ownership, security, environment, Git-submodule, binary, symlink, or agent
+  control files. Enforce changed-file count, per-file bytes, aggregate bytes,
+  text-only content, and at least one production Python change.
+- **Untrusted validation is sandboxed.** Execute model-authored code with no
+  network, `env -i`, an isolated PID namespace, and a fresh `/proc`. Record and
+  compare workspace manifests so tests or imports cannot rewrite the proposal.
+- **Single-flight autonomous development.** The hourly product loop starts only
+  after central governance succeeds and no PR is open. Recheck both the queue
+  and exact base SHA before mutation. Open one PR only; never approve, merge,
+  publish, release, rebase, or hide a stale generated proposal.
 - **Complete quality gates.** Production docstrings and both line and branch
   coverage remain at 100%.
 - **Release metadata stays synchronized.** A release updates `pyproject.toml`,
