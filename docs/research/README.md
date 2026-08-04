@@ -80,6 +80,29 @@ commercial importance of the observed effect. Consumers should report the mean
 difference and per-query evidence and should keep validation-set policy
 selection separate from one-time held-out test comparison.
 
+## Direct TREC comparison composition
+
+`compare_trec_runs` introduces no additional statistical method. It composes
+the already grounded contracts in a fixed, auditable order:
+
+1. parse one baseline run and one candidate run with the NIST-derived
+   interchange boundary;
+2. parse qrels once and preserve negative unjudged entries in the immutable
+   artifact;
+3. convert each run to decreasing-score rankings;
+4. convert qrels to the generic non-negative judgment mapping;
+5. delegate both evaluations and paired randomization to `compare_rankings`;
+6. retain every parsed artifact, evaluation, and per-query difference in one
+   frozen `TrecRunComparisonReport`.
+
+This orchestration prevents benchmark consumers from silently applying a
+different parser, query filter, cutoff, score order, or significance option to
+one of the two systems. Identical run tags remain permitted because TREC tags
+are descriptive provenance fields rather than unique artifact identities.
+
+The complete workflow and interpretation boundary are documented in
+[`docs/trec-run-comparison.md`](../trec-run-comparison.md).
+
 ## Tuning protocol
 
 `tune_weighted_reciprocal_rank_fusion` evaluates named fixed-weight policies on
