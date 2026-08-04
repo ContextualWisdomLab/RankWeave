@@ -27,6 +27,20 @@ jobs:
       - name: Apply the reviewed unprivileged sandbox repair
         run: |
           set -euo pipefail
+          python - <<'PATCH'
+          from pathlib import Path
+
+          path = Path('.github/scripts/apply_pr20_sandbox_patch.py')
+          source = path.read_text(encoding='utf-8')
+          old = '''        '          sudo chown -R "$SANDBOX_UID:$SANDBOX_GID"',
+                  '            "$validation_dist" "$validation_home" "$ruff_cache"',
+          '''
+          new = '''        '          sudo chown -R "$SANDBOX_UID:$SANDBOX_GID" "$validation_dist" "$validation_home" "$ruff_cache"',
+          '''
+          if source.count(old) != 1:
+              raise SystemExit('validation ownership command shape drifted')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PATCH
           python .github/scripts/apply_pr20_sandbox_patch.py
 
       - name: Verify the repaired branch
