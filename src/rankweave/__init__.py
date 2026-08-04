@@ -2,21 +2,20 @@
 
 Pure-Python (stdlib-only) fusion of lexical, semantic, learned-sparse,
 and other retrieval channels, complete-list fusion, ranked-effectiveness
-evaluation, paired statistical comparison, offline weight-policy tuning,
-strict TREC interchange, direct TREC run comparison, and Unicode NFC query
-normalization. Store-agnostic: bring your own channels; rankweave combines and
-evaluates their evidence.
+evaluation, paired and family-wise statistical comparison, offline weight
+policy tuning, strict TREC interchange, and Unicode NFC query normalization.
+Store-agnostic: bring your own channels; rankweave combines and evaluates their
+evidence.
 
 Two fusion strategies, research-grounded (see ``docs/research/``):
 
-- ``convex_combination`` (default, "TM2C2") — Bruch, Gai & Ingber
-  2023 (arXiv:2210.11934): a convex combination of theoretically
-  min-max normalized scores; robust, distribution-preserving, no
-  training data needed. The public API supports both the common
-  two-channel pairing and explicit N-channel convex weights.
-- ``reciprocal_rank_fusion`` — Cormack, Clarke & Büttcher 2009: the
-  non-parametric rank-only alternative, with equal- and convex-weighted
-  complete-list APIs.
+- ``convex_combination`` (default, "TM2C2") — Bruch et al. (2024): a convex
+  combination of theoretically min-max normalized scores; robust,
+  distribution-preserving, and requiring no training data. The public API
+  supports both the common two-channel pairing and explicit N-channel convex
+  weights.
+- ``reciprocal_rank_fusion`` — Cormack et al. (2009): the non-parametric
+  rank-only alternative, with equal- and convex-weighted complete-list APIs.
 
 Quickstart::
 
@@ -24,8 +23,8 @@ Quickstart::
 
     settings = FusionSettings()  # TM2C2, alpha=0.7
     score = fuse_channel_scores(
-        word_similarity_score=0.62,   # lexical channel, [0, 1]
-        cosine_distance=0.30,         # dense channel, [0, 2]
+        word_similarity_score=0.62,
+        cosine_distance=0.30,
         channel_ranks={"lexical": 1, "dense": 1},
         settings=settings,
     )
@@ -102,6 +101,11 @@ from rankweave.trec_comparison import (
     TrecRunComparisonReport,
     compare_trec_runs,
 )
+from rankweave.trec_family_comparison import (
+    TrecCandidateComparison,
+    TrecRunFamilyComparisonReport,
+    compare_trec_run_family,
+)
 from rankweave.tuning import (
     MEAN_NDCG_OBJECTIVE,
     MEAN_PRECISION_OBJECTIVE,
@@ -113,7 +117,7 @@ from rankweave.tuning import (
     tune_weighted_reciprocal_rank_fusion,
 )
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 __all__ = [
     "AggregateRankingMetrics",
@@ -150,11 +154,13 @@ __all__ = [
     "SUPPORTED_COMPARISON_METRICS",
     "SUPPORTED_TUNING_OBJECTIVES",
     "TWO_SIDED_ALTERNATIVE",
+    "TrecCandidateComparison",
     "TrecQrelEntry",
     "TrecQrels",
     "TrecRun",
     "TrecRunComparisonReport",
     "TrecRunEntry",
+    "TrecRunFamilyComparisonReport",
     "WORD_SIMILARITY_THEORETICAL_BOUNDS",
     "WeightedChannelContribution",
     "WeightedRRFTuningReport",
@@ -162,6 +168,7 @@ __all__ = [
     "WeightedRankContribution",
     "compare_ranking_reports",
     "compare_rankings",
+    "compare_trec_run_family",
     "compare_trec_runs",
     "convex_combination_score",
     "evaluate_ranking",
