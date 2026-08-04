@@ -70,6 +70,16 @@ jobs:
               raise SystemExit('setpriv contract literal shape drifted')
           source = source.replace(contract_old, contract_new, 1)
 
+          pythonpath_old = (
+              '    assert workflow.count(\'PYTHONPATH="$GITHUB_WORKSPACE/src"\') == 2'
+          )
+          pythonpath_new = (
+              '    assert workflow.count("PYTHONPATH=$GITHUB_WORKSPACE/src") == 2'
+          )
+          if source.count(pythonpath_old) != 1:
+              raise SystemExit('PYTHONPATH contract literal shape drifted')
+          source = source.replace(pythonpath_old, pythonpath_new, 1)
+
           path.write_text(source, encoding='utf-8')
           PATCH
           python .github/scripts/apply_pr20_sandbox_patch.py
