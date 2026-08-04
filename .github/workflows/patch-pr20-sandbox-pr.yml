@@ -66,6 +66,52 @@ jobs:
               raise SystemExit('sandbox contract test marker was not added exactly once')
           addition = mutated[mutated.index(marker):].rstrip()
           destination.write_text(original + '\n\n' + addition + '\n', encoding='utf-8')
+
+          workflow_path = Path('.github/workflows/hourly-commercialization-loop.yml')
+          workflow = workflow_path.read_text(encoding='utf-8')
+          old_clean = '''          rm -f opencode.json .agent-red-output.txt
+          git clean -fdX
+'''
+          new_clean = '''          pr_message_backup="${RUNNER_TEMP}/agent-pr-message.md"
+          if [ -f PR_MESSAGE.md ]; then
+            cp PR_MESSAGE.md "$pr_message_backup"
+          fi
+          rm -f opencode.json .agent-red-output.txt
+          git clean -fdX
+          if [ -f "$pr_message_backup" ]; then
+            cp "$pr_message_backup" PR_MESSAGE.md
+          fi
+'''
+          if workflow.count(old_clean) != 1:
+              raise SystemExit('final ignored-file cleanup shape drifted')
+          workflow = workflow.replace(old_clean, new_clean, 1)
+          workflow_path.write_text(workflow, encoding='utf-8')
+
+          helper_path = Path('.github/scripts/materialize_workspace.py')
+          helper = helper_path.read_text(encoding='utf-8')
+          old_mode = '            os.chmod(target, stat.S_IMODE(info.st_mode))\n'
+          new_mode = (
+              '            safe_mode = 0o755 if info.st_mode & stat.S_IXUSR else 0o644\n'
+              '            os.chmod(target, safe_mode)\n'
+          )
+          if helper.count(old_mode) != 1:
+              raise SystemExit('workspace mode-copy shape drifted')
+          helper_path.write_text(helper.replace(old_mode, new_mode, 1), encoding='utf-8')
+
+          contract_marker = '    assert \'strict UTF-8\' in workflow\n'
+          contract_addition = (
+              contract_marker
+              + '    assert \'pr_message_backup="${RUNNER_TEMP}/agent-pr-message.md"\' in workflow\n'
+              + '    assert \'safe_mode = 0o755 if info.st_mode & stat.S_IXUSR else 0o644\' in '
+              + "Path('.github/scripts/materialize_workspace.py').read_text(encoding='utf-8')\n"
+          )
+          contracts = destination.read_text(encoding='utf-8')
+          if contracts.count(contract_marker) != 1:
+              raise SystemExit('sandbox contract insertion point drifted')
+          destination.write_text(
+              contracts.replace(contract_marker, contract_addition, 1),
+              encoding='utf-8',
+          )
           PY
           rm -f .github/workflows/patch-pr20-sandbox-pr.yml
 
