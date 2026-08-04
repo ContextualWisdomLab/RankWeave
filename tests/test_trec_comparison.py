@@ -1,6 +1,10 @@
 from dataclasses import FrozenInstanceError
 
 import pytest
+from rankweave.trec_comparison import (
+    TrecRunComparisonReport,
+    compare_trec_runs,
+)
 
 from rankweave.comparison import (
     CANDIDATE_GREATER_ALTERNATIVE,
@@ -8,10 +12,6 @@ from rankweave.comparison import (
     PRECISION_AT_K_METRIC,
 )
 from rankweave.trec import TrecQrels, TrecRun
-from rankweave.trec_comparison import (
-    TrecRunComparisonReport,
-    compare_trec_runs,
-)
 
 
 QRELS_TEXT = """
