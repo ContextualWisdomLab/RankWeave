@@ -215,7 +215,8 @@ report = evaluate_trec_run(run_text, qrels_text, cutoff=10)
 
 TREC qrels require four fields and signed ASCII integer relevance in
 `[-127, 127]`. Runs require six fields, literal `Q0`, a positive rank, finite
-score, and one portable 1–20 character ASCII run tag. Blank and `#` comment
+score, and one portable 1–20 character ASCII run tag containing only ASCII
+letters, digits, periods, underscores, or hyphens. Blank and `#` comment
 lines are ignored while physical error line numbers are preserved. Evaluation
 orders runs by decreasing score, not the submitted rank field.
 
