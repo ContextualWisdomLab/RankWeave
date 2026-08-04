@@ -60,6 +60,16 @@ jobs:
               raise SystemExit('installed-wheel version smoke shape drifted')
           source = source.replace(smoke_old, smoke_new, 1)
 
+          contract_old = (
+              '    assert workflow.count("            setpriv\\n") == 3'
+          )
+          contract_new = (
+              '    assert workflow.count("            setpriv\\\\n") == 3'
+          )
+          if source.count(contract_old) != 1:
+              raise SystemExit('setpriv contract literal shape drifted')
+          source = source.replace(contract_old, contract_new, 1)
+
           path.write_text(source, encoding='utf-8')
           PATCH
           python .github/scripts/apply_pr20_sandbox_patch.py
