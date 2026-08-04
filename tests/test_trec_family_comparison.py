@@ -67,6 +67,10 @@ def test_family_comparison_applies_hand_checked_holm_adjustment():
         "partial",
         "equal",
     ]
+    assert [
+        entry.comparison.significance.mean_difference
+        for entry in report.candidates
+    ] == pytest.approx([1.0, 0.5, 0.0])
     assert [entry.raw_p_value for entry in report.candidates] == pytest.approx(
         [0.25, 0.5, 1.0]
     )
@@ -117,6 +121,7 @@ def test_familywise_alpha_changes_only_rejection_decisions():
     )
 
     candidate = report.candidates[0]
+    assert candidate.comparison.significance.mean_difference == 1.0
     assert candidate.raw_p_value == 0.25
     assert candidate.holm_adjusted_p_value == 0.25
     assert candidate.rejected_at_familywise_alpha is False
