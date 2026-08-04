@@ -7,14 +7,16 @@ grounding with the code.
 
 ## Papers
 
-| Citation | Grounds |
+| Source | Grounds |
 |---|---|
-| Bruch, Gai & Ingber (2023), *An Analysis of Fusion Functions for Hybrid Retrieval*, ACM TOIS 42(1), arXiv:2210.11934 | Default TM2C2 convex fusion, theoretical normalization, multi-system extension, and sample-efficient offline tuning. |
-| Cormack, Clarke & Büttcher (2009), *Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods*, SIGIR 2009 | RRF and the default `eta=60`. |
-| Samuel et al. (2025), *MMMORRF: Multimodal Multilingual Modularized Reciprocal Rank Fusion*, SIGIR 2025, DOI: 10.1145/3726302.3730157 | Evidence for weighted RRF when retrieval channels have different reliability. |
-| Järvelin & Kekäläinen (2002), *Cumulated Gain-based Evaluation of IR Techniques*, ACM TOIS 20(4), DOI: 10.1145/582415.582418 | Graded cumulative gain, logarithmic rank discounting, and ideal-ranking normalization. |
-| Smucker, Allan & Carterette (2007), *A Comparison of Statistical Significance Tests for Information Retrieval Evaluation*, CIKM 2007, DOI: 10.1145/1321440.1321528 | Paired topic-level randomization as a suitable transparent test for comparing IR systems. |
+| Bruch et al. (2024) | Default TM2C2 convex fusion, theoretical normalization, multi-system extension, and sample-efficient offline tuning. |
+| Cormack et al. (2009) | Reciprocal rank fusion and the default `eta=60`. |
+| Samuel et al. (2025) | Evidence for weighted RRF when retrieval channels have different reliability. |
+| Järvelin and Kekäläinen (2002) | Graded cumulative gain, logarithmic rank discounting, and ideal-ranking normalization. |
+| Smucker et al. (2007) | Paired topic-level randomization as a suitable transparent test for comparing IR systems. |
+| Holm (1979) | Sequentially rejective family-wise error control for candidate-family comparisons. |
 
+Complete APA 7th edition references appear in [References](#references-apa-7th-edition).
 Where a locally preserved PDF is absent, the source remains cite-only until
 redistribution permission is confirmed. Git LFS is intentionally not required.
 
@@ -30,14 +32,15 @@ redistribution permission is confirmed. Git LFS is intentionally not required.
 
 ## Fusion defaults
 
-Bruch, Gai & Ingber report that a convex combination of theoretically min-max
+Bruch et al. (2024) report that a convex combination of theoretically min-max
 normalized scores is robust in and out of domain. RankWeave defaults to
 `alpha=0.7`, within the reported stable range, and exposes explicit convex
 weights for more than two systems.
 
 RRF remains the rank-only alternative. RankWeave exposes equal-weight and
 fixed-weight APIs. The weighted interface is generic and auditable; it does not
-reproduce MMMORRF's domain-specific adaptive video estimator.
+reproduce MMMORRF's domain-specific adaptive video estimator (Samuel et al.,
+2025).
 
 ## Metric conventions
 
@@ -58,11 +61,11 @@ randomization. `compare_rankings` first creates both complete evaluation
 reports through the same fail-closed evaluation contract.
 
 The test is grounded in the IR significance-study literature summarized by
-Smucker, Allan & Carterette. Their empirical comparison over TREC runs found
-little practical difference among randomization, bootstrap, and paired t-tests
-for the studied measures, while sign and Wilcoxon tests behaved less well.
-RankWeave chooses randomization because its paired exchangeability assumption
-and calculation can be exposed directly without a numerical dependency.
+Smucker et al. (2007). Their empirical comparison over TREC runs found little
+practical difference among randomization, bootstrap, and paired t tests for the
+studied measures, while sign and Wilcoxon tests behaved less well. RankWeave
+chooses randomization because its paired exchangeability assumption and
+calculation can be exposed directly without a numerical dependency.
 
 The operational contract is:
 
@@ -103,6 +106,23 @@ are descriptive provenance fields rather than unique artifact identities.
 The complete workflow and interpretation boundary are documented in
 [`docs/trec-run-comparison.md`](../trec-run-comparison.md).
 
+## Candidate-family error control
+
+`compare_trec_run_family` reuses one parsed baseline, one parsed qrels artifact,
+and one baseline evaluation for an ordered family of candidates. It preserves
+every raw paired p-value and applies Holm's sequentially rejective adjustment
+(Holm, 1979). The procedure controls the family-wise error rate under arbitrary
+dependence, so correlated candidate systems and shared queries do not invalidate
+the adjustment.
+
+Candidate families must be defined before inspecting results. Changing the
+family after observing p-values changes the statistical question. Adjusted
+p-values remain inferential evidence rather than effect size, operational value,
+or permission to deploy a winner automatically.
+
+The complete workflow is documented in
+[`docs/trec-family-comparison.md`](../trec-family-comparison.md).
+
 ## Tuning protocol
 
 `tune_weighted_reciprocal_rank_fusion` evaluates named fixed-weight policies on
@@ -110,9 +130,9 @@ a complete judged validation query set. It supports macro nDCG, reciprocal
 rank, recall, or precision and preserves candidate insertion order as the exact
 tie-breaker.
 
-The selected validation policy is not an unbiased final effectiveness
-estimate. Consumers must evaluate it once on an independent held-out test set
-before making a production-quality claim.
+The selected validation policy is not an unbiased final effectiveness estimate.
+Consumers must evaluate it once on an independent held-out test set before
+making a production-quality claim.
 
 ## TREC interchange contract
 
@@ -153,3 +173,36 @@ exact query-set parity gate as the native evaluation API.
 
 Detailed operational behavior is documented in
 [`docs/trec-interoperability.md`](../trec-interoperability.md).
+
+## References (APA 7th edition)
+
+Bruch, S., Gai, S., & Ingber, A. (2024). An analysis of fusion functions for
+hybrid retrieval. *ACM Transactions on Information Systems, 42*(1), Article 20,
+1–35. https://doi.org/10.1145/3596512
+
+Cormack, G. V., Clarke, C. L. A., & Büttcher, S. (2009). Reciprocal rank fusion
+outperforms Condorcet and individual rank learning methods. In *Proceedings of
+the 32nd International ACM SIGIR Conference on Research and Development in
+Information Retrieval* (pp. 758–759). Association for Computing Machinery.
+https://doi.org/10.1145/1571941.1572114
+
+Holm, S. (1979). A simple sequentially rejective multiple test procedure.
+*Scandinavian Journal of Statistics, 6*(2), 65–70.
+https://doi.org/10.2307/4615733
+
+Järvelin, K., & Kekäläinen, J. (2002). Cumulated gain-based evaluation of IR
+techniques. *ACM Transactions on Information Systems, 20*(4), 422–446.
+https://doi.org/10.1145/582415.582418
+
+Samuel, S., DeGenaro, D., Guallar-Blasco, J., Sanders, K., Eisape, O.,
+Spendlove, T., Reddy, A., Martin, A., Yates, A., Yang, E., Carpenter, C.,
+Etter, D., Kayi, E., Wiesner, M., Murray, K., & Kriz, R. (2025). MMMORRF:
+Multimodal multilingual modularized reciprocal rank fusion. In *Proceedings of
+the 48th International ACM SIGIR Conference on Research and Development in
+Information Retrieval* (pp. 4004–4009). Association for Computing Machinery.
+https://doi.org/10.1145/3726302.3730157
+
+Smucker, M. D., Allan, J., & Carterette, B. (2007). A comparison of statistical
+significance tests for information retrieval evaluation. In *Proceedings of the
+Sixteenth ACM Conference on Information and Knowledge Management* (pp. 623–632).
+Association for Computing Machinery. https://doi.org/10.1145/1321440.1321528
