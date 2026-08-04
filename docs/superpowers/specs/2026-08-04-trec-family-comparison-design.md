@@ -117,8 +117,9 @@ Run tags are not candidate identifiers and may be repeated.
 
 Tests cover:
 
-- three candidates with hand-checked raw p-values `0.25`, `0.5`, and `1.0` and
-  Holm-adjusted values `0.75`, `1.0`, and `1.0`;
+- three candidates with hand-checked mean differences `1.0`, `0.5`, and `0.0`,
+  raw p-values `0.25`, `0.5`, and `1.0`, and Holm-adjusted values `0.75`, `1.0`,
+  and `1.0`;
 - family-wise alpha rejection flags;
 - insertion order and tie ordering;
 - identical run tags;
