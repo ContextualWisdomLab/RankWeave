@@ -105,7 +105,8 @@ queries and correlated candidates do not invalidate the adjustment.
 For `m` raw p-values RankWeave:
 
 1. sorts by raw p-value, breaking ties by candidate input order;
-2. multiplies the p-value at sorted position `i` by `m - i`;
+2. numbers each sorted position `i` from zero and multiplies its p-value by
+   `m - i`;
 3. caps the result at one;
 4. takes the cumulative maximum to enforce monotonic adjusted p-values;
 5. maps adjusted values back to candidate input order.
