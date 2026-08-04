@@ -4,6 +4,10 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+### Security
+- Model-authored red and final tests now run as the unprivileged `nobody` user inside network and PID namespaces with all capability sets removed and `no_new_privs` enabled. Trusted validation tooling is root-owned and read-only before untrusted Python executes.
+- Autonomous text boundaries now require strict UTF-8 in addition to regular-file, symlink, NUL, file-count, and byte limits. Ignored PR metadata is preserved across cleanup and parsed with isolated system Python only after validation.
+
 ### Changed
 - Replace the inactive Copilot Agent Tasks product-development stage with a hash-pinned OpenCode workflow using the official NVIDIA provider and `NVIDIA_NIM_API_KEY`.
 - Split autonomous development into a test/design-only red phase and a bounded implementation phase; workflow-owned pytest execution must prove a real failure before production edits are allowed.

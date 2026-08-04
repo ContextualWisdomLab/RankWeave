@@ -244,3 +244,21 @@ def test_opencode_binary_and_models_are_pinned():
         "nvidia/deepseek-ai/deepseek-v4-pro",
     ):
         assert model in workflow
+
+
+def test_untrusted_execution_drops_privileges():
+    workflow = _workflow_text()
+
+    assert 'venv="/tmp/rankweave-automation-venv-${GITHUB_RUN_ID}"' in workflow
+    assert 'sudo chown -R root:root "$venv"' in workflow
+    assert 'sudo chmod -R a-w "$venv"' in workflow
+    assert workflow.count("            setpriv\n") == 3
+    assert workflow.count('--reuid="$SANDBOX_UID"') == 3
+    assert workflow.count('--regid="$SANDBOX_GID"') == 3
+    assert workflow.count("--no-new-privs") == 3
+    assert workflow.count("--bounding-set=-all") == 3
+    assert workflow.count("PYTHONPATH=$GITHUB_WORKSPACE/src") == 2
+    assert 'pr_message_backup="${RUNNER_TEMP}/agent-pr-message.md"' in workflow
+    assert "/usr/bin/python3 -I -S - <<'PY'" in workflow
+    assert "strict UTF-8" in workflow
+
