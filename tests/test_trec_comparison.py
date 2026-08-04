@@ -13,7 +13,6 @@ from rankweave.comparison import (
 )
 from rankweave.trec import TrecQrels, TrecRun
 
-
 QRELS_TEXT = """
 # judged topics
 query-a 0 relevant-a 1
