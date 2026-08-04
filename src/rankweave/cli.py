@@ -14,6 +14,7 @@ from . import __version__
 from .comparison import (
     CANDIDATE_GREATER_ALTERNATIVE,
     CANDIDATE_LESS_ALTERNATIVE,
+    QueryMetricDifference,
     SUPPORTED_ALTERNATIVES,
     TWO_SIDED_ALTERNATIVE,
 )
@@ -139,13 +140,15 @@ def _macro_metric_value(aggregate: object, metric_name: str) -> float:
     return float(getattr(aggregate, attribute))
 
 
-def _query_difference_to_dict(difference: object) -> dict[str, Any]:
+def _query_difference_to_dict(
+    difference: QueryMetricDifference,
+) -> dict[str, Any]:
     """Project one immutable per-query difference to JSON-compatible data."""
     return {
-        "query_id": getattr(difference, "query_id"),
-        "baseline_value": getattr(difference, "baseline_value"),
-        "candidate_value": getattr(difference, "candidate_value"),
-        "difference": getattr(difference, "difference"),
+        "query_id": difference.query_id,
+        "baseline_value": difference.baseline_value,
+        "candidate_value": difference.candidate_value,
+        "difference": difference.difference,
     }
 
 
