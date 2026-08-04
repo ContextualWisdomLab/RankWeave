@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rankweave"
-version = "0.7.0"
-description = "Dependency-free retrieval fusion, evaluation, paired significance comparison, policy tuning, and strict TREC interchange."
+version = "0.8.0"
+description = "Dependency-free retrieval fusion, evaluation, paired significance, policy tuning, and direct TREC benchmark comparison."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -23,6 +23,7 @@ keywords = [
     "randomization-test",
     "trec",
     "trec-eval",
+    "benchmark-comparison",
     "interoperability",
     "ndcg",
     "dense-retrieval",
