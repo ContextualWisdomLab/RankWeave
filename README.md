@@ -221,9 +221,10 @@ report = evaluate_trec_run(run_text, qrels_text, cutoff=10)
 
 TREC qrels require four fields and signed ASCII integer relevance in
 `[-127, 127]`. Runs require six fields, literal `Q0`, a positive rank, finite
-score, and one portable 1–20 character ASCII run tag. Blank and `#` comment
-lines are ignored while physical error line numbers are preserved. Evaluation
-orders runs by decreasing score, not the submitted rank field.
+score, and one portable 1–20 character ASCII run tag containing only ASCII
+letters, digits, periods, underscores, or hyphens. Blank and `#` comment lines
+are ignored while physical error line numbers are preserved. Evaluation orders
+runs by decreasing score, not the submitted rank field.
 
 ## Compare two TREC runs directly
 
@@ -264,9 +265,10 @@ write one `rankweave: error: ...` line to stderr, and return `2`.
 
 Inputs default to a 64 MiB limit per artifact. Each read requests at most the
 configured limit plus one byte, so a file that grows after its initial size
-check cannot trigger an unbounded in-memory read. The CLI accepts local files
-only and delegates all evaluation and randomization behavior to
-`compare_trec_runs`.
+check cannot trigger an unbounded in-memory read. A configured limit that is too
+large for the platform's binary read API is rejected as a validation error. The
+CLI accepts local files only and delegates all evaluation and randomization
+behavior to `compare_trec_runs`.
 
 See [RankWeave command-line interface](docs/cli.md).
 
