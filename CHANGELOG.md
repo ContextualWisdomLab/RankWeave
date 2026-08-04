@@ -4,6 +4,19 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-08-04
+
+### Added
+- `compare_trec_run_family` for comparing one baseline TREC run with a named family of candidate runs against one shared qrels artifact.
+- Immutable `TrecCandidateComparison` and `TrecRunFamilyComparisonReport` records preserving every candidate artifact, native evaluation, raw paired p-value, Holm-adjusted p-value, and family-wise rejection decision.
+- Holm's sequentially rejective family-wise error correction with deterministic raw-p-value tie handling by candidate input order.
+- Candidate-context error reporting that identifies the malformed or query-incomplete candidate while preserving the underlying parser or evaluation error.
+- Package exports, wheel verification, and isolated installed-wheel smoke coverage for candidate-family comparison.
+
+### Changed
+- Baseline and qrels artifacts are parsed and evaluated once for a candidate family; each candidate delegates to the existing paired comparison implementation with the same explicit metric, alternative, draw count, and seed.
+- Run tags remain provenance rather than candidate identity and may repeat across baseline and candidate artifacts.
+
 ## [0.8.0] — 2026-08-04
 
 ### Added
