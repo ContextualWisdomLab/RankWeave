@@ -128,8 +128,11 @@ def read_text_bounded(path: str | Path, max_input_bytes: int) -> str:
         raise ValueError(
             f"{file_path}: exceeds max-input-bytes {max_input_bytes}"
         )
-    with file_path.open("rb") as input_file:
-        raw_bytes = input_file.read(max_input_bytes + 1)
+    try:
+        with file_path.open("rb") as input_file:
+            raw_bytes = input_file.read(max_input_bytes + 1)
+    except OverflowError as exc:
+        raise ValueError("max_input_bytes is too large for this platform") from exc
     if len(raw_bytes) > max_input_bytes:
         raise ValueError(
             f"{file_path}: exceeds max-input-bytes {max_input_bytes}"
