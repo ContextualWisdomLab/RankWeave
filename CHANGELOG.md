@@ -4,6 +4,17 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+### Changed
+- Replace the inactive Copilot Agent Tasks product-development stage with a hash-pinned OpenCode workflow using the official NVIDIA provider and `NVIDIA_NIM_API_KEY`.
+- Split autonomous development into a test/design-only red phase and a bounded implementation phase; workflow-owned pytest execution must prove a real failure before production edits are allowed.
+- Recheck both the open-PR queue and exact `main` SHA immediately before creating one generated pull request.
+
+### Security
+- Scope the NVIDIA credential only to static OpenCode steps and remove GitHub/OIDC credentials from agent processes.
+- Deny Bash, web access, external directories, LSP, subagents, skills, and protected-path edits during model authoring.
+- Reject workflow, ownership, security, environment, Git-submodule, binary, symlink, oversized, excessively broad, or non-production autonomous diffs.
+- Validate model-authored code with no network, an empty inherited environment, isolated PID and `/proc` namespaces, offline wheel installation, and pre/post workspace-manifest equality.
+
 ## [0.10.0] — 2026-08-04
 
 ### Added
@@ -71,7 +82,7 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 ## [0.5.0] — 2026-08-03
 
 ### Added
-- `tune_weighted_reciprocal_rank_fusion` for deterministic offline selection of fixed convex weighted-RRF policies on a judged validation query set.
+- `tune_weighted_reciprocal_rank_fusion` for deterministic offline selection of fixed weighted-RRF policies on a judged validation query set.
 - Immutable `WeightedRRFTuningTrial` and `WeightedRRFTuningReport` records containing every candidate policy, complete evaluation evidence, objective values, and the selected policy.
 - Explicit tuning objectives for macro nDCG, reciprocal rank, recall, and precision, with first-candidate deterministic tie-breaking.
 
@@ -109,7 +120,7 @@ Initial extraction from [ContextualWisdomLab/naruon](https://github.com/Contextu
 - `fuse_channel_scores` — fuse one candidate's lexical + dense channel evidence into a single bounded score under the selected strategy.
 - `FusionSettings` — immutable strategy + parameters (`convex_combination` default with `semantic_weight_alpha=0.7`; `reciprocal_rank_fusion` with `rank_constant_eta=60`).
 - `convex_combination_score`, `reciprocal_rank_fusion_score`, `theoretical_min_max_normalize` — the underlying fusion primitives.
-- `normalize_search_text` — NFC compose + whitespace-collapse + length-cap for the query side of a language-agnostic lexical channel.
+- `normalize_search_text` — NFC compose + whitespace-collapse + length-cap for the query side of a language-agnostic character-trigram lexical channel.
 - `WORD_SIMILARITY_THEORETICAL_BOUNDS`, `COSINE_DISTANCE_THEORETICAL_BOUNDS`.
 - 28 unit tests; no dependencies (stdlib only); typed (`py.typed`).
 - Research grounding + paper manifest under `docs/research/`.
