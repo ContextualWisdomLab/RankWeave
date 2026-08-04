@@ -182,7 +182,8 @@ jobs:
               --baseline-run baseline.run \
               --candidate-run candidate.run \
               --qrels qrels.txt \
-              --cutoff 1 > module-report.json
+              --cutoff 1 \
+              --alternative candidate-greater > module-report.json
             cmp report.json module-report.json
           )
       - run: .package-smoke/bin/python -m pip check
