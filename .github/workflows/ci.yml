@@ -60,6 +60,8 @@ jobs:
               wheel_members = set(wheel_file.namelist())
           required_members = {
               "rankweave/__init__.py",
+              "rankweave/__main__.py",
+              "rankweave/cli.py",
               "rankweave/comparison.py",
               "rankweave/evaluation.py",
               "rankweave/trec.py",
@@ -139,4 +141,48 @@ jobs:
           assert family.candidates[0].raw_p_value == 0.5
           assert family.candidates[0].holm_adjusted_p_value == 0.5
           PY
+      - name: Smoke-test installed console command outside source tree
+        run: |
+          set -euo pipefail
+          venv_bin="$PWD/.package-smoke/bin"
+          smoke_dir="$(mktemp -d)"
+          trap 'rm -rf "$smoke_dir"' EXIT
+          cat >"$smoke_dir/baseline.run" <<'EOF'
+          q Q0 other 1 0.9 baseline
+          q Q0 document 2 0.2 baseline
+          EOF
+          cat >"$smoke_dir/candidate.run" <<'EOF'
+          q Q0 document 1 0.9 candidate
+          q Q0 other 2 0.2 candidate
+          EOF
+          cat >"$smoke_dir/qrels.txt" <<'EOF'
+          q 0 document 1
+          q 0 other 0
+          EOF
+          (
+            cd "$smoke_dir"
+            "$venv_bin/rankweave" compare \
+              --baseline-run baseline.run \
+              --candidate-run candidate.run \
+              --qrels qrels.txt \
+              --cutoff 1 \
+              --alternative candidate-greater > report.json
+            "$venv_bin/python" - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("report.json").read_text(encoding="utf-8"))
+          assert report["schema_version"] == "rankweave.trec-comparison.v1"
+          assert report["rankweave_version"] == "0.10.0"
+          assert report["baseline_run_id"] == "baseline"
+          assert report["candidate_run_id"] == "candidate"
+          assert report["mean_difference"] == 1.0
+          PY
+            "$venv_bin/python" -m rankweave compare \
+              --baseline-run baseline.run \
+              --candidate-run candidate.run \
+              --qrels qrels.txt \
+              --cutoff 1 > module-report.json
+            cmp report.json module-report.json
+          )
       - run: .package-smoke/bin/python -m pip check

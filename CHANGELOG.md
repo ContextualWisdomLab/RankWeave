@@ -4,6 +4,21 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-08-04
+
+### Added
+- The `rankweave compare` console command and equivalent `python -m rankweave compare` module entrypoint for one strict baseline-versus-candidate TREC comparison.
+- Stable UTF-8 JSON output contract `rankweave.trec-comparison.v1`, with compact output by default and deterministic two-space output through `--pretty`.
+- Explicit CLI controls for cutoff, metric, alternative, randomization count, seed, and per-artifact byte limit.
+- Installed-wheel command smoke tests, module-entrypoint tests, argument and error-contract tests, and memory-bound regression coverage.
+
+### Changed
+- Shell, CI, container, and non-Python orchestrators can consume the existing `compare_trec_runs` contract without duplicating parsing or statistical logic.
+- Expected usage, file-system, UTF-8, size, TREC, evaluation, and statistical validation failures emit one stderr diagnostic and exit with status `2`; successful JSON remains stdout-only.
+
+### Fixed
+- Artifact reads are bounded in memory to at most `max_input_bytes + 1`, preventing a file that grows after its size check from causing an unbounded read.
+
 ## [0.9.0] — 2026-08-04
 
 ### Added
