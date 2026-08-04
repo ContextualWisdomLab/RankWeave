@@ -81,24 +81,35 @@ jobs:
         needs.revalidate-pr-queue.result == 'success'
       }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 55
     permissions:
-      contents: read
-      pull-requests: read
+      contents: write
+      pull-requests: write
     env:
       TARGET_REPOSITORY: ContextualWisdomLab/RankWeave
       BASE_BRANCH: main
-      AGENT_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+      OPENCODE_VERSION: "1.17.13"
+      OPENCODE_SHA256: 157afa289d1a8d9372de0ce19ac726119b937a1f6b201808d46f06e4e59bb348
+      OPENCODE_MODEL_CANDIDATES: >-
+        nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5
+        nvidia/nvidia/nemotron-3-super-120b-a12b
+        nvidia/deepseek-ai/deepseek-v4-pro
+      OPENCODE_RED_TIMEOUT_SECONDS: "300"
+      OPENCODE_IMPLEMENT_TIMEOUT_SECONDS: "600"
+      MAX_AUTONOMOUS_CHANGED_FILES: "25"
+      MAX_AUTONOMOUS_FILE_BYTES: "262144"
+      MAX_AUTONOMOUS_TOTAL_BYTES: "1048576"
     steps:
       - name: Determine whether product development may start
         id: gate
         env:
           GH_TOKEN: ${{ github.token }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
         run: |
           set -euo pipefail
 
-          if [ -z "${AGENT_TOKEN:-}" ]; then
-            echo "::warning::COPILOT_GITHUB_TOKEN is not configured; product development remains fail-closed."
+          if [ -z "${NVIDIA_API_KEY:-}" ]; then
+            echo "::warning::NVIDIA_NIM_API_KEY is not configured; product development remains fail-closed."
             echo "eligible=false" >>"$GITHUB_OUTPUT"
             exit 0
           fi
@@ -113,120 +124,618 @@ jobs:
             exit 0
           fi
 
-          if ! tasks_json="$(
-            GH_TOKEN="$AGENT_TOKEN" gh api \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2026-03-10" \
-              --paginate \
-              --slurp \
-              "/agents/repos/${TARGET_REPOSITORY}/tasks?per_page=100"
-          )"; then
-            echo "::warning::Unable to list Copilot agent tasks; refusing to create another."
-            echo "eligible=false" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if ! active_task_count="$(
-            TASKS_JSON="$tasks_json" python3 - <<'PY'
-          import json
-          import os
-          import sys
-
-          payload = json.loads(os.environ["TASKS_JSON"])
-
-          def extract_tasks(value):
-              if isinstance(value, list):
-                  if all(
-                      isinstance(item, dict) and "state" in item
-                      for item in value
-                  ):
-                      return value
-                  extracted = []
-                  for page in value:
-                      page_tasks = extract_tasks(page)
-                      if page_tasks is None:
-                          return None
-                      extracted.extend(page_tasks)
-                  return extracted
-              if isinstance(value, dict):
-                  tasks_value = value.get("tasks", value.get("items"))
-                  if isinstance(tasks_value, list):
-                      return extract_tasks(tasks_value)
-              return None
-
-          tasks = extract_tasks(payload)
-          if tasks is None:
-              print("Unsupported agent-task response shape", file=sys.stderr)
-              raise SystemExit(1)
-
-          active_states = {"queued", "in_progress", "idle", "waiting_for_user"}
-          terminal_states = {"completed", "failed", "timed_out", "cancelled"}
-          active_count = 0
-          for task in tasks:
-              if not isinstance(task, dict):
-                  active_count += 1
-                  continue
-              state = task.get("state")
-              if state in active_states or state not in terminal_states:
-                  active_count += 1
-          print(active_count)
-          PY
-          )"; then
-            echo "::warning::Unable to interpret Copilot agent tasks; refusing to create another."
-            echo "eligible=false" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [ "$active_task_count" -ne 0 ]; then
-            echo "A Copilot agent task already owns the development queue."
-            echo "eligible=false" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-
           echo "eligible=true" >>"$GITHUB_OUTPUT"
 
-      - name: Start one bounded buyer-visible product task
+      - name: Check out the current base without persisted credentials
+        if: steps.gate.outputs.eligible == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prepare trusted validation tooling
+        if: steps.gate.outputs.eligible == 'true'
+        run: |
+          set -euo pipefail
+          venv="${RUNNER_TEMP}/rankweave-automation-venv"
+          python -m venv "$venv"
+          "$venv/bin/python" -m pip install --upgrade pip
+          "$venv/bin/python" -m pip install -e ".[dev]" hatchling
+          echo "AUTOMATION_VENV=$venv" >>"$GITHUB_ENV"
+          echo "AUTOMATION_BASE_SHA=$(git rev-parse HEAD)" >>"$GITHUB_ENV"
+          {
+            echo "/opencode.json"
+            echo "/.agent-red-output.txt"
+            echo "/PR_MESSAGE.md"
+          } >>"$GITHUB_WORKSPACE/.git/info/exclude"
+
+      - name: Verify the trusted base and network-isolation primitive
+        if: steps.gate.outputs.eligible == 'true'
+        run: |
+          set -euo pipefail
+          "$AUTOMATION_VENV/bin/python" -m ruff check .
+          "$AUTOMATION_VENV/bin/python" -m coverage run -m pytest -q
+          "$AUTOMATION_VENV/bin/python" -m coverage report
+          rm -f .coverage
+          sudo unshare --net --pid --fork --mount-proc true
+
+      - name: Install the pinned OpenCode CLI
+        if: steps.gate.outputs.eligible == 'true'
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/opencode-linux-x64.tar.gz"
+          install_dir="${RUNNER_TEMP}/opencode/bin"
+          mkdir -p "$install_dir"
+          curl -fsSL \
+            -o "$archive" \
+            "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz"
+          printf '%s  %s\n' "$OPENCODE_SHA256" "$archive" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          install -m 0755 "${RUNNER_TEMP}/opencode" "$install_dir/opencode"
+          "$install_dir/opencode" --version
+          echo "$install_dir" >>"$GITHUB_PATH"
+
+      - name: Configure test-first authoring permissions
+        if: steps.gate.outputs.eligible == 'true'
+        run: |
+          set -euo pipefail
+          cat >"$GITHUB_WORKSPACE/opencode.json" <<'CONFIG'
+          {
+            "$schema": "https://opencode.ai/config.json",
+            "enabled_providers": ["nvidia"],
+            "model": "nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            "lsp": false,
+            "permission": {
+              "read": {
+                "*": "allow",
+                ".git/**": "deny",
+                "opencode.json": "deny",
+                ".env": "deny",
+                ".env.*": "deny"
+              },
+              "edit": {
+                "*": "deny",
+                "tests/**": "allow",
+                "docs/superpowers/specs/**": "allow"
+              },
+              "bash": "deny",
+              "webfetch": "deny",
+              "websearch": "deny",
+              "external_directory": "deny",
+              "task": "deny",
+              "skill": "deny",
+              "question": "deny",
+              "lsp": "deny",
+              "doom_loop": "deny"
+            }
+          }
+          CONFIG
+
+      - name: Author one design and failing regression test
         if: steps.gate.outputs.eligible == 'true'
         env:
-          GH_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
         run: |
           set -euo pipefail
 
           prompt="$(cat <<'PROMPT'
-          Continue commercializing ContextualWisdomLab/RankWeave on the main branch.
+          Work only from the trusted files on the checked-out RankWeave main branch.
+          Do not read GitHub issues, pull requests, external web pages, environment
+          variables, or paths outside the repository.
 
-          First inspect AGENTS.md, README.md, CHANGELOG.md, open issues, recent commits,
-          package boundaries, tests, security posture, interoperability, and the natural
-          retrieval-engine user journey. Select exactly one highest-impact buyer-visible product gap
-          that fits one bounded pull request. Do not create a new repository.
+          Select exactly one highest-impact buyer-visible product gap that fits one
+          bounded pull request and does not require a new external research claim.
+          Write a concise design under docs/superpowers/specs/ and write the failing
+          pytest regression tests first. During this phase do not modify production
+          code, package metadata, README.md, AGENTS.md, CHANGELOG.md, workflows, or
+          any file outside tests/ and docs/superpowers/specs/. Do not write
+          PR_MESSAGE.md yet.
 
-          Work test-first: Write a failing test before production code and verify that it
-          fails for the intended reason. Implement the smallest coherent solution, then
-          run focused and full validation. Preserve the standard-library-only runtime,
-          store-agnostic modular architecture, deterministic behavior, immutable audit
-          records, fail-closed input contracts, Python 3.10+ compatibility, 100% line and branch coverage,
-          and complete production docstrings. Use authoritative primary
-          standards or peer-reviewed evidence for algorithmic defaults and document any
-          deliberate compatibility differences.
-
-          Update CHANGELOG.md, README.md, AGENTS.md, research or operations documentation,
-          package smoke tests, and version metadata when the slice is release-ready. Use
-          Figma or Product Design only when the repository has an actual UI; do not add a
-          cosmetic interface to this library. Open exactly one focused pull request that
-          explains buyer impact, evidence, compatibility, and executable verification.
-          Do not merge your own pull request and do not bypass reviews or required checks.
+          The tests must express the buyer-visible contract, preserve RankWeave's
+          standard-library-only runtime, deterministic and immutable evidence,
+          fail-closed validation, Python 3.10+ compatibility, and modular standalone
+          plus naruon-import use. The workflow will execute the test suite after this
+          phase and requires a genuine test failure before implementation begins.
           PROMPT
           )"
 
-          payload="$(
-            jq -n \
-              --arg prompt "$prompt" \
-              --arg base_ref "$BASE_BRANCH" \
-              '{prompt: $prompt, base_ref: $base_ref, create_pull_request: true}'
+          status=1
+          for model in $OPENCODE_MODEL_CANDIDATES; do
+            echo "::group::opencode red phase $model"
+            if timeout --kill-after=30s "${OPENCODE_RED_TIMEOUT_SECONDS}s" \
+              env -u GH_TOKEN -u GITHUB_TOKEN \
+              -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL \
+              HOME="${RUNNER_TEMP}/opencode-home-red" \
+              opencode run "$prompt" --model "$model"; then
+              status=0
+              echo "::endgroup::"
+              break
+            fi
+            echo "::endgroup::"
+            echo "::warning::Model $model failed during the red phase; discarding partial work."
+            git reset --hard "$AUTOMATION_BASE_SHA"
+            git clean -fd
+          done
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Every NVIDIA model failed during test-first authoring."
+            exit 1
+          fi
+
+      - name: Verify test-only scope and observe the red state
+        if: steps.gate.outputs.eligible == 'true'
+        run: |
+          set -euo pipefail
+          rm -f opencode.json
+          "$AUTOMATION_VENV/bin/python" - <<'PY'
+          from __future__ import annotations
+
+          import subprocess
+          from pathlib import Path
+
+          records = subprocess.check_output(
+              ["git", "status", "--porcelain=v1", "-z"]
+          ).split(b"\0")
+          paths = []
+          index = 0
+          while index < len(records):
+              record = records[index]
+              index += 1
+              if not record:
+                  continue
+              status = record[:2].decode("ascii")
+              path = record[3:].decode("utf-8")
+              if "R" in status or "C" in status or "D" in status:
+                  raise SystemExit(
+                      f"red phase may not rename, copy, or delete files: {path}"
+                  )
+              paths.append(path)
+
+          if not paths:
+              raise SystemExit("red phase produced no files")
+          if not any(
+              path.startswith("tests/") and Path(path).suffix == ".py"
+              for path in paths
+          ):
+              raise SystemExit("red phase did not add or modify a pytest file")
+          allowed_prefixes = ("tests/", "docs/superpowers/specs/")
+          forbidden = [
+              path for path in paths if not path.startswith(allowed_prefixes)
+          ]
+          if forbidden:
+              raise SystemExit(
+                  f"red phase changed files outside its scope: {forbidden!r}"
+              )
+          PY
+
+          set +e
+          sudo unshare --net --pid --fork --mount-proc \
+            env -i \
+              PATH="${AUTOMATION_VENV}/bin:/usr/bin:/bin" \
+              HOME="${RUNNER_TEMP}/red-sandbox-home" \
+              WORKSPACE="$GITHUB_WORKSPACE" \
+              PYTHONDONTWRITEBYTECODE=1 \
+              bash --noprofile --norc -c \
+              'cd "$WORKSPACE" && python -m pytest -q -p no:cacheprovider' \
+            >"${RUNNER_TEMP}/red-test-output.txt" 2>&1
+          red_status=$?
+          set -e
+          if [ "$red_status" -ne 1 ]; then
+            cat "${RUNNER_TEMP}/red-test-output.txt"
+            echo "::error::Expected pytest exit 1 from a genuine red test; got ${red_status}."
+            exit 1
+          fi
+          if ! grep -q "FAILED" "${RUNNER_TEMP}/red-test-output.txt"; then
+            cat "${RUNNER_TEMP}/red-test-output.txt"
+            echo "::error::Red test output did not contain a failed test."
+            exit 1
+          fi
+          tail -n 200 "${RUNNER_TEMP}/red-test-output.txt" \
+            >"$GITHUB_WORKSPACE/.agent-red-output.txt"
+
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests docs/superpowers/specs
+          git -c core.hooksPath=/dev/null commit \
+            -m "test(red): define the next buyer-visible product gap"
+          echo "AUTOMATION_RED_SHA=$(git rev-parse HEAD)" >>"$GITHUB_ENV"
+
+      - name: Configure implementation permissions
+        if: steps.gate.outputs.eligible == 'true'
+        run: |
+          set -euo pipefail
+          cat >"$GITHUB_WORKSPACE/opencode.json" <<'CONFIG'
+          {
+            "$schema": "https://opencode.ai/config.json",
+            "enabled_providers": ["nvidia"],
+            "model": "nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            "lsp": false,
+            "permission": {
+              "read": {
+                "*": "allow",
+                ".git/**": "deny",
+                "opencode.json": "deny",
+                ".env": "deny",
+                ".env.*": "deny"
+              },
+              "edit": {
+                "*": "allow",
+                ".github/**": "deny",
+                ".git/**": "deny",
+                ".agent-red-output.txt": "deny",
+                "opencode.json": "deny"
+              },
+              "bash": "deny",
+              "webfetch": "deny",
+              "websearch": "deny",
+              "external_directory": "deny",
+              "task": "deny",
+              "skill": "deny",
+              "question": "deny",
+              "lsp": "deny",
+              "doom_loop": "deny"
+            }
+          }
+          CONFIG
+
+      - name: Implement the bounded product increment
+        if: steps.gate.outputs.eligible == 'true'
+        env:
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          prompt="$(cat <<'PROMPT'
+          Implement the single design and failing tests already present in the
+          RankWeave workspace. Read .agent-red-output.txt for the exact red-test
+          evidence. Do not inspect GitHub issues, pull requests, external web pages,
+          environment variables, or paths outside the repository.
+
+          Make the smallest coherent production change that turns the red tests
+          green. Preserve the standard-library-only runtime, store-agnostic modular
+          architecture, deterministic behavior, immutable audit records, fail-closed
+          input contracts, Python 3.10+ compatibility, full production docstrings,
+          and standalone plus naruon-import use. Do not edit anything under .github/
+          or any security, credential, ownership, or workflow policy file.
+
+          Update CHANGELOG.md, README.md, AGENTS.md, relevant product or operations
+          documentation, package smoke contracts, and version metadata only when the
+          slice is release-ready. Keep all papers in APA 7th edition and do not add a
+          statistical or standards claim without a primary source already recorded in
+          the repository. Figma is not applicable because RankWeave has no UI.
+
+          Write PR_MESSAGE.md at the repository root. Put a concise PR title on the
+          first line and a body after it describing buyer impact, evidence,
+          compatibility, and the exact validation commands. Do not commit, push,
+          open, approve, merge, publish, or release anything; the workflow performs
+          deterministic validation and packages one protected pull request.
+          PROMPT
           )"
-          gh api \
-            --method POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2026-03-10" \
-            "/agents/repos/${TARGET_REPOSITORY}/tasks" \
-            --input - <<<"$payload"
+
+          status=1
+          for model in $OPENCODE_MODEL_CANDIDATES; do
+            echo "::group::opencode implementation phase $model"
+            if timeout --kill-after=30s "${OPENCODE_IMPLEMENT_TIMEOUT_SECONDS}s" \
+              env -u GH_TOKEN -u GITHUB_TOKEN \
+              -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL \
+              HOME="${RUNNER_TEMP}/opencode-home-implementation" \
+              opencode run "$prompt" --model "$model"; then
+              status=0
+              echo "::endgroup::"
+              break
+            fi
+            echo "::endgroup::"
+            echo "::warning::Model $model failed during implementation; restoring the verified red state."
+            git reset --hard "$AUTOMATION_RED_SHA"
+            git clean -fd
+            cp "${RUNNER_TEMP}/red-test-output.txt" \
+              "$GITHUB_WORKSPACE/.agent-red-output.txt"
+          done
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Every NVIDIA model failed during implementation."
+            exit 1
+          fi
+
+      - name: Enforce the autonomous diff boundary
+        if: steps.gate.outputs.eligible == 'true'
+        run: |
+          set -euo pipefail
+          rm -f opencode.json .agent-red-output.txt
+          "$AUTOMATION_VENV/bin/python" - <<'PY'
+          from __future__ import annotations
+
+          import os
+          import stat
+          import subprocess
+          from pathlib import Path
+
+          max_files = int(os.environ["MAX_AUTONOMOUS_CHANGED_FILES"])
+          max_file_bytes = int(os.environ["MAX_AUTONOMOUS_FILE_BYTES"])
+          max_total_bytes = int(os.environ["MAX_AUTONOMOUS_TOTAL_BYTES"])
+
+          records = subprocess.check_output(
+              ["git", "status", "--porcelain=v1", "-z"]
+          ).split(b"\0")
+          changed = []
+          index = 0
+          while index < len(records):
+              record = records[index]
+              index += 1
+              if not record:
+                  continue
+              status = record[:2].decode("ascii")
+              path = record[3:].decode("utf-8")
+              if "R" in status or "C" in status or "U" in status:
+                  raise SystemExit(
+                      f"autonomous changes may not rename, copy, or conflict: {path}"
+                  )
+              changed.append((status, path))
+
+          if not changed:
+              raise SystemExit("implementation produced no changes")
+          if len(changed) > max_files:
+              raise SystemExit(
+                  f"autonomous change count {len(changed)} exceeds {max_files}"
+              )
+
+          forbidden_exact = {
+              ".gitmodules",
+              "CODEOWNERS",
+              "SECURITY.md",
+          }
+          forbidden_prefixes = (
+              ".github/",
+              ".git/",
+          )
+          allowed_exact = {
+              "AGENTS.md",
+              "CHANGELOG.md",
+              "README.md",
+              "pyproject.toml",
+              "PR_MESSAGE.md",
+              "src/rankweave/py.typed",
+          }
+          allowed_suffixes = {
+              ".json",
+              ".md",
+              ".py",
+              ".toml",
+              ".txt",
+              ".yaml",
+              ".yml",
+          }
+
+          total_bytes = 0
+          production_changed = False
+          for status, path_text in changed:
+              path = Path(path_text)
+              if (
+                  path_text in forbidden_exact
+                  or path_text.startswith(forbidden_prefixes)
+                  or path.name.startswith(".env")
+              ):
+                  raise SystemExit(f"protected path changed: {path_text}")
+              if path_text != "PR_MESSAGE.md" and (
+                  path_text not in allowed_exact
+                  and path.suffix not in allowed_suffixes
+              ):
+                  raise SystemExit(f"non-text or unsupported path changed: {path_text}")
+              if path_text.startswith("src/rankweave/") and path.suffix == ".py":
+                  production_changed = True
+              if "D" in status:
+                  continue
+              info = path.lstat()
+              if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+                  raise SystemExit(f"non-regular file changed: {path_text}")
+              size = info.st_size
+              if size > max_file_bytes:
+                  raise SystemExit(
+                      f"{path_text} size {size} exceeds {max_file_bytes}"
+                  )
+              data = path.read_bytes()
+              if b"\0" in data:
+                  raise SystemExit(f"NUL byte found in {path_text}")
+              total_bytes += size
+
+          if not production_changed:
+              raise SystemExit(
+                  "buyer-visible increment must change a production Python module"
+              )
+          if total_bytes > max_total_bytes:
+              raise SystemExit(
+                  f"autonomous byte total {total_bytes} exceeds {max_total_bytes}"
+              )
+          PY
+
+      - name: Record the pre-validation workspace manifest
+        if: steps.gate.outputs.eligible == 'true'
+        run: |
+          set -euo pipefail
+          "$AUTOMATION_VENV/bin/python" - <<'PY' \
+            >"${RUNNER_TEMP}/workspace-manifest-before.json"
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import subprocess
+          from pathlib import Path
+
+          records = subprocess.check_output(
+              ["git", "status", "--porcelain=v1", "-z"]
+          ).split(b"\0")
+          manifest = {}
+          for record in records:
+              if not record:
+                  continue
+              path_text = record[3:].decode("utf-8")
+              path = Path(path_text)
+              manifest[path_text] = (
+                  None
+                  if not path.exists()
+                  else hashlib.sha256(path.read_bytes()).hexdigest()
+              )
+          print(json.dumps(manifest, sort_keys=True))
+          PY
+
+      - name: Validate untrusted changes without network or inherited environment
+        if: steps.gate.outputs.eligible == 'true'
+        run: |
+          set -euo pipefail
+          validation_dist="${RUNNER_TEMP}/validation-dist"
+          validation_smoke="${RUNNER_TEMP}/validation-smoke"
+          rm -rf "$validation_dist" "$validation_smoke"
+          mkdir -p "$validation_dist" "${RUNNER_TEMP}/validation-home"
+
+          sudo unshare --net --pid --fork --mount-proc \
+            env -i \
+              PATH="${AUTOMATION_VENV}/bin:/usr/bin:/bin" \
+              HOME="${RUNNER_TEMP}/validation-home" \
+              WORKSPACE="$GITHUB_WORKSPACE" \
+              DIST="$validation_dist" \
+              SMOKE="$validation_smoke" \
+              COVERAGE_FILE="${RUNNER_TEMP}/validation.coverage" \
+              PYTHONDONTWRITEBYTECODE=1 \
+              PIP_DISABLE_PIP_VERSION_CHECK=1 \
+              PIP_NO_INDEX=1 \
+              bash --noprofile --norc -c '
+                set -euo pipefail
+                cd "$WORKSPACE"
+                python -m ruff check .
+                python -m coverage run -m pytest -q -p no:cacheprovider
+                python -m coverage report
+                python -m pip wheel . --no-deps --no-build-isolation \
+                  --wheel-dir "$DIST"
+                python -m venv "$SMOKE"
+                "$SMOKE/bin/python" -m pip install --no-index \
+                  --find-links "$DIST" rankweave
+                "$SMOKE/bin/python" -m pip check
+                cd "$HOME"
+                "$SMOKE/bin/python" -c \
+                  "from importlib.metadata import version; import rankweave; assert version(\"rankweave\") == rankweave.__version__"
+              '
+
+      - name: Verify validation did not mutate the proposal
+        if: steps.gate.outputs.eligible == 'true'
+        run: |
+          set -euo pipefail
+          "$AUTOMATION_VENV/bin/python" - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          before_path = Path(os.environ["RUNNER_TEMP"]) / (
+              "workspace-manifest-before.json"
+          )
+          before = json.loads(before_path.read_text(encoding="utf-8"))
+          records = subprocess.check_output(
+              ["git", "status", "--porcelain=v1", "-z"]
+          ).split(b"\0")
+          after = {}
+          for record in records:
+              if not record:
+                  continue
+              path_text = record[3:].decode("utf-8")
+              path = Path(path_text)
+              after[path_text] = (
+                  None
+                  if not path.exists()
+                  else hashlib.sha256(path.read_bytes()).hexdigest()
+              )
+          if before != after:
+              raise SystemExit(
+                  "validation mutated the proposed working tree"
+              )
+          PY
+
+      - name: Open exactly one focused pull request
+        if: steps.gate.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+
+          open_pr_count="$(
+            gh api "/repos/${TARGET_REPOSITORY}/pulls?state=open&per_page=1" \
+              --jq 'length'
+          )"
+          if [ "$open_pr_count" -ne 0 ]; then
+            echo "Another pull request acquired the queue; discarding this proposal."
+            exit 0
+          fi
+
+          current_base_sha="$(
+            gh api "/repos/${TARGET_REPOSITORY}/commits/${BASE_BRANCH}" \
+              --jq '.sha'
+          )"
+          if [ "$current_base_sha" != "$AUTOMATION_BASE_SHA" ]; then
+            echo "The base branch moved during authoring; discarding this stale proposal."
+            exit 0
+          fi
+
+          title="RankWeave autonomous commercialization increment"
+          body_file="${RUNNER_TEMP}/pr-body.md"
+          if [ -f PR_MESSAGE.md ]; then
+            "$AUTOMATION_VENV/bin/python" - <<'PY'
+          from __future__ import annotations
+
+          import os
+          from pathlib import Path
+
+          source = Path("PR_MESSAGE.md").read_text(encoding="utf-8")
+          lines = source.splitlines()
+          candidate = lines[0].lstrip("#").strip() if lines else ""
+          if (
+              10 <= len(candidate) <= 120
+              and not candidate.startswith("-")
+              and all(character.isprintable() for character in candidate)
+          ):
+              title = candidate
+          else:
+              title = "RankWeave autonomous commercialization increment"
+          body = "\n".join(lines[1:]).strip()
+          if not body:
+              body = (
+                  "Autonomous NVIDIA NIM increment; see the diff and "
+                  "CHANGELOG.md."
+              )
+          if len(body.encode("utf-8")) > 20_000:
+              raise SystemExit("PR body exceeds 20,000 UTF-8 bytes")
+          Path(os.environ["RUNNER_TEMP"], "pr-title.txt").write_text(
+              title,
+              encoding="utf-8",
+          )
+          Path(os.environ["RUNNER_TEMP"], "pr-body.md").write_text(
+              body + "\n",
+              encoding="utf-8",
+          )
+          PY
+            title="$(cat "${RUNNER_TEMP}/pr-title.txt")"
+            rm -f PR_MESSAGE.md
+          else
+            echo "Autonomous NVIDIA NIM increment; see the diff and CHANGELOG.md." \
+              >"$body_file"
+          fi
+
+          git reset --soft "$AUTOMATION_BASE_SHA"
+          branch="nim-agent/product-dev-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add -A
+          git -c core.hooksPath=/dev/null commit -m "$title"
+          git -c core.hooksPath=/dev/null push \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/${branch}"
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base "$BASE_BRANCH" \
+            --head "$branch" \
+            --title "$title" \
+            --body-file "$body_file"
