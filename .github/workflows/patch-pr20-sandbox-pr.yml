@@ -27,6 +27,8 @@ jobs:
       - name: Extract and execute the reviewed patch block
         run: |
           set -euo pipefail
+          cp tests/test_hourly_commercialization_workflow.py \
+            /tmp/original-hourly-workflow-tests.py
           python - <<'PY'
           from pathlib import Path
 
@@ -51,6 +53,20 @@ jobs:
           )
           PY
           bash /tmp/apply-pr20-sandbox-patch.sh
+          python - <<'PY'
+          from pathlib import Path
+
+          destination = Path('tests/test_hourly_commercialization_workflow.py')
+          original = Path('/tmp/original-hourly-workflow-tests.py').read_text(
+              encoding='utf-8'
+          ).rstrip()
+          mutated = destination.read_text(encoding='utf-8')
+          marker = '\ndef test_untrusted_execution_uses_disposable_unprivileged_trees():'
+          if mutated.count(marker) != 1:
+              raise SystemExit('sandbox contract test marker was not added exactly once')
+          addition = mutated[mutated.index(marker):].rstrip()
+          destination.write_text(original + '\n\n' + addition + '\n', encoding='utf-8')
+          PY
           rm -f .github/workflows/patch-pr20-sandbox-pr.yml
 
       - name: Verify the repaired branch
