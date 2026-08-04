@@ -43,6 +43,22 @@ def _extract_patch_program(workflow_source: str) -> str:
     return "\n".join(dedented_lines) + "\n"
 
 
+def _preserve_terminal_backslashes(source: str) -> str:
+    """Prevent Python from consuming shell continuation newlines in literals."""
+    preserved: list[str] = []
+    for line in source.splitlines(keepends=True):
+        if line.endswith("\n"):
+            body = line[:-1]
+            newline = "\n"
+        else:
+            body = line
+            newline = ""
+        if body.endswith("\\"):
+            body += "\\"
+        preserved.append(body + newline)
+    return "".join(preserved)
+
+
 def _restore_base_indent(value: str) -> str:
     """Restore YAML block indentation lost inside workflow-fragment literals."""
     lines = value.splitlines(keepends=True)
@@ -69,14 +85,21 @@ class _WorkflowFragmentNormalizer(ast.NodeTransformer):
         ):
             for argument_index in (1, 2):
                 argument = node.args[argument_index]
-                if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+                if isinstance(argument, ast.Constant) and isinstance(
+                    argument.value, str
+                ):
                     argument.value = _restore_base_indent(argument.value)
         return node
 
 
 def _compile_historical_patch(source: str) -> object:
-    """Compile the reviewed patch after restoring YAML-erased indentation."""
-    tree = ast.parse(source, filename=HISTORICAL_WORKFLOW_PATH, mode="exec")
+    """Compile the reviewed patch after restoring YAML-erased text details."""
+    preserved_source = _preserve_terminal_backslashes(source)
+    tree = ast.parse(
+        preserved_source,
+        filename=HISTORICAL_WORKFLOW_PATH,
+        mode="exec",
+    )
     normalized = _WorkflowFragmentNormalizer().visit(tree)
     ast.fix_missing_locations(normalized)
     return compile(
