@@ -288,14 +288,14 @@ def test_family_cli_rejects_invalid_options(
 
 def test_family_cli_rejects_duplicate_candidate_identifiers(tmp_path, capsys):
     arguments = _successful_family_arguments(tmp_path)
-    arguments[6] = arguments[4].replace("모델-a=", "model-b=")
+    arguments[6] = arguments[4]
 
     exit_code = main(arguments)
 
     captured = capsys.readouterr()
     assert exit_code == 2
     assert captured.out == ""
-    assert "duplicate candidate identifier 'model-b'" in captured.err
+    assert "duplicate candidate identifier '모델-a'" in captured.err
 
 
 def test_family_cli_reports_candidate_specific_trec_error(tmp_path, capsys):
