@@ -1,215 +1,323 @@
-"""Apply the reviewed PR 20 sandbox-hardening repair deterministically."""
+"""Apply the final PR 20 unprivileged-execution hardening."""
 
 from __future__ import annotations
 
-import ast
-import subprocess
 from pathlib import Path
 
-HISTORICAL_SOURCE_COMMIT = "d18eb52fb63488c639cccff6895e8a253af28539"
-HISTORICAL_WORKFLOW_PATH = ".github/workflows/patch-pr20-sandbox.yml"
-TARGET_WORKFLOW_PATH = ".github/workflows/hourly-commercialization-loop.yml"
-TARGET_TEST_PATH = "tests/test_hourly_commercialization_workflow.py"
-MATERIALIZER_PATH = ".github/scripts/materialize_workspace.py"
-_WORKFLOW_BASE_INDENT = "          "
+ROOT = Path.cwd()
+WORKFLOW_PATH = ROOT / ".github/workflows/hourly-commercialization-loop.yml"
+TEST_PATH = ROOT / "tests/test_hourly_commercialization_workflow.py"
 
 
-def _historical_patch_source() -> str:
-    """Read the reviewed patch program from one immutable repository commit."""
-    revision = f"{HISTORICAL_SOURCE_COMMIT}:{HISTORICAL_WORKFLOW_PATH}"
-    raw_source = subprocess.check_output(["git", "show", revision])
-    return raw_source.decode("utf-8", errors="strict")
-
-
-def _extract_patch_program(workflow_source: str) -> str:
-    """Extract and dedent the outer Python program from the historical workflow."""
-    step_start = (
-        "      - name: Apply sandbox hardening and remove this workflow\n"
-        "        run: |\n"
-    )
-    step_end = "\n      - name: Verify the repaired branch\n"
-    if workflow_source.count(step_start) != 1 or workflow_source.count(step_end) != 1:
-        raise RuntimeError("historical one-shot workflow shape drifted")
-    run_block = workflow_source.split(step_start, 1)[1].split(step_end, 1)[0]
-    opener = "          python - <<'PY'\n"
-    closer = "\n          PY"
-    if opener not in run_block or closer not in run_block:
-        raise RuntimeError("historical one-shot Python boundary is missing")
-    python_source = run_block.split(opener, 1)[1].rsplit(closer, 1)[0]
-    dedented_lines = [
-        line[10:] if line.startswith(_WORKFLOW_BASE_INDENT) else line
-        for line in python_source.splitlines()
-    ]
-    return "\n".join(dedented_lines) + "\n"
-
-
-def _preserve_terminal_backslashes(source: str) -> str:
-    """Prevent Python from consuming shell continuation newlines in literals."""
-    preserved: list[str] = []
-    for line in source.splitlines(keepends=True):
-        if line.endswith("\n"):
-            body = line[:-1]
-            newline = "\n"
-        else:
-            body = line
-            newline = ""
-        if body.endswith("\\"):
-            body += "\\"
-        preserved.append(body + newline)
-    return "".join(preserved)
-
-
-def _restore_base_indent(value: str) -> str:
-    """Restore YAML block indentation lost inside workflow-fragment literals."""
-    lines = value.splitlines(keepends=True)
-    if len(lines) < 2 or not lines[0].startswith(_WORKFLOW_BASE_INDENT):
-        return value
-    restored = [lines[0]]
-    for line in lines[1:]:
-        restored.append(_WORKFLOW_BASE_INDENT + line if line.strip() else line)
-    return "".join(restored)
-
-
-class _WorkflowFragmentNormalizer(ast.NodeTransformer):
-    """Restore base indentation in ``replace_once(workflow, ...)`` literals."""
-
-    def visit_Call(self, node: ast.Call) -> ast.AST:
-        """Normalize old and new workflow fragments in one replacement call."""
-        self.generic_visit(node)
-        if (
-            isinstance(node.func, ast.Name)
-            and node.func.id == "replace_once"
-            and len(node.args) >= 3
-            and isinstance(node.args[0], ast.Name)
-            and node.args[0].id == "workflow"
-        ):
-            for argument_index in (1, 2):
-                argument = node.args[argument_index]
-                if isinstance(argument, ast.Constant) and isinstance(
-                    argument.value, str
-                ):
-                    argument.value = _restore_base_indent(argument.value)
-        return node
-
-
-def _compile_historical_patch(source: str) -> object:
-    """Compile the reviewed patch after restoring YAML-erased text details."""
-    preserved_source = _preserve_terminal_backslashes(source)
-    tree = ast.parse(
-        preserved_source,
-        filename=HISTORICAL_WORKFLOW_PATH,
-        mode="exec",
-    )
-    normalized = _WorkflowFragmentNormalizer().visit(tree)
-    ast.fix_missing_locations(normalized)
-    return compile(
-        normalized,
-        f"{HISTORICAL_SOURCE_COMMIT}:{HISTORICAL_WORKFLOW_PATH}",
-        "exec",
-    )
-
-
-def _replace_once(text: str, old: str, new: str, *, label: str) -> str:
-    """Replace exactly one reviewed fragment and fail closed on branch drift."""
+def replace_once(text: str, old: str, new: str, *, label: str) -> str:
+    """Replace exactly one reviewed fragment and fail closed on drift."""
     count = text.count(old)
     if count != 1:
         raise RuntimeError(f"{label}: expected one fragment, found {count}")
     return text.replace(old, new, 1)
 
 
-def _preserve_agent_pr_message() -> None:
-    """Keep validated PR metadata across ignored-file cleanup."""
-    path = Path(TARGET_WORKFLOW_PATH)
-    workflow = path.read_text(encoding="utf-8")
-    old_clean = (
-        "          rm -f opencode.json .agent-red-output.txt\n"
-        "          git clean -fdX\n"
+def patch_workflow() -> None:
+    """Run untrusted tests without credentials, capabilities, or write access."""
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    workflow = replace_once(
+        workflow,
+        '''          venv="${RUNNER_TEMP}/rankweave-automation-venv"
+          python -m venv "$venv"
+          "$venv/bin/python" -m pip install --upgrade pip
+          "$venv/bin/python" -m pip install -e ".[dev]" hatchling
+          echo "AUTOMATION_VENV=$venv" >>"$GITHUB_ENV"
+          echo "AUTOMATION_BASE_SHA=$(git rev-parse HEAD)" >>"$GITHUB_ENV"
+''',
+        '''          venv="/tmp/rankweave-automation-venv-${GITHUB_RUN_ID}"
+          sudo rm -rf "$venv"
+          python -m venv "$venv"
+          "$venv/bin/python" -m pip install --upgrade pip
+          "$venv/bin/python" -m pip install -e ".[dev]" hatchling
+          sudo chown -R root:root "$venv"
+          sudo chmod -R a-w "$venv"
+          sandbox_uid="$(id -u nobody)"
+          sandbox_gid="$(id -g nobody)"
+          command -v setpriv >/dev/null
+          echo "AUTOMATION_VENV=$venv" >>"$GITHUB_ENV"
+          echo "AUTOMATION_BASE_SHA=$(git rev-parse HEAD)" >>"$GITHUB_ENV"
+          echo "SANDBOX_UID=$sandbox_uid" >>"$GITHUB_ENV"
+          echo "SANDBOX_GID=$sandbox_gid" >>"$GITHUB_ENV"
+''',
+        label="trusted tooling setup",
     )
-    new_clean = (
-        '          pr_message_backup="${RUNNER_TEMP}/agent-pr-message.md"\n'
-        "          if [ -f PR_MESSAGE.md ]; then\n"
-        '            cp PR_MESSAGE.md "$pr_message_backup"\n'
-        "          fi\n"
-        "          rm -f opencode.json .agent-red-output.txt\n"
-        "          git clean -fdX\n"
-        '          if [ -f "$pr_message_backup" ]; then\n'
-        '            cp "$pr_message_backup" PR_MESSAGE.md\n'
-        "          fi\n"
+    workflow = replace_once(
+        workflow,
+        '''          sudo unshare --net --pid --fork --mount-proc true
+''',
+        '''          sudo unshare --net --pid --fork --mount-proc \
+            setpriv \
+              --reuid="$SANDBOX_UID" \
+              --regid="$SANDBOX_GID" \
+              --clear-groups \
+              --no-new-privs \
+              --bounding-set=-all \
+              --inh-caps=-all \
+              --ambient-caps=-all \
+              true
+''',
+        label="namespace privilege-drop probe",
     )
-    path.write_text(
-        _replace_once(
-            workflow,
-            old_clean,
-            new_clean,
-            label="final ignored-file cleanup",
-        ),
-        encoding="utf-8",
+    workflow = replace_once(
+        workflow,
+        '''              if b"\\0" in data:
+                  raise SystemExit(f"red phase file contains a NUL byte: {path_text}")
+              total_bytes += info.st_size
+''',
+        '''              if b"\\0" in data:
+                  raise SystemExit(f"red phase file contains a NUL byte: {path_text}")
+              try:
+                  data.decode("utf-8", errors="strict")
+              except UnicodeDecodeError as exc:
+                  raise SystemExit(
+                      f"red phase file is not strict UTF-8: {path_text}"
+                  ) from exc
+              total_bytes += info.st_size
+''',
+        label="red strict UTF-8 boundary",
     )
+    workflow = replace_once(
+        workflow,
+        '''          set +e
+          sudo unshare --net --pid --fork --mount-proc \
+            env -i \
+              PATH="${AUTOMATION_VENV}/bin:/usr/bin:/bin" \
+              HOME="${RUNNER_TEMP}/red-sandbox-home" \
+              WORKSPACE="$GITHUB_WORKSPACE" \
+              PYTHONDONTWRITEBYTECODE=1 \
+              bash --noprofile --norc -c \
+              'cd "$WORKSPACE" && python -m pytest -q -p no:cacheprovider' \
+            >"${RUNNER_TEMP}/red-test-output.txt" 2>&1
+          red_status=$?
+''',
+        '''          red_home="/tmp/rankweave-red-home-${GITHUB_RUN_ID}"
+          sudo rm -rf "$red_home"
+          sudo mkdir -p "$red_home"
+          sudo chown "$SANDBOX_UID:$SANDBOX_GID" "$red_home"
+
+          set +e
+          sudo unshare --net --pid --fork --mount-proc \
+            setpriv \
+              --reuid="$SANDBOX_UID" \
+              --regid="$SANDBOX_GID" \
+              --clear-groups \
+              --no-new-privs \
+              --bounding-set=-all \
+              --inh-caps=-all \
+              --ambient-caps=-all \
+              env -i \
+                PATH="${AUTOMATION_VENV}/bin:/usr/bin:/bin" \
+                HOME="$red_home" \
+                WORKSPACE="$GITHUB_WORKSPACE" \
+                PYTHONPATH="$GITHUB_WORKSPACE/src" \
+                PYTHONDONTWRITEBYTECODE=1 \
+                bash --noprofile --norc -c \
+                'cd "$WORKSPACE" && python -m pytest -q -p no:cacheprovider' \
+            >"${RUNNER_TEMP}/red-test-output.txt" 2>&1
+          red_status=$?
+''',
+        label="red unprivileged sandbox",
+    )
+    workflow = replace_once(
+        workflow,
+        '''              if b"\\0" in data:
+                  raise SystemExit(f"NUL byte found in {path_text}")
+              total_bytes += info.st_size
+''',
+        '''              if b"\\0" in data:
+                  raise SystemExit(f"NUL byte found in {path_text}")
+              try:
+                  data.decode("utf-8", errors="strict")
+              except UnicodeDecodeError as exc:
+                  raise SystemExit(
+                      f"changed file is not strict UTF-8: {path_text}"
+                  ) from exc
+              total_bytes += info.st_size
+''',
+        label="proposal strict UTF-8 boundary",
+    )
+    workflow = replace_once(
+        workflow,
+        '''          validation_dist="${RUNNER_TEMP}/validation-dist"
+          validation_smoke="${RUNNER_TEMP}/validation-smoke"
+          rm -rf "$validation_dist" "$validation_smoke"
+          mkdir -p "$validation_dist" "${RUNNER_TEMP}/validation-home"
+
+          sudo unshare --net --pid --fork --mount-proc \
+            env -i \
+              PATH="${AUTOMATION_VENV}/bin:/usr/bin:/bin" \
+              HOME="${RUNNER_TEMP}/validation-home" \
+              WORKSPACE="$GITHUB_WORKSPACE" \
+              DIST="$validation_dist" \
+              SMOKE="$validation_smoke" \
+              COVERAGE_FILE="${RUNNER_TEMP}/validation.coverage" \
+              PYTHONDONTWRITEBYTECODE=1 \
+              PIP_DISABLE_PIP_VERSION_CHECK=1 \
+              PIP_NO_INDEX=1 \
+              bash --noprofile --norc -c '
+                set -euo pipefail
+                cd "$WORKSPACE"
+                python -m ruff check .
+                python -m coverage run -m pytest -q -p no:cacheprovider
+                python -m coverage report
+                python -m pip wheel . --no-deps --no-build-isolation \
+                  --wheel-dir "$DIST"
+                python -m venv "$SMOKE"
+                "$SMOKE/bin/python" -m pip install --no-index \
+                  --find-links "$DIST" rankweave
+                "$SMOKE/bin/python" -m pip check
+                cd "$HOME"
+                "$SMOKE/bin/python" -c \
+                  "from importlib.metadata import version; import rankweave; assert version(\\"rankweave\\") == rankweave.__version__"
+              '
+''',
+        '''          validation_dist="/tmp/rankweave-validation-dist-${GITHUB_RUN_ID}"
+          validation_smoke="/tmp/rankweave-validation-smoke-${GITHUB_RUN_ID}"
+          validation_home="/tmp/rankweave-validation-home-${GITHUB_RUN_ID}"
+          validation_coverage="/tmp/rankweave-validation-${GITHUB_RUN_ID}.coverage"
+          ruff_cache="/tmp/rankweave-ruff-cache-${GITHUB_RUN_ID}"
+          sudo rm -rf \
+            "$validation_dist" "$validation_smoke" "$validation_home" \
+            "$validation_coverage" "$ruff_cache"
+          sudo mkdir -p "$validation_dist" "$validation_home" "$ruff_cache"
+          sudo chown -R "$SANDBOX_UID:$SANDBOX_GID" \
+            "$validation_dist" "$validation_home" "$ruff_cache"
+
+          sudo unshare --net --pid --fork --mount-proc \
+            setpriv \
+              --reuid="$SANDBOX_UID" \
+              --regid="$SANDBOX_GID" \
+              --clear-groups \
+              --no-new-privs \
+              --bounding-set=-all \
+              --inh-caps=-all \
+              --ambient-caps=-all \
+              env -i \
+                PATH="${AUTOMATION_VENV}/bin:/usr/bin:/bin" \
+                HOME="$validation_home" \
+                WORKSPACE="$GITHUB_WORKSPACE" \
+                PYTHONPATH="$GITHUB_WORKSPACE/src" \
+                DIST="$validation_dist" \
+                SMOKE="$validation_smoke" \
+                COVERAGE_FILE="$validation_coverage" \
+                RUFF_CACHE_DIR="$ruff_cache" \
+                PYTHONDONTWRITEBYTECODE=1 \
+                PIP_DISABLE_PIP_VERSION_CHECK=1 \
+                PIP_NO_INDEX=1 \
+                bash --noprofile --norc -c '
+                  set -euo pipefail
+                  cd "$WORKSPACE"
+                  python -m ruff check .
+                  python -m coverage run -m pytest -q -p no:cacheprovider
+                  python -m coverage report
+                  python -m pip wheel . --no-deps --no-build-isolation \
+                    --wheel-dir "$DIST"
+                  python -m venv "$SMOKE"
+                  "$SMOKE/bin/python" -m pip install --no-index \
+                    --find-links "$DIST" rankweave
+                  "$SMOKE/bin/python" -m pip check
+                  cd "$HOME"
+                  "$SMOKE/bin/python" -c \
+                    "from importlib.metadata import version; import rankweave; assert version(\\"rankweave\\") == rankweave.__version__"
+                '
+''',
+        label="final unprivileged sandbox",
+    )
+    workflow = replace_once(
+        workflow,
+        '''          rm -f opencode.json .agent-red-output.txt
+          git clean -fdX
+''',
+        '''          pr_message_backup="${RUNNER_TEMP}/agent-pr-message.md"
+          if [ -f PR_MESSAGE.md ]; then
+            cp PR_MESSAGE.md "$pr_message_backup"
+          fi
+          rm -f opencode.json .agent-red-output.txt
+          git clean -fdX
+          if [ -f "$pr_message_backup" ]; then
+            cp "$pr_message_backup" PR_MESSAGE.md
+          fi
+''',
+        label="ignored-file cleanup",
+    )
+    workflow = replace_once(
+        workflow,
+        '''            "$AUTOMATION_VENV/bin/python" - <<'PY'
+''',
+        '''            /usr/bin/python3 -I -S - <<'PY'
+''',
+        label="trusted PR metadata parser",
+    )
+    WORKFLOW_PATH.write_text(workflow, encoding="utf-8")
 
 
-def _sanitize_materialized_file_modes() -> None:
-    """Copy only ordinary executable or non-executable file modes."""
-    path = Path(MATERIALIZER_PATH)
-    helper = path.read_text(encoding="utf-8")
-    old_mode = "            os.chmod(target, stat.S_IMODE(info.st_mode))\n"
-    new_mode = (
-        "            safe_mode = 0o755 if info.st_mode & stat.S_IXUSR else 0o644\n"
-        "            os.chmod(target, safe_mode)\n"
-    )
-    path.write_text(
-        _replace_once(
-            helper,
-            old_mode,
-            new_mode,
-            label="workspace materializer mode copy",
-        ),
-        encoding="utf-8",
-    )
+def update_contract_tests() -> None:
+    """Pin the unprivileged validation boundary in workflow regression tests."""
+    tests = TEST_PATH.read_text(encoding="utf-8").rstrip()
+    if "def test_untrusted_execution_drops_privileges" in tests:
+        raise RuntimeError("unprivileged execution contract already exists")
+    tests += '''
 
 
-def _extend_workflow_contract_test() -> None:
-    """Pin PR-message preservation and sanitized disposable file modes."""
-    path = Path(TARGET_TEST_PATH)
-    contracts = path.read_text(encoding="utf-8")
-    marker = "    assert 'strict UTF-8' in workflow\n"
-    addition = (
-        marker
-        + "    assert 'pr_message_backup=\"${RUNNER_TEMP}/agent-pr-message.md\"' in workflow\n"  # noqa: E501
-        + "    materializer = Path('.github/scripts/materialize_workspace.py').read_text(\n"  # noqa: E501
-        + "        encoding='utf-8'\n"
-        + "    )\n"
-        + "    assert 'safe_mode = 0o755 if info.st_mode & stat.S_IXUSR else 0o644' in materializer\n"  # noqa: E501
-    )
-    path.write_text(
-        _replace_once(
-            contracts,
-            marker,
-            addition,
-            label="sandbox contract insertion point",
-        ),
-        encoding="utf-8",
-    )
+def test_untrusted_execution_drops_privileges():
+    workflow = _workflow_text()
+
+    assert 'venv="/tmp/rankweave-automation-venv-${GITHUB_RUN_ID}"' in workflow
+    assert 'sudo chown -R root:root "$venv"' in workflow
+    assert 'sudo chmod -R a-w "$venv"' in workflow
+    assert workflow.count('setpriv \\\\') == 3
+    assert workflow.count('--reuid="$SANDBOX_UID"') == 3
+    assert workflow.count('--regid="$SANDBOX_GID"') == 3
+    assert workflow.count('--no-new-privs') == 3
+    assert workflow.count('--bounding-set=-all') == 3
+    assert 'PYTHONPATH="$GITHUB_WORKSPACE/src"' in workflow
+    assert 'pr_message_backup="${RUNNER_TEMP}/agent-pr-message.md"' in workflow
+    assert "/usr/bin/python3 -I -S - <<'PY'" in workflow
+    assert "strict UTF-8" in workflow
+'''
+    TEST_PATH.write_text(tests + "\n", encoding="utf-8")
 
 
-def _remove_temporary_repair_files() -> None:
-    """Remove every temporary workflow and this runner before verification."""
-    for path_text in (
-        ".github/workflows/patch-pr20-sandbox-pr.yml",
-        HISTORICAL_WORKFLOW_PATH,
-        ".github/scripts/apply_pr20_sandbox_patch.py",
+def update_docs() -> None:
+    """Document the credential-free unprivileged execution boundary."""
+    changelog_path = ROOT / "CHANGELOG.md"
+    changelog = changelog_path.read_text(encoding="utf-8")
+    changelog = replace_once(
+        changelog,
+        "## [Unreleased]\n",
+        '''## [Unreleased]
+
+### Security
+- Model-authored red and final tests now run as the unprivileged `nobody` user inside network and PID namespaces with all capability sets removed and `no_new_privs` enabled. Trusted validation tooling is root-owned and read-only before untrusted Python executes.
+- Autonomous text boundaries now require strict UTF-8 in addition to regular-file, symlink, NUL, file-count, and byte limits. Ignored PR metadata is preserved across cleanup and parsed with isolated system Python only after validation.
+''',
+        label="changelog security section",
+    )
+    changelog_path.write_text(changelog, encoding="utf-8")
+
+
+def remove_bootstrap_files() -> None:
+    """Remove one-shot helpers and the superseded materializer."""
+    for path in (
+        ROOT / ".github/workflows/patch-pr20-sandbox-pr.yml",
+        ROOT / ".github/workflows/patch-pr20-sandbox.yml",
+        ROOT / ".github/scripts/apply_pr20_sandbox_patch.py",
+        ROOT / ".github/scripts/materialize_workspace.py",
     ):
-        Path(path_text).unlink(missing_ok=True)
+        path.unlink(missing_ok=True)
 
 
 def main() -> int:
-    """Execute the reviewed repair, harden it, and clean up bootstrap files."""
-    source = _extract_patch_program(_historical_patch_source())
-    code = _compile_historical_patch(source)
-    exec(code, {"__name__": "__main__"})
-    _preserve_agent_pr_message()
-    _sanitize_materialized_file_modes()
-    _extend_workflow_contract_test()
-    _remove_temporary_repair_files()
+    """Apply, test-contract, document, and clean the final hardening."""
+    patch_workflow()
+    update_contract_tests()
+    update_docs()
+    remove_bootstrap_files()
     return 0
 
 
