@@ -6,8 +6,8 @@ Operating guide for automated agents working in this repo.
 
 `rankweave` is a **pure-Python, stdlib-only** library for
 language-agnostic hybrid-retrieval fusion, effectiveness evaluation, paired
-statistical comparison, offline policy tuning, and strict TREC interchange,
-extracted from
+statistical comparison, offline policy tuning, strict TREC interchange, and
+direct TREC benchmark comparison, extracted from
 [ContextualWisdomLab/naruon](https://github.com/ContextualWisdomLab/naruon)
 Context Search under the lab's ONE SOURCE MULTI USE convention
 (standalone product *and* submodule-importable).
@@ -18,9 +18,9 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   Do not add a runtime dependency; if you think you need one, the feature
   probably belongs in the consumer, not here.
 - **Store-agnostic.** rankweave never talks to a database, embedding provider,
-  or search index. It fuses scores, evaluates and compares rankings, selects
-  offline policies, parses interchange artifacts, and normalizes query text.
-  Keep SQL, HTTP, and ORM concerns out.
+  search index, or benchmark download service. It fuses scores, evaluates and
+  compares rankings, selects offline policies, parses interchange artifacts,
+  and normalizes query text. Keep SQL, HTTP, and ORM concerns out.
 - **Behavior parity with naruon.** A behavior change in shared retrieval
   primitives must be mirrored in naruon's `services/hybrid_retrieval` (and
   vice versa) until naruon consumes this package directly. Prefer additive,
@@ -43,6 +43,15 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   exactly. Larger randomization tests use a local seeded `random.Random`, never
   global random state, and retain the seed, draw count, method, alternative,
   observed mean difference, and complete per-query differences.
+- **Direct TREC comparison is orchestration only.** Parse each baseline run,
+  candidate run, and qrels artifact once; retain all three parsed artifacts;
+  convert runs through `TrecRun.rankings_by_query()`; convert qrels through
+  `TrecQrels.relevance_by_query()`; and delegate evaluation and significance to
+  `compare_rankings`. Never duplicate parser, metric, or randomization logic in
+  `trec_comparison.py`.
+- **Run tags are evidence, not identity.** Baseline and candidate TREC run tags
+  may be identical. Preserve both immutable run artifacts and never infer that
+  equal tags imply equal systems or equal source files.
 - **Significance is not business value.** Documentation and examples must
   report effect size with the p-value and must not present statistical
   significance as practical significance, independent test performance, or a
@@ -100,6 +109,8 @@ python -m pip wheel . --no-deps --wheel-dir dist
   fixed weighted-RRF policies.
 - `src/rankweave/trec.py` — strict TREC qrels/run parsing, formatting, and
   direct evaluation adapters.
+- `src/rankweave/trec_comparison.py` — thin three-artifact orchestration that
+  preserves parsed provenance and delegates to native paired comparison.
 - `src/rankweave/query_normalization.py` — NFC query normalization.
 - `.github/workflows/hourly-commercialization-loop.yml` — hourly bounded
   review/fix/revalidate/develop orchestration using central reusable policy.
@@ -107,6 +118,8 @@ python -m pip wheel . --no-deps --wheel-dir dist
   single-flight behavior, and failure modes for autonomous maintenance.
 - `docs/trec-interoperability.md` — interchange contracts and compatibility
   differences from reference TREC tooling.
+- `docs/trec-run-comparison.md` — direct baseline/candidate/qrels comparison
+  workflow and preserved audit evidence.
 - `docs/superpowers/specs/` and `docs/superpowers/plans/` — reviewed product
   design and executable implementation plans.
 - `tests/` — behavior tests with hand-computed expected values.
