@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 from rankweave.cli import comparison_to_dict, read_text_bounded
@@ -44,3 +46,11 @@ def test_bounded_reader_never_requests_more_than_limit_plus_one(
         read_text_bounded(path, 4)
 
     assert stream.requested_sizes == [5]
+
+
+def test_bounded_reader_rejects_platform_oversized_limit(tmp_path):
+    path = tmp_path / "bounded.run"
+    path.write_bytes(b"x")
+
+    with pytest.raises(ValueError, match="too large for this platform"):
+        read_text_bounded(path, sys.maxsize)
