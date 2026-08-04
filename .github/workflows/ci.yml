@@ -155,6 +155,10 @@ jobs:
           q Q0 document 1 0.9 candidate
           q Q0 other 2 0.2 candidate
           EOF
+          cat >"$smoke_dir/candidate-b.run" <<'EOF'
+          q Q0 document 1 0.95 candidate-b
+          q Q0 other 2 0.1 candidate-b
+          EOF
           cat >"$smoke_dir/qrels.txt" <<'EOF'
           q 0 document 1
           q 0 other 0
@@ -173,7 +177,7 @@ jobs:
 
           report = json.loads(Path("report.json").read_text(encoding="utf-8"))
           assert report["schema_version"] == "rankweave.trec-comparison.v1"
-          assert report["rankweave_version"] == "0.10.0"
+          assert report["rankweave_version"] == "0.11.0"
           assert report["baseline_run_id"] == "baseline"
           assert report["candidate_run_id"] == "candidate"
           assert report["mean_difference"] == 1.0
@@ -185,5 +189,42 @@ jobs:
               --cutoff 1 \
               --alternative candidate-greater > module-report.json
             cmp report.json module-report.json
+
+            "$venv_bin/rankweave" compare-family \
+              --baseline-run baseline.run \
+              --candidate first=candidate.run \
+              --candidate second=candidate-b.run \
+              --qrels qrels.txt \
+              --cutoff 1 \
+              --alternative candidate-greater > family-report.json
+            "$venv_bin/python" - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(
+              Path("family-report.json").read_text(encoding="utf-8")
+          )
+          assert report["schema_version"] == (
+              "rankweave.trec-family-comparison.v1"
+          )
+          assert report["rankweave_version"] == "0.11.0"
+          assert report["baseline_run_id"] == "baseline"
+          assert report["candidate_count"] == 2
+          assert [candidate["candidate_id"] for candidate in report["candidates"]] == [
+              "first",
+              "second",
+          ]
+          assert [
+              candidate["candidate_run_id"] for candidate in report["candidates"]
+          ] == ["candidate", "candidate-b"]
+          PY
+            "$venv_bin/python" -m rankweave compare-family \
+              --baseline-run baseline.run \
+              --candidate first=candidate.run \
+              --candidate second=candidate-b.run \
+              --qrels qrels.txt \
+              --cutoff 1 \
+              --alternative candidate-greater > family-module-report.json
+            cmp family-report.json family-module-report.json
           )
       - run: .package-smoke/bin/python -m pip check
