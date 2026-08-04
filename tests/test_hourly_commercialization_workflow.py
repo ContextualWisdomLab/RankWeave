@@ -47,7 +47,7 @@ def test_product_development_uses_nvidia_nim_and_fails_closed():
     assert "NVIDIA_NIM_API_KEY" in workflow
     assert "COPILOT_GITHUB_TOKEN" not in workflow
     assert "/agents/repos" not in workflow
-    assert workflow.count("/pulls?state=open&per_page=1") == 2
+    assert workflow.count("/pulls?state=open&per_page=1") == 3
     assert (
         "NVIDIA_NIM_API_KEY is not configured; product development remains "
         "fail-closed" in workflow
@@ -94,6 +94,28 @@ def test_opencode_permissions_block_execution_network_and_protected_edits():
     assert "Do not read GitHub issues, pull requests, external web pages" in workflow
 
 
+def test_agent_control_file_is_immutable_to_autonomous_authoring():
+    workflow = _workflow_text()
+    implementation = workflow[
+        workflow.index("Configure implementation permissions") :
+        workflow.index("Implement the bounded product increment")
+    ]
+    diff_gate = workflow[
+        workflow.index("Enforce the autonomous diff boundary") :
+        workflow.index("Record the pre-validation workspace manifest")
+    ]
+    forbidden_exact = diff_gate[
+        diff_gate.index("forbidden_exact") : diff_gate.index("forbidden_prefixes")
+    ]
+    allowed_exact = diff_gate[
+        diff_gate.index("allowed_exact") : diff_gate.index("allowed_prefixes")
+    ]
+
+    assert '"AGENTS.md": "deny"' in implementation
+    assert '"AGENTS.md"' in forbidden_exact
+    assert '"AGENTS.md"' not in allowed_exact
+
+
 def test_product_development_proves_a_red_state_before_implementation():
     workflow = _workflow_text()
 
@@ -137,6 +159,7 @@ def test_autonomous_diff_is_text_only_bounded_and_policy_safe():
         '".gitmodules"',
         '"CODEOWNERS"',
         '"SECURITY.md"',
+        '"AGENTS.md"',
         '".github/"',
         '".git/"',
     ):
@@ -164,11 +187,30 @@ def test_untrusted_validation_has_no_network_or_inherited_environment():
     assert "-m pip check" in workflow
 
 
+def test_queue_and_base_are_checked_before_and_after_token_exchange():
+    workflow = _workflow_text()
+    preflight_start = workflow.index("Recheck queue and base before token exchange")
+    token_start = workflow.index("Exchange an OpenCode app token")
+    mutation_start = workflow.index("Open exactly one focused pull request")
+    preflight = workflow[preflight_start:token_start]
+    token_step = workflow[token_start:mutation_start]
+    mutation = workflow[mutation_start:]
+
+    assert preflight_start < token_start < mutation_start
+    assert "/pulls?state=open&per_page=1" in preflight
+    assert "/commits/${BASE_BRANCH}" in preflight
+    assert "eligible=false" in preflight
+    assert "eligible=true" in preflight
+    assert "steps.mutation_preflight.outputs.eligible == 'true'" in token_step
+    assert "/pulls?state=open&per_page=1" in mutation
+    assert "/commits/${BASE_BRANCH}" in mutation
+
+
 def test_final_queue_and_base_are_rechecked_before_pr_creation():
     workflow = _workflow_text()
 
-    assert workflow.count("/pulls?state=open&per_page=1") == 2
-    assert "/commits/${BASE_BRANCH}" in workflow
+    assert workflow.count("/pulls?state=open&per_page=1") == 3
+    assert workflow.count("/commits/${BASE_BRANCH}") == 2
     assert "The base branch moved during authoring" in workflow
     assert "Another pull request acquired the queue" in workflow
     assert "git reset --soft \"$AUTOMATION_BASE_SHA\"" in workflow
@@ -261,4 +303,3 @@ def test_untrusted_execution_drops_privileges():
     assert 'pr_message_backup="${RUNNER_TEMP}/agent-pr-message.md"' in workflow
     assert "/usr/bin/python3 -I -S - <<'PY'" in workflow
     assert "strict UTF-8" in workflow
-
