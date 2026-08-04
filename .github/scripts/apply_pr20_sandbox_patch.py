@@ -247,9 +247,11 @@ def patch_workflow() -> None:
     )
     workflow = replace_once(
         workflow,
-        '''            "$AUTOMATION_VENV/bin/python" - <<'PY'
+        '''          if [ -f PR_MESSAGE.md ]; then
+            "$AUTOMATION_VENV/bin/python" - <<'PY'
 ''',
-        '''            /usr/bin/python3 -I -S - <<'PY'
+        '''          if [ -f PR_MESSAGE.md ]; then
+            /usr/bin/python3 -I -S - <<'PY'
 ''',
         label="trusted PR metadata parser",
     )
