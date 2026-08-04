@@ -83,8 +83,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 55
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+      id-token: write
+      pull-requests: read
     env:
       TARGET_REPOSITORY: ContextualWisdomLab/RankWeave
       BASE_BRANCH: main
@@ -267,32 +268,54 @@ jobs:
         run: |
           set -euo pipefail
           rm -f opencode.json
+          git clean -fdX
           "$AUTOMATION_VENV/bin/python" - <<'PY'
           from __future__ import annotations
 
+          import os
+          import stat
           import subprocess
           from pathlib import Path
 
+          max_files = int(os.environ["MAX_AUTONOMOUS_CHANGED_FILES"])
+          max_file_bytes = int(os.environ["MAX_AUTONOMOUS_FILE_BYTES"])
+          max_total_bytes = int(os.environ["MAX_AUTONOMOUS_TOTAL_BYTES"])
           records = subprocess.check_output(
               ["git", "status", "--porcelain=v1", "-z"]
           ).split(b"\0")
           paths = []
+          total_bytes = 0
           index = 0
           while index < len(records):
               record = records[index]
               index += 1
               if not record:
                   continue
-              status = record[:2].decode("ascii")
-              path = record[3:].decode("utf-8")
-              if "R" in status or "C" in status or "D" in status:
+              status_text = record[:2].decode("ascii")
+              path_text = record[3:].decode("utf-8")
+              if any(marker in status_text for marker in ("R", "C", "D", "U")):
                   raise SystemExit(
-                      f"red phase may not rename, copy, or delete files: {path}"
+                      "red phase may not rename, copy, or delete files: "
+                      f"{path_text}"
                   )
-              paths.append(path)
+              paths.append(path_text)
+              path = Path(path_text)
+              info = path.lstat()
+              if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+                  raise SystemExit(f"red phase produced a non-regular file: {path_text}")
+              if info.st_size > max_file_bytes:
+                  raise SystemExit(
+                      f"red phase file {path_text} exceeds {max_file_bytes} bytes"
+                  )
+              data = path.read_bytes()
+              if b"\0" in data:
+                  raise SystemExit(f"red phase file contains a NUL byte: {path_text}")
+              total_bytes += info.st_size
 
           if not paths:
               raise SystemExit("red phase produced no files")
+          if len(paths) > max_files or total_bytes > max_total_bytes:
+              raise SystemExit("red phase exceeded the autonomous diff budget")
           if not any(
               path.startswith("tests/") and Path(path).suffix == ".py"
               for path in paths
@@ -442,35 +465,53 @@ jobs:
         run: |
           set -euo pipefail
           rm -f opencode.json .agent-red-output.txt
+          git clean -fdX
           "$AUTOMATION_VENV/bin/python" - <<'PY'
           from __future__ import annotations
 
           import os
           import stat
           import subprocess
+          import tomllib
           from pathlib import Path
 
+          base_sha = os.environ["AUTOMATION_BASE_SHA"]
           max_files = int(os.environ["MAX_AUTONOMOUS_CHANGED_FILES"])
           max_file_bytes = int(os.environ["MAX_AUTONOMOUS_FILE_BYTES"])
           max_total_bytes = int(os.environ["MAX_AUTONOMOUS_TOTAL_BYTES"])
 
-          records = subprocess.check_output(
-              ["git", "status", "--porcelain=v1", "-z"]
+          raw = subprocess.check_output(
+              ["git", "diff", "--name-status", "-z", base_sha]
           ).split(b"\0")
-          changed = []
+          changed: dict[str, str] = {}
           index = 0
-          while index < len(records):
-              record = records[index]
+          while index < len(raw):
+              status_bytes = raw[index]
               index += 1
-              if not record:
+              if not status_bytes:
                   continue
-              status = record[:2].decode("ascii")
-              path = record[3:].decode("utf-8")
-              if "R" in status or "C" in status or "U" in status:
+              status_text = status_bytes.decode("ascii")
+              if status_text.startswith(("R", "C")):
+                  old_path = raw[index].decode("utf-8")
+                  new_path = raw[index + 1].decode("utf-8")
                   raise SystemExit(
-                      f"autonomous changes may not rename, copy, or conflict: {path}"
+                      "autonomous changes may not rename or copy files: "
+                      f"{old_path} -> {new_path}"
                   )
-              changed.append((status, path))
+              path_text = raw[index].decode("utf-8")
+              index += 1
+              status_code = status_text[0]
+              if status_code not in {"A", "M"}:
+                  raise SystemExit(
+                      f"autonomous status {status_text} is forbidden: {path_text}"
+                  )
+              changed[path_text] = status_code
+
+          for path_bytes in subprocess.check_output(
+              ["git", "ls-files", "--others", "--exclude-standard", "-z"]
+          ).split(b"\0"):
+              if path_bytes:
+                  changed[path_bytes.decode("utf-8")] = "?"
 
           if not changed:
               raise SystemExit("implementation produced no changes")
@@ -479,23 +520,16 @@ jobs:
                   f"autonomous change count {len(changed)} exceeds {max_files}"
               )
 
-          forbidden_exact = {
-              ".gitmodules",
-              "CODEOWNERS",
-              "SECURITY.md",
-          }
-          forbidden_prefixes = (
-              ".github/",
-              ".git/",
-          )
+          forbidden_exact = {".gitmodules", "CODEOWNERS", "SECURITY.md"}
+          forbidden_prefixes = (".github/", ".git/")
           allowed_exact = {
               "AGENTS.md",
               "CHANGELOG.md",
               "README.md",
               "pyproject.toml",
               "PR_MESSAGE.md",
-              "src/rankweave/py.typed",
           }
+          allowed_prefixes = ("src/rankweave/", "tests/", "docs/")
           allowed_suffixes = {
               ".json",
               ".md",
@@ -508,44 +542,69 @@ jobs:
 
           total_bytes = 0
           production_changed = False
-          for status, path_text in changed:
+          for path_text in sorted(changed):
               path = Path(path_text)
+              if path.is_absolute() or ".." in path.parts:
+                  raise SystemExit(f"invalid changed path: {path_text}")
               if (
                   path_text in forbidden_exact
                   or path_text.startswith(forbidden_prefixes)
                   or path.name.startswith(".env")
               ):
                   raise SystemExit(f"protected path changed: {path_text}")
-              if path_text != "PR_MESSAGE.md" and (
+              if (
                   path_text not in allowed_exact
-                  and path.suffix not in allowed_suffixes
+                  and not path_text.startswith(allowed_prefixes)
               ):
+                  raise SystemExit(f"path is outside autonomous scope: {path_text}")
+              if path_text != "PR_MESSAGE.md" and path.suffix not in allowed_suffixes:
                   raise SystemExit(f"non-text or unsupported path changed: {path_text}")
               if path_text.startswith("src/rankweave/") and path.suffix == ".py":
                   production_changed = True
-              if "D" in status:
-                  continue
               info = path.lstat()
               if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
                   raise SystemExit(f"non-regular file changed: {path_text}")
-              size = info.st_size
-              if size > max_file_bytes:
+              if info.st_size > max_file_bytes:
                   raise SystemExit(
-                      f"{path_text} size {size} exceeds {max_file_bytes}"
+                      f"{path_text} size {info.st_size} exceeds {max_file_bytes}"
                   )
               data = path.read_bytes()
               if b"\0" in data:
                   raise SystemExit(f"NUL byte found in {path_text}")
-              total_bytes += size
+              total_bytes += info.st_size
 
           if not production_changed:
               raise SystemExit(
                   "buyer-visible increment must change a production Python module"
               )
+          if not any(path.startswith("tests/") for path in changed):
+              raise SystemExit("autonomous increment must include regression tests")
+          if not any(
+              path.startswith("docs/superpowers/specs/") for path in changed
+          ):
+              raise SystemExit("autonomous increment must include a design specification")
+          if "CHANGELOG.md" not in changed:
+              raise SystemExit("autonomous increment must update CHANGELOG.md")
           if total_bytes > max_total_bytes:
               raise SystemExit(
                   f"autonomous byte total {total_bytes} exceeds {max_total_bytes}"
               )
+
+          metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          if metadata["build-system"]["build-backend"] != "hatchling.build":
+              raise SystemExit("build backend may not change")
+          if metadata["project"].get("dependencies") != []:
+              raise SystemExit("RankWeave runtime dependencies must remain empty")
+          if metadata["tool"]["coverage"]["run"].get("branch") is not True:
+              raise SystemExit("branch coverage may not be disabled")
+          if metadata["tool"]["coverage"]["run"].get("source") != ["rankweave"]:
+              raise SystemExit("coverage source may not change")
+          if metadata["tool"]["coverage"]["report"].get("fail_under") != 100:
+              raise SystemExit("coverage fail-under must remain 100")
+          required_doc_rules = {f"D10{index}" for index in range(8)}
+          selected_rules = set(metadata["tool"]["ruff"]["lint"].get("select", []))
+          if not required_doc_rules <= selected_rules:
+              raise SystemExit("production docstring rules may not be weakened")
           PY
 
       - name: Record the pre-validation workspace manifest
@@ -558,23 +617,29 @@ jobs:
 
           import hashlib
           import json
+          import os
           import subprocess
           from pathlib import Path
 
-          records = subprocess.check_output(
-              ["git", "status", "--porcelain=v1", "-z"]
-          ).split(b"\0")
-          manifest = {}
-          for record in records:
-              if not record:
-                  continue
-              path_text = record[3:].decode("utf-8")
-              path = Path(path_text)
-              manifest[path_text] = (
-                  None
-                  if not path.exists()
-                  else hashlib.sha256(path.read_bytes()).hexdigest()
-              )
+          base_sha = os.environ["AUTOMATION_BASE_SHA"]
+          paths = {
+              value.decode("utf-8")
+              for value in subprocess.check_output(
+                  ["git", "diff", "--name-only", "-z", base_sha]
+              ).split(b"\0")
+              if value
+          }
+          paths.update(
+              value.decode("utf-8")
+              for value in subprocess.check_output(
+                  ["git", "ls-files", "--others", "--exclude-standard", "-z"]
+              ).split(b"\0")
+              if value
+          )
+          manifest = {
+              path_text: hashlib.sha256(Path(path_text).read_bytes()).hexdigest()
+              for path_text in sorted(paths)
+          }
           print(json.dumps(manifest, sort_keys=True))
           PY
 
@@ -628,37 +693,85 @@ jobs:
           import subprocess
           from pathlib import Path
 
-          before_path = Path(os.environ["RUNNER_TEMP"]) / (
-              "workspace-manifest-before.json"
-          )
+          base_sha = os.environ["AUTOMATION_BASE_SHA"]
+          before_path = Path(os.environ["RUNNER_TEMP"]) / "workspace-manifest-before.json"
           before = json.loads(before_path.read_text(encoding="utf-8"))
-          records = subprocess.check_output(
-              ["git", "status", "--porcelain=v1", "-z"]
-          ).split(b"\0")
-          after = {}
-          for record in records:
-              if not record:
-                  continue
-              path_text = record[3:].decode("utf-8")
-              path = Path(path_text)
-              after[path_text] = (
-                  None
-                  if not path.exists()
-                  else hashlib.sha256(path.read_bytes()).hexdigest()
-              )
+          paths = {
+              value.decode("utf-8")
+              for value in subprocess.check_output(
+                  ["git", "diff", "--name-only", "-z", base_sha]
+              ).split(b"\0")
+              if value
+          }
+          paths.update(
+              value.decode("utf-8")
+              for value in subprocess.check_output(
+                  ["git", "ls-files", "--others", "--exclude-standard", "-z"]
+              ).split(b"\0")
+              if value
+          )
+          after = {
+              path_text: hashlib.sha256(Path(path_text).read_bytes()).hexdigest()
+              for path_text in sorted(paths)
+          }
           if before != after:
-              raise SystemExit(
-                  "validation mutated the proposed working tree"
-              )
+              raise SystemExit("validation mutated the proposed working tree")
           PY
+
+      - name: Exchange an OpenCode app token for generated PR events
+        id: generated_pr_token
+        if: steps.gate.outputs.eligible == 'true'
+        env:
+          OIDC_AUDIENCE: opencode-github-action
+          OPENCODE_API_BASE_URL: https://api.opencode.ai
+        run: |
+          set -euo pipefail
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ] || \
+            [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "::error::OIDC request environment is unavailable."
+            exit 1
+          fi
+          request_url="${ACTIONS_ID_TOKEN_REQUEST_URL}"
+          separator="&"
+          case "$request_url" in
+            *\?*) ;;
+            *) separator="?" ;;
+          esac
+          oidc_response="$(
+            curl -fsS \
+              -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${request_url}${separator}audience=${OIDC_AUDIENCE}"
+          )"
+          oidc_token="$(jq -r '.value // empty' <<<"$oidc_response")"
+          if [ -z "$oidc_token" ]; then
+            echo "::error::OIDC token response was empty."
+            exit 1
+          fi
+          token_response="$(
+            curl -fsS \
+              -X POST \
+              -H "Authorization: Bearer ${oidc_token}" \
+              "${OPENCODE_API_BASE_URL}/exchange_github_app_token"
+          )"
+          app_token="$(jq -r '.token // empty' <<<"$token_response")"
+          if [ -z "$app_token" ]; then
+            echo "::error::OpenCode GitHub App token response was empty."
+            exit 1
+          fi
+          echo "::add-mask::$app_token"
+          echo "token=$app_token" >>"$GITHUB_OUTPUT"
 
       - name: Open exactly one focused pull request
         if: steps.gate.outputs.eligible == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.generated_pr_token.outputs.token }}
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::Generated PR app token is unavailable."
+            exit 1
+          fi
 
           open_pr_count="$(
             gh api "/repos/${TARGET_REPOSITORY}/pulls?state=open&per_page=1" \
@@ -700,10 +813,7 @@ jobs:
               title = "RankWeave autonomous commercialization increment"
           body = "\n".join(lines[1:]).strip()
           if not body:
-              body = (
-                  "Autonomous NVIDIA NIM increment; see the diff and "
-                  "CHANGELOG.md."
-              )
+              body = "Autonomous NVIDIA NIM increment; see the diff and CHANGELOG.md."
           if len(body.encode("utf-8")) > 20_000:
               raise SystemExit("PR body exceeds 20,000 UTF-8 bytes")
           Path(os.environ["RUNNER_TEMP"], "pr-title.txt").write_text(
