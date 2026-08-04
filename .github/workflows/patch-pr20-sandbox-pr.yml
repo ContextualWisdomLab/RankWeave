@@ -6,7 +6,8 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
+  id-token: write
 
 concurrency:
   group: trigger-pr20-sandbox-repair
@@ -93,11 +94,57 @@ jobs:
           python -m coverage run -m pytest -q
           python -m coverage report
 
-      - name: Commit and push the verified repair
+      - name: Exchange an OpenCode app token for the verified repair
+        id: repair_token
         env:
-          GH_TOKEN: ${{ github.token }}
+          OIDC_AUDIENCE: opencode-github-action
+          OPENCODE_API_BASE_URL: https://api.opencode.ai
         run: |
           set -euo pipefail
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ] || \
+            [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "::error::OIDC request environment is unavailable."
+            exit 1
+          fi
+          request_url="${ACTIONS_ID_TOKEN_REQUEST_URL}"
+          separator="&"
+          case "$request_url" in
+            *\?*) ;;
+            *) separator="?" ;;
+          esac
+          oidc_response="$(
+            curl -fsS \
+              -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${request_url}${separator}audience=${OIDC_AUDIENCE}"
+          )"
+          oidc_token="$(jq -r '.value // empty' <<<"$oidc_response")"
+          if [ -z "$oidc_token" ]; then
+            echo "::error::OIDC token response was empty."
+            exit 1
+          fi
+          token_response="$(
+            curl -fsS \
+              -X POST \
+              -H "Authorization: Bearer ${oidc_token}" \
+              "${OPENCODE_API_BASE_URL}/exchange_github_app_token"
+          )"
+          app_token="$(jq -r '.token // empty' <<<"$token_response")"
+          if [ -z "$app_token" ]; then
+            echo "::error::OpenCode GitHub App token response was empty."
+            exit 1
+          fi
+          echo "::add-mask::$app_token"
+          echo "token=$app_token" >>"$GITHUB_OUTPUT"
+
+      - name: Commit and push the verified repair
+        env:
+          GH_TOKEN: ${{ steps.repair_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::Verified repair app token is unavailable."
+            exit 1
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
