@@ -288,7 +288,7 @@ def test_family_cli_rejects_invalid_options(
 
 def test_family_cli_rejects_duplicate_candidate_identifiers(tmp_path, capsys):
     arguments = _successful_family_arguments(tmp_path)
-    arguments[5] = arguments[3].replace("모델-a=", "model-b=")
+    arguments[6] = arguments[4].replace("모델-a=", "model-b=")
 
     exit_code = main(arguments)
 
@@ -302,7 +302,7 @@ def test_family_cli_reports_candidate_specific_trec_error(tmp_path, capsys):
     arguments = _successful_family_arguments(tmp_path)
     malformed_path = tmp_path / "malformed.run"
     malformed_path.write_text("query Q0 document 0 1.0 run\n", encoding="utf-8")
-    arguments[5] = f"model-b={malformed_path}"
+    arguments[6] = f"model-b={malformed_path}"
 
     exit_code = main(arguments)
 
@@ -323,6 +323,18 @@ def test_family_cli_applies_byte_limit_to_each_candidate(tmp_path, capsys):
     assert exit_code == 2
     assert captured.out == ""
     assert "exceeds max-input-bytes 4" in captured.err
+
+
+def test_family_projection_rejects_non_string_candidate_identifier():
+    report = compare_trec_run_family(
+        BASELINE_RUN_TEXT,
+        {1: CANDIDATE_A_RUN_TEXT},
+        QRELS_TEXT,
+        cutoff=1,
+    )
+
+    with pytest.raises(ValueError, match="candidate identifiers must be strings"):
+        family_comparison_to_dict(report)
 
 
 def test_family_projection_rejects_wrong_report_type():
