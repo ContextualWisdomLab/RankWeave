@@ -4,6 +4,42 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-08-05
+
+### Added
+- Public `WeightedRRFCrossValidationFold`,
+  `WeightedRRFCrossValidationReport`, and
+  `cross_validate_weighted_reciprocal_rank_fusion` APIs for blocked-fold
+  assessment of fixed weighted reciprocal-rank-fusion policy selection.
+- Complete immutable training tuning and held-out evaluation evidence for every
+  fold, one original-query-order out-of-fold evaluation, a fixed
+  `rank_constant_eta`, and a separately labelled all-data final tuning
+  recommendation.
+- Dedicated rank-only cross-validation documentation, package-root exports,
+  installed-wheel smoke, architecture and agent contracts, and APA 7th research
+  grounding.
+
+### Changed
+- Convex and weighted-RRF cross-validation now share one fail-closed request
+  validator for cutoff, objective, candidate family, query/judgment parity,
+  exact fold assignment, fold identifier hashability, and minimum fold count.
+- Existing convex cross-validation public behavior and record names remain
+  unchanged.
+
+### Validation
+- Weighted-RRF folds require unique hashable item IDs, complete channel weights,
+  convex weight domains, a positive integer eta, and at least two explicit
+  caller-owned folds.
+- The same eta and selected fixed weights are used for training tuning, held-out
+  fusion, and final tuning. Cross-validation remains selection-procedure
+  evidence; final effectiveness requires an independent test set.
+
+### Compatibility
+- Runtime remains standard-library-only, Python 3.10+, deterministic,
+  store-agnostic, standalone-usable, and suitable for naruon or another MSA
+  consumer. No database, network, provider, LLM, UI, scheduler, or credential
+  dependency is introduced.
+
 ## [0.17.0] - 2026-08-05
 
 ### Added

@@ -29,6 +29,14 @@ in original query order, and keep the all-data deployment recommendation
 separate from held-out evidence. Do not add random splitting, hidden grouping,
 or duplicate fusion and evaluation arithmetic.
 
+## Weighted-RRF cross-validation
+
+Keep rank-only fold assessment as deterministic composition of the native RRF
+tuner, fusion primitive, and evaluation API. Preserve one fixed eta, caller fold
+order, complete per-fold evidence, exact query-set parity, and the independent
+final-test boundary. Do not introduce hidden folds, adaptive weights, or a
+second rank-fusion implementation.
+
 ## Temporal backtesting
 
 Treat availability time as a required evidence boundary, not a convenience

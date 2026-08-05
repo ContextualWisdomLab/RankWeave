@@ -106,6 +106,11 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   unchanged to held-out queries, restore original query order for out-of-fold
   evidence, and keep full-data final tuning separate. Never generate hidden
   random folds or imply that an arbitrary grouping is leakage-safe.
+- **RRF cross-validation preserves native semantics.** Rank-only fold
+  assessment must delegate to `tune_weighted_reciprocal_rank_fusion`,
+  `weighted_reciprocal_rank_fuse`, and `evaluate_rankings`; use one fixed eta,
+  preserve explicit fold order, and keep final all-data tuning distinct from
+  out-of-fold evidence.
 - **Strict TREC boundaries.** Four-column qrels and six-column run artifacts
   reject malformed, duplicate, non-finite, or unserializable state. Qrels
   relevance is a signed ASCII-decimal integer in `[-127, 127]`; portable run
@@ -175,6 +180,7 @@ python -m pip wheel . --no-deps --wheel-dir dist
 - `src/rankweave/ranked_list_fusion.py` — complete-list fusion and audit data.
 - `src/rankweave/evaluation.py` — precision, recall, RR, and graded nDCG.
 - `src/rankweave/comparison.py` — exact and Monte Carlo paired randomization.
+- `src/rankweave/cross_validation.py` — blocked convex and weighted-RRF policy assessment.
 - `src/rankweave/cross_validation.py` — explicit blocked folds, fold-local selection, and out-of-fold evidence.
 - `src/rankweave/tuning.py` — validation-set convex-score and weighted-RRF policy selection.
 - `src/rankweave/temporal_backtesting.py` — availability-time backtesting and audit evidence.

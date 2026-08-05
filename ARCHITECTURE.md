@@ -80,6 +80,15 @@ revisions, users, tenants, events, projects, or time windows must not cross the
 training boundary. Random fold generation and rolling-origin forecasting are
 outside this module.
 
+## Rank-only cross-validation boundary
+
+`cross_validation.py` keeps convex and weighted-RRF public APIs explicit while
+sharing request validation. The RRF path delegates selection to
+`tune_weighted_reciprocal_rank_fusion`, fusion to
+`weighted_reciprocal_rank_fuse`, and metrics to `evaluate_rankings`. One fixed
+eta is carried through every fold and final tuning. Fold construction and
+leakage control remain caller responsibilities.
+
 ## Availability-time backtesting boundary
 
 `temporal_backtesting.py` is deterministic experiment orchestration. It delegates
