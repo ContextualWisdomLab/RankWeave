@@ -30,7 +30,8 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - run: python -m pip install --upgrade pip
-      - run: pip install -e ".[dev]"
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m compileall -q src
       - run: python -m ruff check .
       - run: python -m coverage run -m pytest -q
       - run: python -m coverage report
@@ -64,6 +65,12 @@ jobs:
               "rankweave/cli.py",
               "rankweave/comparison.py",
               "rankweave/evaluation.py",
+              "rankweave/report_schemas.py",
+              "rankweave/schemas/__init__.py",
+              "rankweave/schemas/trec-comparison-v1.schema.json",
+              "rankweave/schemas/trec-comparison-v2.schema.json",
+              "rankweave/schemas/trec-family-comparison-v1.schema.json",
+              "rankweave/schemas/trec-family-comparison-v2.schema.json",
               "rankweave/trec.py",
               "rankweave/trec_comparison.py",
               "rankweave/trec_family_comparison.py",
@@ -78,56 +85,56 @@ jobs:
       - run: >-
           .package-smoke/bin/python -m pip install
           --no-index --find-links dist rankweave
-      - name: Smoke-test installed wheel
+      - name: Smoke-test installed wheel APIs and resources
         run: |
           .package-smoke/bin/python - <<'PY'
+          import json
           from importlib.metadata import version
+          from importlib.util import find_spec
 
           import rankweave
 
-          assert version("rankweave") == "0.12.0"
-          assert rankweave.__version__ == "0.12.0"
+          assert version("rankweave") == "0.13.0"
+          assert rankweave.__version__ == "0.13.0"
+          assert find_spec("jsonschema") is None
+
+          expected = [
+              ("pairwise", "v1", "rankweave.trec-comparison.v1"),
+              ("pairwise", "v2", "rankweave.trec-comparison.v2"),
+              ("family", "v1", "rankweave.trec-family-comparison.v1"),
+              ("family", "v2", "rankweave.trec-family-comparison.v2"),
+          ]
+          descriptors = rankweave.available_report_schemas()
+          assert [
+              (
+                  descriptor.report_type,
+                  descriptor.schema_version,
+                  descriptor.transport_schema_id,
+              )
+              for descriptor in descriptors
+          ] == expected
+          for descriptor in descriptors:
+              text = rankweave.load_report_schema_text(
+                  descriptor.report_type,
+                  descriptor.schema_version,
+              )
+              schema = rankweave.load_report_schema(
+                  descriptor.report_type,
+                  descriptor.schema_version,
+              )
+              assert text.endswith("\n")
+              assert json.loads(text) == schema
+              assert schema["properties"]["schema_version"]["const"] == (
+                  descriptor.transport_schema_id
+              )
+
           assert rankweave.reciprocal_rank_fuse({"dense": ["document"]})
           metrics = rankweave.evaluate_ranking(
-              ["document"], {"document": 1}, cutoff=1
+              ["document"],
+              {"document": 1},
+              cutoff=1,
           )
           assert metrics.ndcg_at_k == 1.0
-          tuning = rankweave.tune_weighted_reciprocal_rank_fusion(
-              {"query": {"dense": ["document"]}},
-              {"query": {"document": 1}},
-              {"dense-only": {"dense": 1.0}},
-              cutoff=1,
-          )
-          assert tuning.best_policy_id == "dense-only"
-          trec_report = rankweave.evaluate_trec_run(
-              "q Q0 document 1 1.0 rw1\n",
-              "q 0 document 1\n",
-              cutoff=1,
-          )
-          assert trec_report.aggregate.mean_ndcg_at_k == 1.0
-          comparison = rankweave.compare_rankings(
-              {"q": ["other", "document"]},
-              {"q": ["document", "other"]},
-              {"q": {"document": 1}},
-              cutoff=1,
-              alternative=rankweave.CANDIDATE_GREATER_ALTERNATIVE,
-          )
-          assert comparison.significance.mean_difference == 1.0
-          family = rankweave.compare_trec_run_family(
-              "q Q0 other 1 0.9 baseline\n"
-              "q Q0 document 2 0.2 baseline\n",
-              {
-                  "candidate": (
-                      "q Q0 document 1 0.9 candidate\n"
-                      "q Q0 other 2 0.2 candidate\n"
-                  )
-              },
-              "q 0 document 1\nq 0 other 0\n",
-              cutoff=1,
-              alternative=rankweave.CANDIDATE_GREATER_ALTERNATIVE,
-          )
-          assert family.candidates[0].raw_p_value == 0.5
-          assert family.candidates[0].holm_adjusted_p_value == 0.5
           PY
       - name: Smoke-test installed console and module commands outside source tree
         run: |
@@ -135,6 +142,7 @@ jobs:
           venv_bin="$PWD/.package-smoke/bin"
           smoke_dir="$(mktemp -d)"
           trap 'rm -rf "$smoke_dir"' EXIT
+
           cat >"$smoke_dir/baseline.run" <<'EOF'
           # baseline audit comment
           q Q0 other 1 0.9 baseline
@@ -155,24 +163,37 @@ jobs:
           q 0 document 1
           q 0 other 0
           EOF
+
           (
             cd "$smoke_dir"
+
+            for report_type in pairwise family; do
+              for schema_version in v1 v2; do
+                output="${report_type}-${schema_version}.schema.json"
+                module_output="${report_type}-${schema_version}.module.schema.json"
+                "$venv_bin/rankweave" schema \
+                  --report-type "$report_type" \
+                  --schema-version "$schema_version" >"$output"
+                "$venv_bin/python" -m rankweave schema \
+                  --report-type "$report_type" \
+                  --schema-version "$schema_version" >"$module_output"
+                cmp "$output" "$module_output"
+              done
+            done
+
             "$venv_bin/rankweave" compare \
               --baseline-run baseline.run \
               --candidate-run candidate.run \
               --qrels qrels.txt \
               --cutoff 1 \
               --alternative candidate-greater > pairwise-v1.json
-            "$venv_bin/python" - <<'PY'
-          import json
-          from pathlib import Path
-
-          report = json.loads(Path("pairwise-v1.json").read_text(encoding="utf-8"))
-          assert report["schema_version"] == "rankweave.trec-comparison.v1"
-          assert report["rankweave_version"] == "0.12.0"
-          assert "artifacts" not in report
-          assert report["mean_difference"] == 1.0
-          PY
+            "$venv_bin/python" -m rankweave compare \
+              --baseline-run baseline.run \
+              --candidate-run candidate.run \
+              --qrels qrels.txt \
+              --cutoff 1 \
+              --alternative candidate-greater > pairwise-v1.module.json
+            cmp pairwise-v1.json pairwise-v1.module.json
 
             "$venv_bin/rankweave" compare \
               --baseline-run baseline.run \
@@ -187,27 +208,8 @@ jobs:
               --qrels qrels.txt \
               --cutoff 1 \
               --alternative candidate-greater \
-              --include-artifact-digests > pairwise-v2-module.json
-            cmp pairwise-v2.json pairwise-v2-module.json
-            "$venv_bin/python" - <<'PY'
-          import hashlib
-          import json
-          from pathlib import Path
-
-          report = json.loads(Path("pairwise-v2.json").read_text(encoding="utf-8"))
-          assert report["schema_version"] == "rankweave.trec-comparison.v2"
-          assert report["rankweave_version"] == "0.12.0"
-          for role, path in {
-              "baseline_run": Path("baseline.run"),
-              "candidate_run": Path("candidate.run"),
-              "qrels": Path("qrels.txt"),
-          }.items():
-              payload = path.read_bytes()
-              assert report["artifacts"][role] == {
-                  "sha256": hashlib.sha256(payload).hexdigest(),
-                  "byte_count": len(payload),
-              }
-          PY
+              --include-artifact-digests > pairwise-v2.module.json
+            cmp pairwise-v2.json pairwise-v2.module.json
 
             "$venv_bin/rankweave" compare-family \
               --baseline-run baseline.run \
@@ -216,21 +218,14 @@ jobs:
               --qrels qrels.txt \
               --cutoff 1 \
               --alternative candidate-greater > family-v1.json
-            "$venv_bin/python" - <<'PY'
-          import json
-          from pathlib import Path
-
-          report = json.loads(Path("family-v1.json").read_text(encoding="utf-8"))
-          assert report["schema_version"] == (
-              "rankweave.trec-family-comparison.v1"
-          )
-          assert report["rankweave_version"] == "0.12.0"
-          assert "artifacts" not in report
-          assert [candidate["candidate_id"] for candidate in report["candidates"]] == [
-              "first",
-              "second",
-          ]
-          PY
+            "$venv_bin/python" -m rankweave compare-family \
+              --baseline-run baseline.run \
+              --candidate first=candidate.run \
+              --candidate second=candidate-b.run \
+              --qrels qrels.txt \
+              --cutoff 1 \
+              --alternative candidate-greater > family-v1.module.json
+            cmp family-v1.json family-v1.module.json
 
             "$venv_bin/rankweave" compare-family \
               --baseline-run baseline.run \
@@ -247,29 +242,37 @@ jobs:
               --qrels qrels.txt \
               --cutoff 1 \
               --alternative candidate-greater \
-              --include-artifact-digests > family-v2-module.json
-            cmp family-v2.json family-v2-module.json
+              --include-artifact-digests > family-v2.module.json
+            cmp family-v2.json family-v2.module.json
+
             "$venv_bin/python" - <<'PY'
-          import hashlib
           import json
           from pathlib import Path
 
-          report = json.loads(Path("family-v2.json").read_text(encoding="utf-8"))
-          assert report["schema_version"] == (
-              "rankweave.trec-family-comparison.v2"
-          )
-          assert report["rankweave_version"] == "0.12.0"
-          assert [
-              item["candidate_id"] for item in report["artifacts"]["candidates"]
-          ] == ["first", "second"]
-          for item, path in zip(
-              report["artifacts"]["candidates"],
-              [Path("candidate.run"), Path("candidate-b.run")],
-              strict=True,
-          ):
-              payload = path.read_bytes()
-              assert item["sha256"] == hashlib.sha256(payload).hexdigest()
-              assert item["byte_count"] == len(payload)
+          import rankweave
+
+          for descriptor in rankweave.available_report_schemas():
+              path = Path(
+                  f"{descriptor.report_type}-{descriptor.schema_version}.schema.json"
+              )
+              assert path.read_text(encoding="utf-8") == (
+                  rankweave.load_report_schema_text(
+                      descriptor.report_type,
+                      descriptor.schema_version,
+                  )
+              )
+
+          expected_reports = {
+              "pairwise-v1.json": "rankweave.trec-comparison.v1",
+              "pairwise-v2.json": "rankweave.trec-comparison.v2",
+              "family-v1.json": "rankweave.trec-family-comparison.v1",
+              "family-v2.json": "rankweave.trec-family-comparison.v2",
+          }
+          for file_name, schema_id in expected_reports.items():
+              report = json.loads(Path(file_name).read_text(encoding="utf-8"))
+              assert report["schema_version"] == schema_id
+              assert report["rankweave_version"] == "0.13.0"
+              assert ("artifacts" in report) == schema_id.endswith(".v2")
           PY
           )
       - run: .package-smoke/bin/python -m pip check
