@@ -167,8 +167,8 @@ jobs:
 
           import rankweave
 
-          assert version("rankweave") == "0.14.0"
-          assert rankweave.__version__ == "0.14.0"
+          assert version("rankweave") == "0.15.0"
+          assert rankweave.__version__ == "0.15.0"
           assert find_spec("jsonschema") is None
 
           expected = [
@@ -232,6 +232,31 @@ jobs:
           )
           assert verification.verified is True
           assert verification.mismatch_count == 0
+
+          tuning = rankweave.tune_weighted_convex_fusion(
+              {
+                  "q1": {
+                      "lexical": [("a", 1.0), ("b", 0.0)],
+                      "dense": [("b", 1.0), ("a", 0.0)],
+                  },
+                  "q2": {
+                      "lexical": [("c", 0.9), ("d", 0.1)],
+                      "dense": [("d", 0.9), ("c", 0.1)],
+                  },
+              },
+              {"q1": {"a": 1}, "q2": {"c": 1}},
+              {
+                  "dense-heavy": {"lexical": 0.1, "dense": 0.9},
+                  "lexical-heavy": {"lexical": 0.9, "dense": 0.1},
+              },
+              cutoff=1,
+          )
+          assert tuning.best_policy_id == "lexical-heavy"
+          assert isinstance(tuning, rankweave.WeightedConvexTuningReport)
+          assert isinstance(
+              tuning.trials[0],
+              rankweave.WeightedConvexTuningTrial,
+          )
           PY
       - name: Smoke-test installed console and module commands outside source tree
         run: |
@@ -339,7 +364,7 @@ jobs:
               assert payload["schema_version"] == (
                   "rankweave.artifact-verification.v1"
               )
-              assert payload["rankweave_version"] == "0.14.0"
+              assert payload["rankweave_version"] == "0.15.0"
               assert payload["verified"] is True
               assert payload["artifact_count"] == expected_count
               assert payload["mismatch_count"] == 0
