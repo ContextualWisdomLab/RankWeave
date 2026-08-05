@@ -1,14 +1,16 @@
-# Node.js 24 GitHub Action Pin Hardening Design
+# Node.js 24 Package CI Action Pin Hardening Design
 
 ## Status
 
-Approved for autonomous implementation under the repository's standing commercialization loop. This is a bounded CI supply-chain hardening slice; it does not change RankWeave runtime APIs, report schemas, statistical behavior, package version, or central reusable-workflow SHAs.
+Approved for autonomous implementation under the repository's standing commercialization loop. This is a bounded package-CI supply-chain hardening slice; it does not change RankWeave runtime APIs, report schemas, statistical behavior, package version, the privileged hourly product loop, or central reusable-workflow SHAs.
 
 ## Problem
 
-RankWeave's repository-owned `ci.yml` and hourly commercialization workflow still invoke older Node.js 20-based releases of `actions/checkout` and `actions/setup-python`. GitHub-hosted runners currently force those actions onto Node.js 24 and emit deprecation warnings. The warnings create avoidable operational noise, weaken the repository's evidence that checked-in automation matches its declared runtime, and can become future execution failures when the compatibility bridge is removed.
+RankWeave's repository-owned `ci.yml` still invokes older Node.js 20-based releases of `actions/checkout` and `actions/setup-python`. GitHub-hosted runners currently force those actions onto Node.js 24 and emit deprecation warnings. The warnings create avoidable operational noise, weaken the repository's evidence that checked-in automation matches its declared runtime, and can become future execution failures when the compatibility bridge is removed.
 
-The repository also has a narrow regression test that protects only the old checkout SHA. It does not assert the setup-python or setup-uv pins and does not cover the hourly workflow's local checkout step.
+The existing regression test protects only the old checkout SHA. It does not assert setup-python or setup-uv and therefore cannot prove that every package-CI job uses the reviewed action set.
+
+The privileged hourly commercialization workflow is deliberately excluded from this slice. It contains the autonomous-development credential and sandbox boundary and should receive its own narrowly reviewed control-plane PR rather than being coupled to ordinary package-CI maintenance.
 
 ## Considered approaches
 
@@ -20,9 +22,9 @@ This preserves the exact existing workflow but depends on GitHub's temporary com
 
 This removes manual SHA maintenance but allows upstream changes to enter privileged workflows without repository review. It conflicts with the repository's immutable action-pin policy. Rejected.
 
-### C. Update repository-owned actions to current reviewed Node.js 24-compatible releases pinned by full commit SHA
+### C. Update package CI to current reviewed Node.js 24-compatible releases pinned by full commit SHA
 
-Update `actions/checkout`, `actions/setup-python`, and `astral-sh/setup-uv` only where RankWeave owns the workflow. Preserve the central reusable-workflow SHAs, OpenCode binary hash, NVIDIA credential boundary, schedule, permissions, and behavior. Expand tests to require the exact reviewed pins and reject the superseded commits. Recommended.
+Update `actions/checkout`, `actions/setup-python`, and `astral-sh/setup-uv` in both `ci.yml` jobs. Preserve every matrix entry, command, permission, checksum test, package smoke test, and release workflow. Expand tests to require exact counts and reject superseded commits. Recommended.
 
 ## Reviewed action identities
 
@@ -36,44 +38,32 @@ The full commit SHA, not the mutable tag, is the workflow trust input.
 
 ## Scope
 
-### CI workflow
-
 Replace both test/package job references for:
 
 - `actions/checkout`
 - `actions/setup-python`
 - `astral-sh/setup-uv`
 
-Do not alter Python 3.10–3.13 coverage, frozen uv installation, wheel/sdist inspection, checksum-handoff exercise, installed-wheel smoke, or dependency checks.
+Do not alter Python 3.10–3.13 coverage, frozen uv installation, wheel/sdist inspection, checksum-handoff exercise, installed-wheel smoke, dependency checks, release publication, or autonomous-development controls.
 
-### Hourly commercialization workflow
-
-Replace the single repository-owned checkout action used by the bounded product-development job. Do not alter:
-
-- the `17 * * * *` schedule;
-- immutable central `.github` reusable-workflow SHAs;
-- `NVIDIA_NIM_API_KEY` and OpenCode configuration;
-- permissions, single-flight checks, sandboxing, diff limits, or OIDC mutation boundary.
-
-### Regression contract
+## Regression contract
 
 `tests/test_ci_supply_chain.py` must assert:
 
 - exactly two current checkout, setup-python, and setup-uv references in `ci.yml`;
-- exactly one current checkout reference in the hourly workflow;
-- no superseded checkout, setup-python, or setup-uv SHA remains in either workflow;
+- no superseded checkout, setup-python, or setup-uv SHA remains in `ci.yml`;
 - every asserted reference uses a 40-character lowercase hexadecimal commit SHA.
 
 ## Documentation
 
-Update `CHANGELOG.md` under `Unreleased` and add a maintainer rule to `AGENTS.md` and `CLAUDE.md` stating that repository-owned JavaScript actions must use reviewed Node.js 24-compatible releases pinned by full commit SHA. This does not create a package release because shipped Python behavior is unchanged.
+Update `CHANGELOG.md` under `Unreleased` and add a maintainer rule to `AGENTS.md` and `CLAUDE.md` stating that repository-owned package-CI JavaScript actions must use reviewed Node.js 24-compatible releases pinned by full commit SHA. This does not create a package release because shipped Python behavior is unchanged.
 
 ## Failure handling
 
 - A missing, duplicated, or stale action reference fails the normal pytest matrix.
 - A moving action tag or shortened SHA fails the supply-chain regression test.
-- Central reusable-workflow SHAs are intentionally outside this replacement set.
-- If any workflow behavior changes beyond action runtime and pin identity, the change is out of scope and must be split into a separate design.
+- The hourly commercialization workflow and central reusable-workflow SHAs are intentionally outside this replacement set.
+- If any workflow behavior changes beyond package-CI action runtime and pin identity, the change is out of scope and must be split into a separate design.
 
 ## Verification
 
