@@ -30,6 +30,13 @@ Quickstart::
     )
 """
 
+from rankweave.artifact_verification import (
+    FAMILY_REPORT_SCHEMA_VERSION,
+    PAIRWISE_REPORT_SCHEMA_VERSION,
+    ArtifactVerificationRecord,
+    ArtifactVerificationReport,
+    verify_report_artifacts,
+)
 from rankweave.comparison import (
     CANDIDATE_GREATER_ALTERNATIVE,
     CANDIDATE_LESS_ALTERNATIVE,
@@ -123,10 +130,12 @@ from rankweave.tuning import (
     tune_weighted_reciprocal_rank_fusion,
 )
 
-__version__ = "0.13.0"
+__version__ = "0.14.0"
 
 __all__ = [
     "AggregateRankingMetrics",
+    "ArtifactVerificationRecord",
+    "ArtifactVerificationReport",
     "CANDIDATE_GREATER_ALTERNATIVE",
     "CANDIDATE_LESS_ALTERNATIVE",
     "CONVEX_COMBINATION_STRATEGY",
@@ -136,6 +145,7 @@ __all__ = [
     "DEFAULT_RANDOM_SEED",
     "EXACT_RANDOMIZATION_METHOD",
     "EXACT_RANDOMIZATION_PAIR_LIMIT",
+    "FAMILY_REPORT_SCHEMA_VERSION",
     "FusedRankedItem",
     "FusedScoredItem",
     "FusedWeightedRankedItem",
@@ -146,6 +156,7 @@ __all__ = [
     "MEAN_RECIPROCAL_RANK_OBJECTIVE",
     "MONTE_CARLO_RANDOMIZATION_METHOD",
     "NDCG_AT_K_METRIC",
+    "PAIRWISE_REPORT_SCHEMA_VERSION",
     "PRECISION_AT_K_METRIC",
     "PairedRandomizationResult",
     "QueryMetricDifference",
@@ -197,6 +208,7 @@ __all__ = [
     "weighted_convex_combination_score",
     "weighted_convex_fuse",
     "weighted_reciprocal_rank_fuse",
+    "verify_report_artifacts",
     "weighted_reciprocal_rank_fusion_score",
     "__version__",
 ]
