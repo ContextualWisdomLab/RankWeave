@@ -181,3 +181,12 @@ def test_release_documentation_records_exact_external_setup_and_boundaries():
         assert expected in documentation
     assert "PYPI_API_TOKEN" not in documentation
     assert "stored API token" not in documentation
+
+def test_normal_package_ci_builds_and_inspects_source_distribution():
+    ci_workflow = _read_repository_file(".github/workflows/ci.yml")
+
+    assert "uv build --wheel --sdist --out-dir dist" in ci_workflow
+    assert "Verify source distribution contents" in ci_workflow
+    assert "package job requires exactly one source distribution" in ci_workflow
+    assert 'source_root + "CHANGELOG.md"' in ci_workflow
+    assert 'source_root + "tests/test_version.py"' in ci_workflow

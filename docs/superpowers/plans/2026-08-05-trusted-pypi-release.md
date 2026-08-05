@@ -94,7 +94,7 @@ uv run --frozen --extra dev --python 3.13 \
   python -m pytest -q tests/test_publish_workflow.py
 ```
 
-Expected: FAIL because `.github/workflows/publish.yml` does not exist and current CI/hourly action SHAs do not match the Node.js 24 allowlist.
+Expected: FAIL because `.github/workflows/publish.yml` and `docs/releasing.md` do not yet exist.
 
 - [ ] **Step 3: Commit the red contracts**
 

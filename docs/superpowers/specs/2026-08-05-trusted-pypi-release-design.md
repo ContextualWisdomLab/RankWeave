@@ -109,6 +109,7 @@ The workflow uses current stable, Node.js 24-compatible releases pinned to full 
 - no `COPILOT_GITHUB_TOKEN` appears.
 
 The existing Python 3.10–3.13 matrix remains the runtime compatibility gate. The release build uses Python 3.13 as the deterministic packaging interpreter.
+The ordinary pull-request package job also builds and inspects the source distribution, so archive completeness is exercised before a GitHub Release can exist.
 
 ## Documentation and operational setup
 
