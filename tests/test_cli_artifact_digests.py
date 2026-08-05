@@ -3,14 +3,24 @@ import json
 import os
 import subprocess
 import sys
+from types import SimpleNamespace
+
+import pytest
 
 from rankweave.cli import (
     FAMILY_OUTPUT_SCHEMA_VERSION,
     FAMILY_OUTPUT_SCHEMA_VERSION_V2,
     OUTPUT_SCHEMA_VERSION,
     OUTPUT_SCHEMA_VERSION_V2,
+    _BoundedTextArtifact,
+    _FamilyArtifactEvidence,
+    _NamedArtifactEvidence,
+    _artifact_digest_to_dict,
+    _family_artifacts_to_dict,
+    _pairwise_artifacts_to_dict,
     main,
 )
+from rankweave.trec_family_comparison import compare_trec_run_family
 
 QRELS_BYTES = (
     "# 판단 근거\n"
@@ -52,6 +62,10 @@ def _digest(payload: bytes) -> dict[str, object]:
         "sha256": hashlib.sha256(payload).hexdigest(),
         "byte_count": len(payload),
     }
+
+
+def _empty_artifact() -> _BoundedTextArtifact:
+    return _BoundedTextArtifact(text="", sha256="0" * 64, byte_count=0)
 
 
 def test_pairwise_digest_mode_binds_exact_input_bytes_without_paths(tmp_path, capsys):
@@ -247,3 +261,47 @@ def test_module_entrypoint_emits_utf8_v2_evidence_under_ascii_locale(tmp_path):
     payload = json.loads(completed.stdout.decode("utf-8"))
     assert payload["schema_version"] == FAMILY_OUTPUT_SCHEMA_VERSION_V2
     assert payload["artifacts"]["candidates"][0]["candidate_id"] == "모델"
+
+
+@pytest.mark.parametrize(
+    ("projector", "message"),
+    [
+        (_artifact_digest_to_dict, "bounded text artifact"),
+        (_pairwise_artifacts_to_dict, "pairwise artifact evidence"),
+    ],
+)
+def test_digest_projectors_reject_wrong_evidence_types(projector, message):
+    with pytest.raises(ValueError, match=message):
+        projector(SimpleNamespace())
+
+
+def test_family_digest_projector_rejects_wrong_evidence_type():
+    report = compare_trec_run_family(
+        BASELINE_BYTES.decode(),
+        {"candidate": CANDIDATE_BYTES.decode()},
+        QRELS_BYTES.decode(),
+        cutoff=1,
+    )
+
+    with pytest.raises(ValueError, match="family artifact evidence"):
+        _family_artifacts_to_dict(report, SimpleNamespace())
+
+
+def test_family_digest_projector_requires_report_candidate_order():
+    report = compare_trec_run_family(
+        BASELINE_BYTES.decode(),
+        {"candidate": CANDIDATE_BYTES.decode()},
+        QRELS_BYTES.decode(),
+        cutoff=1,
+    )
+    artifact = _empty_artifact()
+    evidence = _FamilyArtifactEvidence(
+        baseline_run=artifact,
+        qrels=artifact,
+        candidates=(
+            _NamedArtifactEvidence(candidate_id="wrong", artifact=artifact),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="must match report order"):
+        _family_artifacts_to_dict(report, evidence)
