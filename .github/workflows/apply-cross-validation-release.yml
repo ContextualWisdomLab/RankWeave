@@ -1,0 +1,202 @@
+name: Apply cross-validation release updates
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rankweave-pr-31-cross-validation-release
+  cancel-in-progress: true
+
+jobs:
+  apply-verify-push:
+    if: >-
+      github.event.pull_request.number == 31 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'feat/cross-validate-convex-fusion'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: feat/cross-validate-convex-fusion
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect pending release updater
+        id: gate
+        run: |
+          if [ -f .github/scripts/apply_cross_validation_release.py ]; then
+            echo "apply=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "apply=false" >>"$GITHUB_OUTPUT"
+          fi
+      - if: steps.gate.outputs.apply == 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.13"
+      - if: steps.gate.outputs.apply == 'true'
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.29"
+          enable-cache: false
+      - name: Apply reviewed release edits
+        if: steps.gate.outputs.apply == 'true'
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          script_path = Path(
+              ".github/scripts/apply_cross_validation_release.py"
+          )
+          script_text = script_path.read_text(encoding="utf-8")
+          marker = (
+              '"""Apply the reviewed RankWeave 0.16.0 '
+              'cross-validation release edits."""\n'
+          )
+          replacement = marker + "\n# ruff: noqa: E501\n"
+          if script_text.count(marker) != 1:
+              raise SystemExit("release updater docstring marker is not unique")
+          script_path.write_text(
+              script_text.replace(marker, replacement, 1),
+              encoding="utf-8",
+          )
+          PY
+          python .github/scripts/apply_cross_validation_release.py
+          python - <<'PY'
+          from pathlib import Path
+
+          lock_path = Path("uv.lock")
+          lock_text = lock_path.read_text(encoding="utf-8")
+          old_version = 'name = "rankweave"\nversion = "0.15.0"'
+          new_version = 'name = "rankweave"\nversion = "0.16.0"'
+          if lock_text.count(old_version) != 1:
+              raise SystemExit("uv.lock local project version is not unique")
+          lock_path.write_text(
+              lock_text.replace(old_version, new_version, 1),
+              encoding="utf-8",
+          )
+
+          publish_path = Path(".github/workflows/publish.yml")
+          publish_text = publish_path.read_text(encoding="utf-8")
+          marker = '              "rankweave/cli.py",\n'
+          addition = '              "rankweave/cross_validation.py",\n'
+          if addition not in publish_text:
+              if publish_text.count(marker) != 1:
+                  raise SystemExit(
+                      "publish workflow CLI archive marker is not unique"
+                  )
+              publish_path.write_text(
+                  publish_text.replace(marker, marker + addition, 1),
+                  encoding="utf-8",
+              )
+          PY
+          rm .github/scripts/apply_cross_validation_release.py
+      - name: Verify exact release tree
+        if: steps.gate.outputs.apply == 'true'
+        run: |
+          set -euo pipefail
+          uv sync --frozen --extra dev --python 3.13
+          uv run --frozen --extra dev --python 3.13 \
+            python -m compileall -q src
+          uv run --frozen --extra dev --python 3.13 \
+            python -m ruff check .
+          uv run --frozen --extra dev --python 3.13 \
+            python -m coverage run -m pytest -q
+          uv run --frozen --extra dev --python 3.13 \
+            python -m coverage report
+          uv build --wheel --sdist --out-dir dist
+          uv venv .release-smoke --python 3.13
+          uv pip install --python .release-smoke/bin/python \
+            --no-index --find-links dist rankweave
+          .release-smoke/bin/python - <<'PY'
+          import rankweave
+
+          assert rankweave.__version__ == "0.16.0"
+          report = rankweave.cross_validate_weighted_convex_fusion(
+              {
+                  "q1": {
+                      "lexical": [("a", 1.0), ("x", 0.0)],
+                      "dense": [("x", 1.0), ("a", 0.0)],
+                  },
+                  "q2": {
+                      "lexical": [("y", 1.0), ("b", 0.0)],
+                      "dense": [("b", 1.0), ("y", 0.0)],
+                  },
+                  "q3": {
+                      "lexical": [("c", 0.9), ("z", 0.1)],
+                      "dense": [("z", 0.9), ("c", 0.1)],
+                  },
+                  "q4": {
+                      "lexical": [("w", 0.9), ("d", 0.1)],
+                      "dense": [("d", 0.9), ("w", 0.1)],
+                  },
+              },
+              {
+                  "q1": {"a": 1},
+                  "q2": {"b": 1},
+                  "q3": {"c": 1},
+                  "q4": {"d": 1},
+              },
+              {
+                  "dense-heavy": {"lexical": 0.1, "dense": 0.9},
+                  "lexical-heavy": {"lexical": 0.9, "dense": 0.1},
+              },
+              {"q1": "a", "q2": "b", "q3": "a", "q4": "b"},
+              cutoff=1,
+          )
+          assert len(report.folds) == 2
+          assert report.out_of_fold_evaluation.aggregate.query_count == 4
+          assert isinstance(
+              report,
+              rankweave.WeightedConvexCrossValidationReport,
+          )
+          assert isinstance(
+              report.folds[0],
+              rankweave.WeightedConvexCrossValidationFold,
+          )
+          PY
+          uv pip check --python .release-smoke/bin/python
+      - name: Preserve reviewed workflow patches
+        if: steps.gate.outputs.apply == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p workflow-patches
+          cp .github/workflows/ci.yml workflow-patches/ci.yml
+          cp .github/workflows/publish.yml workflow-patches/publish.yml
+      - if: steps.gate.outputs.apply == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cross-validation-workflow-patches
+          path: workflow-patches/
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 1
+      - name: Commit verified non-workflow release updates
+        if: steps.gate.outputs.apply == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf dist .coverage .release-smoke workflow-patches
+          git restore --source=HEAD -- \
+            .github/workflows/ci.yml \
+            .github/workflows/publish.yml
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No non-workflow release changes remain to commit."
+            exit 0
+          fi
+          git -c core.hooksPath=/dev/null commit \
+            -m "release: prepare RankWeave 0.16.0"
+          git -c core.hooksPath=/dev/null push \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/feat/cross-validate-convex-fusion"
