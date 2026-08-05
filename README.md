@@ -168,6 +168,43 @@ precision, recall, reciprocal rank, and nDCG; supported alternatives are
 A p-value is not an effect-size or business-value threshold. Report the observed
 mean difference and per-query evidence with the p-value.
 
+## Tune a fixed convex score-fusion policy
+
+```python
+from rankweave import tune_weighted_convex_fusion
+
+report = tune_weighted_convex_fusion(
+    {
+        "query-a": {
+            "lexical": [("a", 1.0), ("b", 0.0)],
+            "dense": [("b", 1.0), ("a", 0.0)],
+        },
+        "query-b": {
+            "lexical": [("c", 0.9), ("d", 0.1)],
+            "dense": [("d", 0.9), ("c", 0.1)],
+        },
+    },
+    {
+        "query-a": {"a": 3},
+        "query-b": {"c": 3},
+    },
+    {
+        "dense-heavy": {"lexical": 0.1, "dense": 0.9},
+        "lexical-heavy": {"lexical": 0.9, "dense": 0.1},
+    },
+    cutoff=1,
+)
+
+assert report.best_policy_id == "lexical-heavy"
+```
+
+The caller defines the finite policy family before inspecting validation
+results. Every trial retains its complete immutable evaluation, and the first
+policy wins an exact objective tie. Freeze the selected weights and evaluate
+them once on an independent held-out test set before reporting final quality.
+
+See [Convex score-fusion policy tuning](docs/convex-fusion-tuning.md).
+
 ## Tune a fixed weighted-RRF policy
 
 ```python
@@ -486,7 +523,7 @@ Apache-2.0 — see [LICENSE](LICENSE).
 
 ## Verify persisted artifact evidence
 
-RankWeave 0.14.0 can compare explicit local files with the unsigned SHA-256 and raw byte-count evidence in a persisted v2 report without exposing file paths or payloads:
+RankWeave 0.15.0 can compare explicit local files with the unsigned SHA-256 and raw byte-count evidence in a persisted v2 report without exposing file paths or payloads:
 
 ```bash
 rankweave verify-artifacts \
@@ -505,7 +542,7 @@ RankWeave releases are built from the exact published GitHub Release tag, tested
 After a version has been published and independently verified, install it from PyPI:
 
 ```bash
-python -m pip install rankweave==0.14.0
+python -m pip install rankweave==0.15.0
 ```
 
 Before the first Trusted Publisher is configured or when a version has not been published, use a reviewed source checkout instead of assuming that the PyPI name is owned by this project. See [`docs/releasing.md`](docs/releasing.md) for the exact publisher identity, release procedure, and GitHub/PyPI attestation verification boundaries.

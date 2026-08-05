@@ -40,7 +40,7 @@ uv run --frozen --extra dev --python 3.13 python -m coverage report
 uv build --wheel --sdist --out-dir dist
 ```
 
-The versioned release tag is exactly `v${version}`. For RankWeave 0.14.0, the only accepted tag is `v0.14.0`. The publishing workflow rejects non-canonical tags, prerelease objects, any mismatch between the release event commit and the checked-out tag, tags whose commit is not reachable from the default branch, and mismatches among the tag, `pyproject.toml`, and the public package version.
+The versioned release tag is exactly `v${version}`. For RankWeave 0.15.0, the only accepted tag is `v0.15.0`. The publishing workflow rejects non-canonical tags, prerelease objects, any mismatch between the release event commit and the checked-out tag, tags whose commit is not reachable from the default branch, and mismatches among the tag, `pyproject.toml`, and the public package version.
 
 ## Publication flow
 
@@ -69,10 +69,10 @@ A failed re-publication is not silently skipped. PyPI versions are immutable; co
 Download the exact wheel and source distribution from PyPI before verifying them. An authorized repository operator may alternatively download the short-lived `rankweave-distributions` artifact from the successful publication workflow run during its retention window. Verify GitHub's build provenance against this repository:
 
 ```bash
-gh attestation verify path/to/rankweave-0.14.0-py3-none-any.whl \
+gh attestation verify path/to/rankweave-0.15.0-py3-none-any.whl \
   --repo ContextualWisdomLab/RankWeave
 
-gh attestation verify path/to/rankweave-0.14.0.tar.gz \
+gh attestation verify path/to/rankweave-0.15.0.tar.gz \
   --repo ContextualWisdomLab/RankWeave
 ```
 

@@ -1,4 +1,4 @@
-"""Deterministic offline tuning for weighted rank-fusion policies."""
+"""Deterministic offline tuning for fixed retrieval-fusion policies."""
 
 from collections.abc import Hashable, Mapping, Sequence
 from dataclasses import dataclass
@@ -6,7 +6,10 @@ from typing import Generic, TypeVar
 
 from rankweave._validation import _require_positive_integer
 from rankweave.evaluation import RankingEvaluationReport, evaluate_rankings
-from rankweave.ranked_list_fusion import weighted_reciprocal_rank_fuse
+from rankweave.ranked_list_fusion import (
+    weighted_convex_fuse,
+    weighted_reciprocal_rank_fuse,
+)
 
 ItemIdentifier = TypeVar("ItemIdentifier", bound=Hashable)
 PolicyIdentifier = TypeVar("PolicyIdentifier", bound=Hashable)
@@ -25,6 +28,30 @@ SUPPORTED_TUNING_OBJECTIVES = frozenset(
         MEAN_PRECISION_OBJECTIVE,
     }
 )
+
+
+@dataclass(frozen=True)
+class WeightedConvexTuningTrial(Generic[PolicyIdentifier, QueryIdentifier]):
+    """One scored-channel weight policy and its evaluation evidence."""
+
+    policy_id: PolicyIdentifier
+    channel_weights: tuple[tuple[str, float], ...]
+    objective_score: float
+    evaluation: RankingEvaluationReport[QueryIdentifier]
+
+
+@dataclass(frozen=True)
+class WeightedConvexTuningReport(Generic[PolicyIdentifier, QueryIdentifier]):
+    """All scored-fusion trials plus the deterministic best policy."""
+
+    cutoff: int
+    objective_name: str
+    trials: tuple[
+        WeightedConvexTuningTrial[PolicyIdentifier, QueryIdentifier], ...
+    ]
+    best_policy_id: PolicyIdentifier
+    best_channel_weights: tuple[tuple[str, float], ...]
+    best_objective_score: float
 
 
 @dataclass(frozen=True)
@@ -50,6 +77,94 @@ class WeightedRRFTuningReport(Generic[PolicyIdentifier, QueryIdentifier]):
     best_policy_id: PolicyIdentifier
     best_channel_weights: tuple[tuple[str, float], ...]
     best_objective_score: float
+
+
+def tune_weighted_convex_fusion(
+    channel_results_by_query: Mapping[
+        QueryIdentifier,
+        Mapping[str, Sequence[tuple[ItemIdentifier, float]]],
+    ],
+    relevance_by_query: Mapping[
+        QueryIdentifier, Mapping[ItemIdentifier, float]
+    ],
+    candidate_channel_weights: Mapping[
+        PolicyIdentifier, Mapping[str, float]
+    ],
+    *,
+    cutoff: int,
+    objective_name: str = MEAN_NDCG_OBJECTIVE,
+) -> WeightedConvexTuningReport[PolicyIdentifier, QueryIdentifier]:
+    """Select a fixed convex score-fusion policy on validation queries.
+
+    Each candidate maps a caller-defined policy identifier to convex channel
+    weights. For every policy, RankWeave fuses every normalized scored result
+    list, evaluates the resulting rankings, and records the full immutable
+    report. The first candidate wins exact objective ties, making selection
+    deterministic for an insertion-ordered policy mapping.
+
+    This function neither generates a weight grid nor normalizes provider
+    scores. Inputs must already satisfy the ``weighted_convex_fuse`` contract.
+    Callers should define the policy family before inspecting validation
+    outcomes and evaluate the selected policy once on a separate held-out test
+    set before reporting final effectiveness.
+    """
+    validated_cutoff = _require_positive_integer(cutoff, "cutoff")
+    if objective_name not in SUPPORTED_TUNING_OBJECTIVES:
+        raise ValueError(
+            "objective_name must be one of "
+            f"{sorted(SUPPORTED_TUNING_OBJECTIVES)!r}"
+        )
+    if not candidate_channel_weights:
+        raise ValueError("tuning requires at least one candidate policy")
+
+    # Validate the query universe and judgments before evaluating policies.
+    evaluate_rankings(
+        {query_id: () for query_id in channel_results_by_query},
+        relevance_by_query,
+        cutoff=validated_cutoff,
+    )
+
+    trials = []
+    for policy_id, channel_weights in candidate_channel_weights.items():
+        fused_rankings_by_query = {
+            query_id: tuple(
+                fused_item.item_id
+                for fused_item in weighted_convex_fuse(
+                    channel_results,
+                    channel_weights,
+                    limit=validated_cutoff,
+                )
+            )
+            for query_id, channel_results in channel_results_by_query.items()
+        }
+        evaluation = evaluate_rankings(
+            fused_rankings_by_query,
+            relevance_by_query,
+            cutoff=validated_cutoff,
+        )
+        objective_score = getattr(evaluation.aggregate, objective_name)
+        trials.append(
+            WeightedConvexTuningTrial(
+                policy_id=policy_id,
+                channel_weights=tuple(channel_weights.items()),
+                objective_score=objective_score,
+                evaluation=evaluation,
+            )
+        )
+
+    best_trial = trials[0]
+    for trial in trials[1:]:
+        if trial.objective_score > best_trial.objective_score:
+            best_trial = trial
+
+    return WeightedConvexTuningReport(
+        cutoff=validated_cutoff,
+        objective_name=objective_name,
+        trials=tuple(trials),
+        best_policy_id=best_trial.policy_id,
+        best_channel_weights=best_trial.channel_weights,
+        best_objective_score=best_trial.objective_score,
+    )
 
 
 def tune_weighted_reciprocal_rank_fusion(

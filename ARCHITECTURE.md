@@ -48,13 +48,23 @@ scientific validity.
 - `ranked_list_fusion.py` — complete-list fusion and contribution evidence.
 - `evaluation.py` — precision, recall, reciprocal rank, and graded nDCG.
 - `comparison.py` — exact and deterministic Monte Carlo paired randomization.
-- `tuning.py` — validation-set weighted-RRF policy selection.
+- `tuning.py` — validation-set convex-score and weighted-RRF policy selection.
 - `trec.py` — strict TREC parsing, formatting, and evaluation.
 - `trec_comparison.py` — direct pairwise TREC comparison orchestration.
 - `trec_family_comparison.py` — ordered family comparison and Holm correction.
 - `cli.py` — bounded local-file and UTF-8 JSON transport adapter.
 - `report_schemas.py` — stable schema discovery and package-resource loading.
 - `schemas/` — Draft 2020-12 report contracts shipped in the wheel.
+
+## Offline policy-selection boundary
+
+`tuning.py` defines deterministic experiment orchestration, not a second fusion
+or metric engine. Convex score policies delegate to `weighted_convex_fuse`;
+weighted-RRF policies delegate to `weighted_reciprocal_rank_fuse`; both delegate
+all effectiveness calculation to `evaluate_rankings`. Candidate insertion order
+is preserved as the exact tie breaker, and every trial retains its complete
+immutable evaluation. Grid generation, score normalization, validation splits,
+cross-validation, and final held-out inference remain caller responsibilities.
 
 ## Compatibility and release policy
 
