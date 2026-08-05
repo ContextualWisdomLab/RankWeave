@@ -1,9 +1,9 @@
 # Research grounding — RankWeave
 
 RankWeave's defaults, metric conventions, significance comparison, tuning
-workflow, and interchange contracts are tied to published evidence or an
-authoritative reference implementation. This directory preserves that
-grounding with the code.
+workflow, interchange contracts, and autonomous-delivery boundaries are tied
+to published evidence or an authoritative reference implementation. This
+directory preserves that grounding with the code.
 
 ## Papers
 
@@ -29,6 +29,13 @@ redistribution permission is confirmed. Git LFS is intentionally not required.
   `DOCUMENT`, and `RELEVANCY`.
 - **NIST TREC run submission guidance** defines the six fields `topicid`, `Q0`,
   `docid`, `rank`, `score`, and `run-tag`, and documents score-order evaluation.
+- **RFC 8259** requires interoperable JSON exchanged outside a closed ecosystem
+  to use UTF-8 and grounds the CLI's locale-independent byte transport.
+- **SLSA v1.2 Source Track** covers source authoring, review, and source-management
+  threats and grounds the separation between maintainer-owned control policy and
+  bounded autonomous product changes.
+- **GitHub Actions OIDC reference** defines the `id-token: write` permission and
+  the runner request variables used to obtain a short-lived OIDC token.
 
 ## Fusion defaults
 
@@ -174,7 +181,31 @@ exact query-set parity gate as the native evaluation API.
 Detailed operational behavior is documented in
 [`docs/trec-interoperability.md`](../trec-interoperability.md).
 
+## Autonomous source and credential boundaries
+
+The hourly product-development workflow treats model-authored source and tests
+as untrusted input. `AGENTS.md`, workflows, security files, ownership policy,
+and repository metadata are maintainer-owned source-management controls and are
+excluded from autonomous edit permissions and accepted diffs. This boundary is
+consistent with the SLSA v1.2 Source Track's focus on authoring, review, and
+source-management threats; RankWeave does not claim a SLSA level solely from
+these local controls.
+
+After deterministic validation, the workflow rechecks the open-PR queue and
+exact base revision before requesting a short-lived OIDC-derived GitHub App
+token. It repeats both checks immediately before mutation. GitHub's OIDC
+reference establishes the token-request permission and request mechanism; the
+two precondition checks are RankWeave's additional single-flight and TOCTOU
+controls.
+
+The CLI serializes JSON with `ensure_ascii=False` and writes the resulting bytes
+as UTF-8 directly to stdout. This implements RFC 8259's interoperable encoding
+requirement independently of locale-specific text-stream encodings.
+
 ## References (APA 7th edition)
+
+Bray, T. (Ed.). (2017). *The JavaScript Object Notation (JSON) Data Interchange
+Format* (RFC 8259). RFC Editor. https://doi.org/10.17487/RFC8259
 
 Bruch, S., Gai, S., & Ingber, A. (2024). An analysis of fusion functions for
 hybrid retrieval. *ACM Transactions on Information Systems, 42*(1), Article 20,
@@ -185,6 +216,9 @@ outperforms Condorcet and individual rank learning methods. In *Proceedings of
 the 32nd International ACM SIGIR Conference on Research and Development in
 Information Retrieval* (pp. 758–759). Association for Computing Machinery.
 https://doi.org/10.1145/1571941.1572114
+
+GitHub. (n.d.). *OpenID Connect reference*. GitHub Docs. Retrieved August 5,
+2026, from https://docs.github.com/en/actions/reference/security/oidc
 
 Holm, S. (1979). A simple sequentially rejective multiple test procedure.
 *Scandinavian Journal of Statistics, 6*(2), 65–70.
@@ -201,6 +235,9 @@ Multimodal multilingual modularized reciprocal rank fusion. In *Proceedings of
 the 48th International ACM SIGIR Conference on Research and Development in
 Information Retrieval* (pp. 4004–4009). Association for Computing Machinery.
 https://doi.org/10.1145/3726302.3730157
+
+SLSA Community. (2025). *Supply-chain Levels for Software Artifacts
+specification* (Version 1.2). https://slsa.dev/spec/v1.2/
 
 Smucker, M. D., Allan, J., & Carterette, B. (2007). A comparison of statistical
 significance tests for information retrieval evaluation. In *Proceedings of the
