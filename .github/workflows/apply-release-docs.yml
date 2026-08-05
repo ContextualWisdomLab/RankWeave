@@ -36,23 +36,21 @@ jobs:
         run: |
           set -euo pipefail
           python .github/scripts/apply_release_docs.py
+          rm .github/scripts/apply_release_docs.py
           uv sync --frozen --extra dev --python 3.13
           uv run --frozen --extra dev --python 3.13 \
-            python -m ruff check --fix \
-            .github/scripts/apply_release_docs.py \
-            tests/test_publish_workflow.py
+            python -m ruff check --fix tests/test_publish_workflow.py
           uv run --frozen --extra dev --python 3.13 \
             python -m ruff check .
           uv run --frozen --extra dev --python 3.13 \
             python -m coverage run -m pytest -q
           uv run --frozen --extra dev --python 3.13 \
             python -m coverage report
-      - name: Commit verified documentation and remove the updater
+      - name: Commit verified documentation and updater removal
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          rm .github/scripts/apply_release_docs.py
           git config user.name "github-actions[bot]"
           git config user.email \
             "41898282+github-actions[bot]@users.noreply.github.com"
