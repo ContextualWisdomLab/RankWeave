@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.31.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "rankweave"
-version = "0.12.0"
+version = "0.13.0"
 description = "Dependency-free retrieval fusion, evaluation, family-wise statistical comparison, policy tuning, TREC benchmarking, and auditable CLI workflows."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -29,6 +29,7 @@ keywords = [
     "benchmark-comparison",
     "command-line-interface",
     "interoperability",
+    "json-schema",
     "ndcg",
     "dense-retrieval",
     "lexical-retrieval",
@@ -57,11 +58,15 @@ Issues = "https://github.com/ContextualWisdomLab/rankweave/issues"
 
 [project.optional-dependencies]
 dev = [
-    "coverage[toml]>=7.6",
-    "pytest>=8",
-    "ruff>=0.6",
-    "tomli>=2",
+    "coverage[toml]==7.15.2",
+    "jsonschema==4.26.0",
+    "pytest==9.1.1",
+    "ruff==0.15.22",
+    "tomli==2.4.1",
 ]
+
+[tool.uv]
+required-version = "==0.11.29"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rankweave"]

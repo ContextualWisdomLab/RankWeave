@@ -73,6 +73,12 @@ from rankweave.ranked_list_fusion import (
     weighted_convex_fuse,
     weighted_reciprocal_rank_fuse,
 )
+from rankweave.report_schemas import (
+    ReportSchemaDescriptor,
+    available_report_schemas,
+    load_report_schema,
+    load_report_schema_text,
+)
 from rankweave.score_fusion import (
     CONVEX_COMBINATION_STRATEGY,
     COSINE_DISTANCE_THEORETICAL_BOUNDS,
@@ -117,7 +123,7 @@ from rankweave.tuning import (
     tune_weighted_reciprocal_rank_fusion,
 )
 
-__version__ = "0.12.0"
+__version__ = "0.13.0"
 
 __all__ = [
     "AggregateRankingMetrics",
@@ -150,6 +156,7 @@ __all__ = [
     "RankingComparisonReport",
     "RankingEvaluationReport",
     "RankingMetrics",
+    "ReportSchemaDescriptor",
     "SUPPORTED_COMPARISON_ALTERNATIVES",
     "SUPPORTED_COMPARISON_METRICS",
     "SUPPORTED_TUNING_OBJECTIVES",
@@ -166,6 +173,7 @@ __all__ = [
     "WeightedRRFTuningReport",
     "WeightedRRFTuningTrial",
     "WeightedRankContribution",
+    "available_report_schemas",
     "compare_ranking_reports",
     "compare_rankings",
     "compare_trec_run_family",
@@ -177,6 +185,8 @@ __all__ = [
     "format_trec_qrels",
     "format_trec_run",
     "fuse_channel_scores",
+    "load_report_schema",
+    "load_report_schema_text",
     "normalize_search_text",
     "parse_trec_qrels",
     "parse_trec_run",

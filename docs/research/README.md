@@ -31,6 +31,9 @@ redistribution permission is confirmed. Git LFS is intentionally not required.
   `docid`, `rank`, `score`, and `run-tag`, and documents score-order evaluation.
 - **FIPS 180-4** defines SHA-256, which RankWeave uses for exact bounded-input
   byte evidence.
+- **JSON Schema Core and Validation Draft 2020-12** define the media type,
+  vocabularies, structural assertion keywords, and meta-schema used by the
+  packaged report contracts.
 - **RFC 8259** requires interoperable JSON exchanged outside a closed ecosystem
   to use UTF-8 and grounds the CLI's locale-independent byte transport.
 - **SLSA v1.2 Source Track** covers source authoring, review, and
@@ -211,6 +214,26 @@ The established v1 schemas remain the default. Artifact evidence requires the
 explicit flag and v2 schema identifier so strict consumers never receive a
 silent field-set change.
 
+## Machine-readable report contracts
+
+RankWeave packages four strict JSON Schema Draft 2020-12 documents describing
+the established pairwise and candidate-family v1/v2 report structures. The
+Core specification defines schema identification, references, vocabularies,
+and annotation behavior; the Validation specification defines the assertion
+keywords used for types, required properties, numeric domains, arrays, enums,
+constants, and string patterns.
+
+The schemas set `additionalProperties: false` on report objects and constrain
+known metric, alternative, randomization-method, SHA-256, and byte-count
+domains. Cross-field invariants such as candidate-count equality, candidate
+ordering, and query alignment remain documented with `$comment` because a
+portable schema cannot express all domain semantics. RankWeave generation and
+statistical APIs continue to enforce those invariants.
+
+Schema validation is a structural compatibility check only. It neither
+authenticates a producer, recomputes a digest, proves trusted execution, nor
+assesses whether an experimental design supports the reported inference.
+
 ## Autonomous source and credential boundaries
 
 The hourly product-development workflow treats model-authored source and tests
@@ -236,6 +259,15 @@ requirement independently of locale-specific text-stream encodings.
 
 Bray, T. (Ed.). (2017). *The JavaScript Object Notation (JSON) Data Interchange
 Format* (RFC 8259). RFC Editor. https://doi.org/10.17487/RFC8259
+
+Wright, A., Andrews, H., Hutton, B., & Dennis, G. (2022). *JSON Schema: A
+media type for describing JSON documents* (Draft 2020-12). JSON Schema.
+https://json-schema.org/draft/2020-12/json-schema-core.html
+
+Wright, A., Andrews, H., Hutton, B., & Dennis, G. (2022). *JSON Schema
+validation: A vocabulary for structural validation of JSON* (Draft 2020-12).
+JSON Schema.
+https://json-schema.org/draft/2020-12/json-schema-validation.html
 
 Bruch, S., Gai, S., & Ingber, A. (2024). An analysis of fusion functions for
 hybrid retrieval. *ACM Transactions on Information Systems, 42*(1), Article 20,
