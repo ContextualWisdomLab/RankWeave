@@ -111,7 +111,8 @@ def test_build_job_checks_exact_tag_version_and_complete_quality_gate():
     assert "python -m coverage run -m pytest -q" in build_block
     assert "python -m coverage report" in build_block
     assert "uv build --wheel --sdist --out-dir dist" in build_block
-    assert "exactly one wheel and one source distribution" in build_block
+    assert "release must contain exactly one wheel and one " in build_block
+    assert '"source distribution"' in build_block
     assert "rankweave/schemas/artifact-verification-v1.schema.json" in build_block
     assert "CHANGELOG.md" in build_block
 
