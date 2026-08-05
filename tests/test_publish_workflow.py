@@ -85,12 +85,18 @@ def test_publish_workflow_separates_jobs_and_handoffs_one_artifact():
         build_block.index("uv build --wheel --sdist --out-dir dist")
     )
     assert "name: rankweave-distributions" in build_block
-    assert "path: dist/" in build_block
+    assert (
+        "path: |\n"
+        "            dist/\n"
+        "            release-handoff/SHA256SUMS"
+    ) in build_block
     assert "if-no-files-found: error" in build_block
     assert "include-hidden-files: false" in build_block
     assert "retention-days: 7" in build_block
     assert "name: rankweave-distributions" in provenance_block
+    assert "path: handoff/" in provenance_block
     assert "name: rankweave-distributions" in publish_block
+    assert "path: handoff/" in publish_block
     assert "digest-mismatch:" not in workflow_text
 
 
@@ -104,7 +110,8 @@ def test_distribution_handoff_is_checksum_verified_before_use():
         "manifest-sha256: ${{ steps.distributions.outputs.manifest-sha256 }}"
         in build_block
     )
-    assert "sha256sum *.whl *.tar.gz > SHA256SUMS" in build_block
+    assert ") > release-handoff/SHA256SUMS" in build_block
+    assert "sha256sum release-handoff/SHA256SUMS" in build_block
     assert "manifest-sha256=%s" in build_block
     for job_block in (provenance_block, publish_block):
         assert "Verify immutable distribution handoff" in job_block
@@ -112,10 +119,17 @@ def test_distribution_handoff_is_checksum_verified_before_use():
             "EXPECTED_MANIFEST_SHA256: "
             "${{ needs.build.outputs.manifest-sha256 }}"
         ) in job_block
-        assert "dist/SHA256SUMS | sha256sum --check --strict -" in job_block
-        assert "sha256sum --check --strict SHA256SUMS" in job_block
-    assert "dist/*.whl" in provenance_block
-    assert "dist/*.tar.gz" in provenance_block
+        assert "handoff/release-handoff/SHA256SUMS" in job_block
+        assert "sha256sum --check --strict -" in job_block
+        assert "cd handoff/dist" in job_block
+        assert (
+            "sha256sum --check --strict ../release-handoff/SHA256SUMS"
+            in job_block
+        )
+    assert "handoff/dist/*.whl" in provenance_block
+    assert "handoff/dist/*.tar.gz" in provenance_block
+    assert "packages-dir: handoff/dist/" in publish_block
+    assert "packages-dir: dist/" not in publish_block
 
 
 def test_build_job_checks_exact_release_identity_and_default_branch_reachability():
@@ -173,6 +187,7 @@ def test_release_jobs_use_least_privilege_and_protected_environment():
         "      contents: read\n"
         "      id-token: write\n"
         "      attestations: write\n"
+        "      artifact-metadata: write\n"
     ) in provenance_block
     assert "permissions:\n      id-token: write\n" in publish_block
     assert "contents: write" not in workflow_text
