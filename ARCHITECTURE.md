@@ -1,0 +1,65 @@
+# RankWeave Architecture
+
+## Purpose
+
+RankWeave is a dependency-free Python library and command-line component for
+retrieval-score fusion, ranking evaluation, paired and candidate-family
+comparison, policy tuning, strict TREC interchange, and auditable report
+transport. It operates as a standalone package and as a bounded module inside
+naruon or another service-oriented system.
+
+## Architectural boundaries
+
+1. **Pure calculation core** — fusion, evaluation, randomization, Holm
+   correction, and tuning accept in-memory values and perform no network,
+   database, provider, or filesystem access.
+2. **Interchange adapters** — TREC parsers and formatters convert strict text
+   artifacts to immutable domain records.
+3. **Transport adapters** — the CLI performs bounded local reads and delegates
+   all statistical work to the public Python APIs.
+4. **Contract resources** — packaged JSON Schema Draft 2020-12 documents publish
+   the exact pairwise and candidate-family v1/v2 JSON structures without adding
+   a runtime validator dependency.
+5. **Governed delivery** — repository workflows call immutable central `.github`
+   review and merge workflows. The hourly product loop uses a hash-pinned
+   OpenCode executable and `NVIDIA_NIM_API_KEY`; it does not use
+   `COPILOT_GITHUB_TOKEN`.
+
+## Data flow
+
+```text
+local run and qrels artifacts
+  -> bounded strict-UTF-8 adapter
+  -> immutable TREC records
+  -> evaluation and statistical comparison core
+  -> versioned JSON projection
+  -> optional exact-byte SHA-256 evidence
+  -> packaged machine-readable schema validation by the consumer
+```
+
+The default v1 transports remain stable. Opt-in v2 transports add path-free
+artifact digests. Machine-readable schema resources describe both versions but
+do not authenticate producers, verify external artifact bytes, or establish
+scientific validity.
+
+## Module map
+
+- `score_fusion.py` — scalar fusion primitives.
+- `ranked_list_fusion.py` — complete-list fusion and contribution evidence.
+- `evaluation.py` — precision, recall, reciprocal rank, and graded nDCG.
+- `comparison.py` — exact and deterministic Monte Carlo paired randomization.
+- `tuning.py` — validation-set weighted-RRF policy selection.
+- `trec.py` — strict TREC parsing, formatting, and evaluation.
+- `trec_comparison.py` — direct pairwise TREC comparison orchestration.
+- `trec_family_comparison.py` — ordered family comparison and Holm correction.
+- `cli.py` — bounded local-file and UTF-8 JSON transport adapter.
+- `report_schemas.py` — stable schema discovery and package-resource loading.
+- `schemas/` — Draft 2020-12 report contracts shipped in the wheel.
+
+## Compatibility and release policy
+
+Public behavior changes are additive unless a new transport schema identifier is
+introduced. A release synchronizes package metadata, public version, version
+tests, installed-wheel assertions, documentation, and `CHANGELOG.md`. Every
+production statement and branch, plus every public module, class, function, and
+method docstring, remains covered by the repository quality gates.
