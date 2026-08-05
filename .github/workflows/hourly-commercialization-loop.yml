@@ -428,6 +428,7 @@ jobs:
               },
               "edit": {
                 "*": "allow",
+                "AGENTS.md": "deny",
                 ".github/**": "deny",
                 ".git/**": "deny",
                 ".agent-red-output.txt": "deny",
@@ -466,7 +467,7 @@ jobs:
           and standalone plus naruon-import use. Do not edit anything under .github/
           or any security, credential, ownership, or workflow policy file.
 
-          Update CHANGELOG.md, README.md, AGENTS.md, relevant product or operations
+          Update CHANGELOG.md, README.md, relevant product or operations
           documentation, package smoke contracts, and version metadata only when the
           slice is release-ready. Keep all papers in APA 7th edition and do not add a
           statistical or standards claim without a primary source already recorded in
@@ -571,10 +572,14 @@ jobs:
                   f"autonomous change count {len(changed)} exceeds {max_files}"
               )
 
-          forbidden_exact = {".gitmodules", "CODEOWNERS", "SECURITY.md"}
+          forbidden_exact = {
+              ".gitmodules",
+              "AGENTS.md",
+              "CODEOWNERS",
+              "SECURITY.md",
+          }
           forbidden_prefixes = (".github/", ".git/")
           allowed_exact = {
-              "AGENTS.md",
               "CHANGELOG.md",
               "README.md",
               "pyproject.toml",
@@ -804,9 +809,38 @@ jobs:
               raise SystemExit("validation mutated the proposed working tree")
           PY
 
+      - name: Recheck queue and base before token exchange
+        id: mutation_preflight
+        if: steps.gate.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          open_pr_count="$(
+            gh api "/repos/${TARGET_REPOSITORY}/pulls?state=open&per_page=1" \
+              --jq 'length'
+          )"
+          if [ "$open_pr_count" -ne 0 ]; then
+            echo "Another pull request acquired the queue before token exchange."
+            echo "eligible=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          current_base_sha="$(
+            gh api "/repos/${TARGET_REPOSITORY}/commits/${BASE_BRANCH}" \
+              --jq '.sha'
+          )"
+          if [ "$current_base_sha" != "$AUTOMATION_BASE_SHA" ]; then
+            echo "The base branch moved before token exchange."
+            echo "eligible=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "eligible=true" >>"$GITHUB_OUTPUT"
+
       - name: Exchange an OpenCode app token for generated PR events
         id: generated_pr_token
-        if: steps.gate.outputs.eligible == 'true'
+        if: steps.mutation_preflight.outputs.eligible == 'true'
         env:
           OIDC_AUDIENCE: opencode-github-action
           OPENCODE_API_BASE_URL: https://api.opencode.ai
@@ -848,7 +882,7 @@ jobs:
           echo "token=$app_token" >>"$GITHUB_OUTPUT"
 
       - name: Open exactly one focused pull request
-        if: steps.gate.outputs.eligible == 'true'
+        if: steps.mutation_preflight.outputs.eligible == 'true'
         env:
           GH_TOKEN: ${{ steps.generated_pr_token.outputs.token }}
         run: |
