@@ -241,7 +241,7 @@ def test_release_documentation_records_exact_external_setup_and_boundaries():
     assert "stored API token" not in documentation
 
 
-def test_normal_package_ci_builds_and_inspects_source_distribution():
+def test_normal_package_ci_builds_and_exercises_release_archives():
     ci_workflow = _read_repository_file(".github/workflows/ci.yml")
 
     assert "uv build --wheel --sdist --out-dir dist" in ci_workflow
@@ -249,3 +249,10 @@ def test_normal_package_ci_builds_and_inspects_source_distribution():
     assert "package job requires exactly one source distribution" in ci_workflow
     assert 'source_root + "CHANGELOG.md"' in ci_workflow
     assert 'source_root + "tests/test_version.py"' in ci_workflow
+    assert "Exercise release checksum handoff" in ci_workflow
+    assert "sha256sum *.whl *.tar.gz" in ci_workflow
+    assert "release-handoff/SHA256SUMS" in ci_workflow
+    assert "sha256sum --check --strict -" in ci_workflow
+    assert "sha256sum --check --strict ../release-handoff/SHA256SUMS" in (
+        ci_workflow
+    )
