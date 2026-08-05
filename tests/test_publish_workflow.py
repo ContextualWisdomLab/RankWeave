@@ -90,10 +90,32 @@ def test_publish_workflow_separates_jobs_and_handoffs_one_artifact():
     assert "include-hidden-files: false" in build_block
     assert "retention-days: 7" in build_block
     assert "name: rankweave-distributions" in provenance_block
-    assert "digest-mismatch: error" in provenance_block
-    assert "subject-path: dist/*" in provenance_block
     assert "name: rankweave-distributions" in publish_block
-    assert "digest-mismatch: error" in publish_block
+    assert "digest-mismatch:" not in workflow_text
+
+
+def test_distribution_handoff_is_checksum_verified_before_use():
+    workflow_text = _publish_workflow()
+    build_block = _job_block(workflow_text, "build", "provenance")
+    provenance_block = _job_block(workflow_text, "provenance", "publish")
+    publish_block = _job_block(workflow_text, "publish", None)
+
+    assert (
+        "manifest-sha256: ${{ steps.distributions.outputs.manifest-sha256 }}"
+        in build_block
+    )
+    assert "sha256sum *.whl *.tar.gz > SHA256SUMS" in build_block
+    assert "manifest-sha256=%s" in build_block
+    for job_block in (provenance_block, publish_block):
+        assert "Verify immutable distribution handoff" in job_block
+        assert (
+            "EXPECTED_MANIFEST_SHA256: "
+            "${{ needs.build.outputs.manifest-sha256 }}"
+        ) in job_block
+        assert "dist/SHA256SUMS | sha256sum --check --strict -" in job_block
+        assert "sha256sum --check --strict SHA256SUMS" in job_block
+    assert "dist/*.whl" in provenance_block
+    assert "dist/*.tar.gz" in provenance_block
 
 
 def test_build_job_checks_exact_release_identity_and_default_branch_reachability():
