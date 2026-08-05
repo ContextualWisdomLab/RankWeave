@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from importlib.resources import files
+
+# RankWeave supports Python 3.10+, so the Python 3.7 compatibility rule does not
+# apply to this standard-library import.
+from importlib.resources import files  # nosemgrep
 from typing import Any
 
 _REPORT_TYPES = ("pairwise", "family")
