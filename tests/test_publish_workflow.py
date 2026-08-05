@@ -96,13 +96,33 @@ def test_publish_workflow_separates_jobs_and_handoffs_one_artifact():
     assert "digest-mismatch: error" in publish_block
 
 
-def test_build_job_checks_exact_tag_version_and_complete_quality_gate():
+def test_build_job_checks_exact_release_identity_and_default_branch_reachability():
     build_block = _job_block(_publish_workflow(), "build", "provenance")
 
     assert "ref: ${{ github.event.release.tag_name }}" in build_block
+    assert "fetch-depth: 0" in build_block
     assert "persist-credentials: false" in build_block
+    assert "DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}" in (
+        build_block
+    )
+    assert "RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}" in (
+        build_block
+    )
+    assert "RELEASE_SHA: ${{ github.sha }}" in build_block
     assert "RELEASE_TAG: ${{ github.event.release.tag_name }}" in build_block
     assert "release tag is not canonical" in build_block
+    assert "stable package publication rejects prereleases" in build_block
+    assert "does not match release event commit" in build_block
+    assert '"merge-base",' in build_block
+    assert '"--is-ancestor",' in build_block
+    assert "released commit must be reachable from the default branch" in (
+        build_block
+    )
+
+
+def test_build_job_checks_package_version_and_complete_quality_gate():
+    build_block = _job_block(_publish_workflow(), "build", "provenance")
+
     assert 'release_tag != f"v{version}"' in build_block
     assert "rankweave.__version__" in build_block
     assert "uv sync --frozen --extra dev --python 3.13" in build_block
@@ -181,6 +201,7 @@ def test_release_documentation_records_exact_external_setup_and_boundaries():
         assert expected in documentation
     assert "PYPI_API_TOKEN" not in documentation
     assert "stored API token" not in documentation
+
 
 def test_normal_package_ci_builds_and_inspects_source_distribution():
     ci_workflow = _read_repository_file(".github/workflows/ci.yml")
