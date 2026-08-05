@@ -557,7 +557,7 @@ Apache-2.0 — see [LICENSE](LICENSE).
 
 ## Verify persisted artifact evidence
 
-RankWeave 0.16.0 can compare explicit local files with the unsigned SHA-256 and raw byte-count evidence in a persisted v2 report without exposing file paths or payloads:
+RankWeave 0.17.0 can compare explicit local files with the unsigned SHA-256 and raw byte-count evidence in a persisted v2 report without exposing file paths or payloads:
 
 ```bash
 rankweave verify-artifacts \
@@ -576,7 +576,7 @@ RankWeave releases are built from the exact published GitHub Release tag, tested
 After a version has been published and independently verified, install it from PyPI:
 
 ```bash
-python -m pip install rankweave==0.16.0
+python -m pip install rankweave==0.17.0
 ```
 
 Before the first Trusted Publisher is configured or when a version has not been published, use a reviewed source checkout instead of assuming that the PyPI name is owned by this project. See [`docs/releasing.md`](docs/releasing.md) for the exact publisher identity, release procedure, and GitHub/PyPI attestation verification boundaries.
