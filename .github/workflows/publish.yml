@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.release.tag_name }}
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
@@ -29,15 +29,19 @@ jobs:
         with:
           version: "0.11.29"
           enable-cache: false
-      - name: Verify released tag and package metadata
+      - name: Verify released commit, tag, and package metadata
         id: version
         env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_SHA: ${{ github.sha }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           python - <<'PY'
           from pathlib import Path
           import os
           import re
+          import subprocess
           import tomllib
 
           release_tag = os.environ["RELEASE_TAG"]
@@ -45,6 +49,38 @@ jobs:
               raise SystemExit(
                   f"release tag is not canonical: {release_tag!r}"
               )
+          if os.environ["RELEASE_PRERELEASE"].lower() != "false":
+              raise SystemExit("stable package publication rejects prereleases")
+
+          checked_out_sha = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"],
+              text=True,
+          ).strip()
+          release_sha = os.environ["RELEASE_SHA"]
+          if checked_out_sha != release_sha:
+              raise SystemExit(
+                  f"checked-out commit {checked_out_sha!r} does not match "
+                  f"release event commit {release_sha!r}"
+              )
+
+          default_branch_ref = (
+              "origin/" + os.environ["DEFAULT_BRANCH"]
+          )
+          ancestry = subprocess.run(
+              [
+                  "git",
+                  "merge-base",
+                  "--is-ancestor",
+                  checked_out_sha,
+                  default_branch_ref,
+              ],
+              check=False,
+          )
+          if ancestry.returncode != 0:
+              raise SystemExit(
+                  "released commit must be reachable from the default branch"
+              )
+
           project = tomllib.loads(
               Path("pyproject.toml").read_text(encoding="utf-8")
           )
