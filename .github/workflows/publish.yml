@@ -16,6 +16,8 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    outputs:
+      manifest-sha256: ${{ steps.distributions.outputs.manifest-sha256 }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -63,9 +65,7 @@ jobs:
                   f"release event commit {release_sha!r}"
               )
 
-          default_branch_ref = (
-              "origin/" + os.environ["DEFAULT_BRANCH"]
-          )
+          default_branch_ref = "origin/" + os.environ["DEFAULT_BRANCH"]
           ancestry = subprocess.run(
               [
                   "git",
@@ -192,6 +192,16 @@ jobs:
                   f"{sorted(missing_source_members)!r}"
               )
           PY
+      - name: Record immutable distribution checksums
+        id: distributions
+        run: |
+          set -euo pipefail
+          (
+            cd dist
+            sha256sum *.whl *.tar.gz > SHA256SUMS
+          )
+          manifest_sha256="$(sha256sum dist/SHA256SUMS | cut -d ' ' -f1)"
+          printf 'manifest-sha256=%s\n' "$manifest_sha256" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rankweave-distributions
@@ -213,10 +223,23 @@ jobs:
         with:
           name: rankweave-distributions
           path: dist/
-          digest-mismatch: error
+      - name: Verify immutable distribution handoff
+        env:
+          EXPECTED_MANIFEST_SHA256: ${{ needs.build.outputs.manifest-sha256 }}
+        run: |
+          set -euo pipefail
+          printf '%s  %s\n' \
+            "$EXPECTED_MANIFEST_SHA256" \
+            dist/SHA256SUMS | sha256sum --check --strict -
+          (
+            cd dist
+            sha256sum --check --strict SHA256SUMS
+          )
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: dist/*
+          subject-path: |
+            dist/*.whl
+            dist/*.tar.gz
 
   publish:
     needs: [build, provenance]
@@ -232,7 +255,18 @@ jobs:
         with:
           name: rankweave-distributions
           path: dist/
-          digest-mismatch: error
+      - name: Verify immutable distribution handoff
+        env:
+          EXPECTED_MANIFEST_SHA256: ${{ needs.build.outputs.manifest-sha256 }}
+        run: |
+          set -euo pipefail
+          printf '%s  %s\n' \
+            "$EXPECTED_MANIFEST_SHA256" \
+            dist/SHA256SUMS | sha256sum --check --strict -
+          (
+            cd dist
+            sha256sum --check --strict SHA256SUMS
+          )
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: dist/
