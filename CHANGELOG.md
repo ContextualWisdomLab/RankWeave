@@ -4,6 +4,32 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-08-05
+
+### Added
+- Public `WeightedConvexTuningTrial`, `WeightedConvexTuningReport`, and
+  `tune_weighted_convex_fusion` APIs for deterministic selection among fixed
+  convex scored-channel policies.
+- Complete immutable per-policy evaluation evidence, objective selection across
+  nDCG, reciprocal rank, recall, and precision, and first-policy exact-tie
+  behavior.
+- Dedicated scored-fusion tuning documentation, architecture and agent
+  contracts, package-root exports, installed-wheel smoke, and research grounding
+  in Bruch et al. (2024) plus a clearly identified 2026 preprint on held-out
+  fusion selection.
+
+### Validation
+- Scored-query and judgment sets must match exactly; policy weights, normalized
+  scores, duplicate items, undeclared channels, objectives, and cutoff values
+  fail closed through the existing fusion and evaluation contracts.
+- Selection remains a validation-set operation. Final effectiveness requires an
+  independent held-out test set; RankWeave does not generate a hidden search
+  grid, normalize provider scores, or deploy the selected policy.
+
+### Compatibility
+- Runtime remains standard-library-only, Python 3.10+, store-agnostic,
+  standalone-usable, and suitable for naruon or another MSA consumer.
+
 ## [0.14.0] — 2026-08-05
 
 ### Added

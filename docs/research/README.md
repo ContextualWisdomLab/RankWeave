@@ -140,14 +140,22 @@ The complete workflow is documented in
 
 ## Tuning protocol
 
-`tune_weighted_reciprocal_rank_fusion` evaluates named fixed-weight policies on
-a complete judged validation query set. It supports macro nDCG, reciprocal
-rank, recall, or precision and preserves candidate insertion order as the exact
-tie-breaker.
+`tune_weighted_convex_fusion` and `tune_weighted_reciprocal_rank_fusion`
+evaluate caller-defined, insertion-ordered fixed-weight policy families on a
+complete judged validation query set. Both support macro nDCG, reciprocal rank,
+recall, or precision, preserve every full evaluation, and use candidate order as
+the exact tie breaker.
+
+Bruch et al. (2024) report that convex combination can outperform RRF in- and
+out-of-domain and can be tuned sample-efficiently. Barata (2026, preprint)
+illustrates the stricter experiment boundary adopted here: select a finite
+simplex policy only on training queries, distinguish the apparent full-data
+optimum from out-of-fold performance, and test marginal fusion value rather than
+assuming that a standalone retriever must help a hybrid.
 
 The selected validation policy is not an unbiased final effectiveness estimate.
-Consumers must evaluate it once on an independent held-out test set before
-making a production-quality claim.
+Consumers must freeze the chosen weights and evaluate them once on an
+independent held-out test set before making a production-quality claim.
 
 ## TREC interchange contract
 
@@ -268,6 +276,10 @@ Wright, A., Andrews, H., Hutton, B., & Dennis, G. (2022). *JSON Schema
 validation: A vocabulary for structural validation of JSON* (Draft 2020-12).
 JSON Schema.
 https://json-schema.org/draft/2020-12/json-schema-validation.html
+
+Barata, A. P. (2026). *Do static embeddings add value to hybrid Dutch
+retrieval? Cross-validated weighted RRF with paired inference and cross-domain
+transfer* [Preprint]. arXiv. https://doi.org/10.48550/arXiv.2608.02112
 
 Bruch, S., Gai, S., & Ingber, A. (2024). An analysis of fusion functions for
 hybrid retrieval. *ACM Transactions on Information Systems, 42*(1), Article 20,

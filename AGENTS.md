@@ -96,6 +96,11 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
 - **Deterministic model selection.** Candidate mapping insertion order is the
   tie-breaker for equal objective values. Do not replace it with unordered set
   iteration or nondeterministic reduction.
+- **Convex tuning delegates rather than duplicates.** Scored-policy selection
+  must call `weighted_convex_fuse` and `evaluate_rankings`, retain every full
+  immutable evaluation, and treat the supplied policy order as audit evidence.
+  Do not normalize provider scores, generate a hidden search space, or present
+  validation selection as held-out effectiveness.
 - **Strict TREC boundaries.** Four-column qrels and six-column run artifacts
   reject malformed, duplicate, non-finite, or unserializable state. Qrels
   relevance is a signed ASCII-decimal integer in `[-127, 127]`; portable run
