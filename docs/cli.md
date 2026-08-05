@@ -346,3 +346,19 @@ identifiers are versioned independently from the package; any future
 incompatible transport change requires another identifier. Full parsed TREC
 artifacts and immutable comparison reports remain available through the Python
 API rather than being reconstructed from CLI projections.
+
+## `verify-artifacts`
+
+Use `verify-artifacts` only with pairwise or candidate-family v2 reports, because v1 reports intentionally contain no artifact evidence. The report is strict UTF-8 RFC 8259 JSON; duplicate object names, `NaN`, and infinity spellings are rejected. Every file uses the same bounded-read ceiling.
+
+```bash
+rankweave verify-artifacts \
+  --report family.json \
+  --baseline-run baseline.run \
+  --candidate lexical=lexical.run \
+  --candidate hybrid=hybrid.run \
+  --qrels qrels.txt \
+  --pretty
+```
+
+The JSON result is versioned as `rankweave.artifact-verification.v1`. It contains expected and observed SHA-256 digests, byte counts, independent match flags, and no local paths or input text.

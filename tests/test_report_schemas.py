@@ -52,6 +52,12 @@ EXPECTED_DESCRIPTORS = (
         transport_schema_id="rankweave.trec-family-comparison.v2",
         resource_name="trec-family-comparison-v2.schema.json",
     ),
+    ReportSchemaDescriptor(
+        report_type="verification",
+        schema_version="v1",
+        transport_schema_id="rankweave.artifact-verification.v1",
+        resource_name="artifact-verification-v1.schema.json",
+    ),
 )
 
 

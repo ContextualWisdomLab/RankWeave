@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from importlib.resources import files  # nosemgrep
 from typing import Any
 
-_REPORT_TYPES = ("pairwise", "family")
+_REPORT_TYPES = ("pairwise", "family", "verification")
 _SCHEMA_VERSIONS = ("v1", "v2")
 
 
@@ -49,6 +49,16 @@ _REPORT_SCHEMAS = (
         transport_schema_id="rankweave.trec-family-comparison.v2",
         resource_name="trec-family-comparison-v2.schema.json",
     ),
+    ReportSchemaDescriptor(
+        report_type="verification",
+        schema_version="v1",
+        transport_schema_id="rankweave.artifact-verification.v1",
+        resource_name="artifact-verification-v1.schema.json",
+    ),
+)
+_SUPPORTED_SCHEMA_SELECTORS = frozenset(
+    (descriptor.report_type, descriptor.schema_version)
+    for descriptor in _REPORT_SCHEMAS
 )
 
 
@@ -79,6 +89,13 @@ def _schema_descriptor(
         label="schema_version",
         supported=_SCHEMA_VERSIONS,
     )
+    selector = (validated_type, validated_version)
+    if selector not in _SUPPORTED_SCHEMA_SELECTORS:
+        raise ValueError(
+            "schema combination is unsupported: "
+            f"report_type={validated_type!r}, "
+            f"schema_version={validated_version!r}"
+        )
     for descriptor in _REPORT_SCHEMAS:
         if (
             descriptor.report_type == validated_type

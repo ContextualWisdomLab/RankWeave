@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextualwisdomlab.github.io/rankweave/schemas/artifact-verification-v1.schema.json",
+  "title": "RankWeave artifact verification v1",
+  "description": "Path-free comparison of explicit local bytes with unsigned SHA-256 and byte-count evidence from one RankWeave v2 report.",
+  "$comment": "A matching document proves only exact-byte equality with the supplied unsigned report evidence. It is not producer authentication, signature verification, provenance verification, an attestation, or a SLSA-level claim. Cross-field count, order, candidate-nullability, and match-boolean invariants are enforced by RankWeave producers and consumers.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "rankweave_version",
+    "report_schema_version",
+    "verified",
+    "artifact_count",
+    "mismatch_count",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "rankweave.artifact-verification.v1"
+    },
+    "rankweave_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "report_schema_version": {
+      "enum": [
+        "rankweave.trec-comparison.v2",
+        "rankweave.trec-family-comparison.v2"
+      ]
+    },
+    "verified": {
+      "type": "boolean"
+    },
+    "artifact_count": {
+      "type": "integer",
+      "minimum": 3
+    },
+    "mismatch_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "$ref": "#/$defs/artifact_verification_record"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "artifact_verification_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_role",
+        "candidate_id",
+        "expected_sha256",
+        "actual_sha256",
+        "sha256_matches",
+        "expected_byte_count",
+        "actual_byte_count",
+        "byte_count_matches",
+        "verified"
+      ],
+      "properties": {
+        "artifact_role": {
+          "enum": ["baseline_run", "candidate_run", "qrels"]
+        },
+        "candidate_id": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1}
+          ]
+        },
+        "expected_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "actual_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sha256_matches": {
+          "type": "boolean"
+        },
+        "expected_byte_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "actual_byte_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "byte_count_matches": {
+          "type": "boolean"
+        },
+        "verified": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
