@@ -157,6 +157,30 @@ The selected validation policy is not an unbiased final effectiveness estimate.
 Consumers must freeze the chosen weights and evaluate them once on an
 independent held-out test set before making a production-quality claim.
 
+## Explicit-fold cross-validation protocol
+
+`cross_validate_weighted_convex_fusion` executes caller-defined blocked folds.
+Each fold selects a fixed policy on the complementary queries and evaluates that
+policy unchanged on held-out queries. It then reconstructs one out-of-fold
+ranking map in original query order and separately tunes all judged queries to
+recommend a future deployment policy.
+
+Stone (1974) distinguishes cross-validatory choice from assessment. Cawley and
+Talbot (2010) show that optimizing a noisy selection criterion can itself
+overfit, producing selection bias when model choice and performance assessment
+collapse. Roberts et al. (2017) show that random folds can underestimate error
+under temporal, spatial, hierarchical, and related dependence and recommend
+blocks aligned with the data structure. RankWeave therefore records explicit
+caller-owned fold IDs rather than inventing a random split. Barata (2026,
+preprint) provides a retrieval-specific example of training-fold weight
+selection and held-out fold assessment.
+
+The library cannot prove that a supplied grouping is leakage-safe. Consumers
+must keep dependent translations, paraphrases, revisions, synthetic variants,
+users, tenants, events, projects, or time windows together when the deployment
+question requires it. Symmetric blocked folds are not automatically
+rolling-origin forecasting evidence.
+
 ## TREC interchange contract
 
 RankWeave uses the reference formats as the compatibility baseline and applies
@@ -285,6 +309,11 @@ Bruch, S., Gai, S., & Ingber, A. (2024). An analysis of fusion functions for
 hybrid retrieval. *ACM Transactions on Information Systems, 42*(1), Article 20,
 1–35. https://doi.org/10.1145/3596512
 
+Cawley, G. C., & Talbot, N. L. C. (2010). On over-fitting in model
+selection and subsequent selection bias in performance evaluation. *Journal of
+Machine Learning Research, 11*, 2079–2107.
+https://www.jmlr.org/papers/v11/cawley10a.html
+
 Cormack, G. V., Clarke, C. L. A., & Büttcher, S. (2009). Reciprocal rank fusion
 outperforms Condorcet and individual rank learning methods. In *Proceedings of
 the 32nd International ACM SIGIR Conference on Research and Development in
@@ -306,6 +335,13 @@ National Institute of Standards and Technology. (2015). *Secure Hash Standard
 (SHS)* (FIPS PUB 180-4). U.S. Department of Commerce.
 https://doi.org/10.6028/NIST.FIPS.180-4
 
+Roberts, D. R., Bahn, V., Ciuti, S., Boyce, M. S., Elith, J.,
+Guillera-Arroita, G., Hauenstein, S., Lahoz-Monfort, J. J., Schröder, B.,
+Thuiller, W., Warton, D. I., Wintle, B. A., Hartig, F., & Dormann, C. F.
+(2017). Cross-validation strategies for data with temporal, spatial,
+hierarchical, or phylogenetic structure. *Ecography, 40*(8), 913–929.
+https://doi.org/10.1111/ecog.02881
+
 Samuel, S., DeGenaro, D., Guallar-Blasco, J., Sanders, K., Eisape, O.,
 Spendlove, T., Reddy, A., Martin, A., Yates, A., Yang, E., Carpenter, C.,
 Etter, D., Kayi, E., Wiesner, M., Murray, K., & Kriz, R. (2025). MMMORRF:
@@ -316,6 +352,11 @@ https://doi.org/10.1145/3726302.3730157
 
 SLSA Community. (2025). *Supply-chain Levels for Software Artifacts
 specification* (Version 1.2). https://slsa.dev/spec/v1.2/
+
+Stone, M. (1974). Cross-validatory choice and assessment of statistical
+predictions. *Journal of the Royal Statistical Society: Series B
+(Methodological), 36*(2), 111–133.
+https://doi.org/10.1111/j.2517-6161.1974.tb00994.x
 
 Smucker, M. D., Allan, J., & Carterette, B. (2007). A comparison of statistical
 significance tests for information retrieval evaluation. In *Proceedings of the
