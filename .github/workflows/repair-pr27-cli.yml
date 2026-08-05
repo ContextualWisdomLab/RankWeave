@@ -1,8 +1,8 @@
 name: Repair PR 27 verification CLI
 
 on:
-  push:
-    branches: [main]
+  pull_request_target:
+    types: [synchronize]
 
 permissions:
   contents: write
@@ -14,8 +14,9 @@ concurrency:
 jobs:
   patch-test-push:
     if: >-
-      github.event.head_commit.message ==
-      'ci: add one-shot verified repair for PR 27 CLI'
+      github.event.pull_request.number == 27 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'feat/verify-report-artifacts'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -31,7 +32,7 @@ jobs:
       - name: Verify and execute the pinned deterministic patch
         run: |
           set -euo pipefail
-          expected_blob=20a5076b5ee8d93fc2bf8cd7a3760013a33ead1c
+          expected_blob=20a5076b5ee8d93fc2bf41dae371caa5a21c4fc
           actual_blob="$(git hash-object .github/scripts/apply_pr27_cli.py)"
           test "$actual_blob" = "$expected_blob"
           python .github/scripts/apply_pr27_cli.py
