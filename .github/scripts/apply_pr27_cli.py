@@ -251,7 +251,7 @@ def _read_text_artifact_bounded(
                     ensure_ascii=False,
                     separators=(",", ":"),
                 )
-            output_bytes = rendered_output.encode("utf-8") + b"\n"
+            output_bytes = rendered_output.encode("utf-8") + b"\\n"
     except (_UsageError, OSError, ValueError) as exc:
         print(f"rankweave: error: {exc}", file=sys.stderr)
         return 2
