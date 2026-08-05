@@ -67,3 +67,11 @@ method docstring, remains covered by the repository quality gates.
 ## Exact artifact-verification boundary
 
 `artifact_verification.py` is a pure bytes-and-mappings core with no filesystem, JSON, provider, network, or database access. `cli.py` is the bounded filesystem and strict RFC 8259 boundary. The output transport is path-free and independently reusable by naruon or another MSA consumer. SHA-256 equality is deliberately separated from authentication and provenance policy.
+
+## Governed release boundary
+
+A published stable GitHub Release is the only publication trigger. A read-only exact-tag build job verifies release-event commit identity, default-branch reachability, tag and package version identity, the complete quality gate, and both wheel and source-distribution contents. It records a SHA-256 manifest for the two distributions and uploads the files plus that manifest as one immutable Actions artifact.
+
+Separate provenance and publication jobs download the immutable artifact, verify the manifest itself against a build-job output, verify both distribution hashes, and only then use the files. The provenance job creates GitHub build-provenance attestations for the wheel and source distribution. The protected `pypi` environment job exchanges GitHub OIDC for a short-lived PyPI publishing credential.
+
+The official download action's built-in artifact digest validation is useful but reports a mismatch as a warning rather than a failing input contract. RankWeave therefore performs its own checksum-manifest verification and never passes an unsupported `digest-mismatch` input. The repository stores no package-registry credential and provides no token fallback. GitHub and PyPI attestations bind signed statements to exact artifact digests; they do not establish statistical validity, vulnerability absence, or downstream policy compliance.

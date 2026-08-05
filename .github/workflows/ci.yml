@@ -64,7 +64,7 @@ jobs:
           version: "0.11.29"
           enable-cache: false
       - run: uv sync --frozen --extra dev --python 3.13
-      - run: uv build --wheel --out-dir dist
+      - run: uv build --wheel --sdist --out-dir dist
       - name: Verify wheel contents
         run: |
           uv run --frozen --extra dev --python 3.13 python - <<'PY'
@@ -102,6 +102,57 @@ jobs:
           if missing_members:
               raise SystemExit(f"wheel is missing: {sorted(missing_members)!r}")
           PY
+      - name: Verify source distribution contents
+        run: |
+          uv run --frozen --extra dev --python 3.13 python - <<'PY'
+          from pathlib import Path
+          from tarfile import open as open_tarfile
+
+          source_distributions = tuple(
+              Path("dist").glob("rankweave-*.tar.gz")
+          )
+          if len(source_distributions) != 1:
+              raise SystemExit(
+                  "package job requires exactly one source distribution"
+              )
+          source_distribution = source_distributions[0]
+          source_root = source_distribution.name.removesuffix(".tar.gz") + "/"
+          with open_tarfile(source_distribution, "r:gz") as archive:
+              source_members = set(archive.getnames())
+          required_source_members = {
+              source_root + "pyproject.toml",
+              source_root + "README.md",
+              source_root + "CHANGELOG.md",
+              source_root + "LICENSE",
+              source_root + "src/rankweave/__init__.py",
+              source_root + "tests/test_version.py",
+          }
+          missing_source_members = required_source_members - source_members
+          if missing_source_members:
+              raise SystemExit(
+                  "source distribution is missing: "
+                  f"{sorted(missing_source_members)!r}"
+              )
+          PY
+      - name: Exercise release checksum handoff
+        run: |
+          set -euo pipefail
+          mkdir -p release-handoff
+          (
+            cd dist
+            sha256sum *.whl *.tar.gz
+          ) > release-handoff/SHA256SUMS
+          manifest_sha256="$(
+            sha256sum release-handoff/SHA256SUMS | cut -d ' ' -f1
+          )"
+          printf '%s  %s\n' \
+            "$manifest_sha256" \
+            release-handoff/SHA256SUMS | \
+            sha256sum --check --strict -
+          (
+            cd dist
+            sha256sum --check --strict ../release-handoff/SHA256SUMS
+          )
       - run: uv venv .package-smoke --python 3.13
       - run: >-
           uv pip install --python .package-smoke/bin/python

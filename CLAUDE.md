@@ -17,3 +17,7 @@ agent credentials.
 ## Artifact verification
 
 Keep the verification core standard-library-only and transport-neutral. Filesystem and JSON concerns belong in the CLI adapter. A mismatch is a normal machine-readable exit-1 result; malformed evidence remains stderr-only exit 2. Every new output field requires schema, docs, wheel-smoke, and coverage updates.
+
+## Release workflow
+
+`.github/workflows/publish.yml` is a security-sensitive distribution boundary. Keep build, provenance, and publication in separate least-privilege jobs. Publication is release-only, environment-gated, tokenless, and fail-closed. Version-bearing files, CHANGELOG, archive contents, action SHAs, and attestation documentation must change together. A provenance attestation is not a claim of package correctness or scientific validity.

@@ -198,3 +198,7 @@ settings or add CODEOWNERS-based merge gates until multiple maintainers exist.
 ## RankWeave 0.14 verification gate
 
 Changes to artifact verification must preserve raw-byte hashing, independent digest and byte-count comparison, exact family order, path/payload non-disclosure, strict persisted JSON, console/module parity, the packaged verification schema, and 100% production statement and branch coverage. Do not describe a digest match as authentication, attestation, provenance verification, or a SLSA level.
+
+## Trusted release gate
+
+Do not publish from a branch, pull request, manual workflow dispatch, reusable workflow, or stored PyPI credential. A release change must preserve the exact `v${version}` tag gate, frozen full tests and 100% coverage before build, one wheel plus one sdist inspection, immutable artifact handoff, GitHub provenance, protected `pypi` environment, PyPI OIDC, full-SHA action pins, and post-publication verification. Never add `skip-existing` or an alternate registry fallback to make a failed release appear successful.

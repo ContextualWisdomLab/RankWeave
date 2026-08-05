@@ -319,3 +319,15 @@ National Institute of Standards and Technology. (2015). *Secure Hash Standard (S
 Supply-chain Levels for Software Artifacts. (n.d.). *Build: Verifying artifacts (SLSA specification v1.2)*. OpenSSF. Retrieved August 5, 2026, from https://slsa.dev/spec/v1.2/verifying-artifacts
 
 RFC 8259 says object names should be unique for interoperable interpretation and excludes `NaN` and infinity from JSON numbers. FIPS 180-4 specifies SHA-256 for change detection; NIST has announced a future revision but FIPS 180-4 remains the published standard. SLSA v1.2 verification additionally requires trusted provenance/attestation checks and matching an attestation subject to the artifact digest, so RankWeave's unsigned local comparison makes no SLSA claim.
+
+### Trusted publishing and release provenance
+
+GitHub. (n.d.). *Using artifact attestations to establish provenance for builds*. GitHub Docs. Retrieved August 5, 2026, from https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations
+
+Python Packaging Authority. (n.d.). *Publishing with a Trusted Publisher*. PyPI documentation. Retrieved August 5, 2026, from https://docs.pypi.org/trusted-publishers/using-a-publisher/
+
+Trail of Bits. (2023). PEP 740—Index support for digital attestations. *Python Enhancement Proposals*. https://peps.python.org/pep-0740/
+
+Supply-chain Levels for Software Artifacts. (n.d.). *Build: Verifying artifacts (SLSA specification v1.2)*. OpenSSF. Retrieved August 5, 2026, from https://slsa.dev/spec/v1.2/verifying-artifacts
+
+PyPI Trusted Publishing exchanges a GitHub OIDC identity for a short-lived publication credential and avoids storing a registry token. PEP 740 index-hosted attestations and GitHub Artifact Attestations bind signed statements to artifact digests in distinct trust systems. Neither proves that retrieval statistics are scientifically valid, that the package is vulnerability-free, or that a buyer's deployment policy has been satisfied.
