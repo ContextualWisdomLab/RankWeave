@@ -40,18 +40,19 @@ uv run --frozen --extra dev --python 3.13 python -m coverage report
 uv build --wheel --sdist --out-dir dist
 ```
 
-The versioned release tag is exactly `v${version}`. For RankWeave 0.14.0, the only accepted tag is `v0.14.0`. The publishing workflow rejects non-canonical tags and any mismatch among the tag, `pyproject.toml`, and the public package version.
+The versioned release tag is exactly `v${version}`. For RankWeave 0.14.0, the only accepted tag is `v0.14.0`. The publishing workflow rejects non-canonical tags, prerelease objects, any mismatch between the release event commit and the checked-out tag, tags whose commit is not reachable from the default branch, and mismatches among the tag, `pyproject.toml`, and the public package version.
 
 ## Publication flow
 
 Publishing a GitHub Release triggers `.github/workflows/publish.yml` exactly once per tag.
 
 ```text
-published GitHub Release tag
+published stable GitHub Release tag
+  -> exact release-event commit on the default-branch history
   -> read-only exact-tag checkout
   -> complete tests and 100% production coverage
   -> wheel and sdist build and archive inspection
-  -> immutable rankweave-distributions artifact
+  -> immutable rankweave-distributions workflow artifact
   -> GitHub build-provenance attestation
   -> protected pypi environment approval
   -> PyPI Trusted Publishing and PEP 740 attestations
@@ -59,11 +60,13 @@ published GitHub Release tag
 
 The build job has only `contents: read`. The provenance job has `contents: read`, `id-token: write`, and `attestations: write`. The publishing job has only `id-token: write` and receives the immutable distributions after both prior jobs succeed.
 
+The `rankweave-distributions` Actions artifact is retained for seven days for workflow audit and debugging. The workflow does not attach wheel or source-distribution files as GitHub Release assets; PyPI is the durable package-distribution surface.
+
 A failed re-publication is not silently skipped. PyPI versions are immutable; correct the versioning or release process rather than using a skip-existing option.
 
 ## Verification after publication
 
-Download the exact wheel and source distribution from the GitHub Release or PyPI before verifying them. Verify GitHub's build provenance against this repository:
+Download the exact wheel and source distribution from PyPI before verifying them. An authorized repository operator may alternatively download the short-lived `rankweave-distributions` artifact from the successful publication workflow run during its retention window. Verify GitHub's build provenance against this repository:
 
 ```bash
 gh attestation verify path/to/rankweave-0.14.0-py3-none-any.whl \
@@ -81,7 +84,10 @@ These attestations do not prove that RankWeave is vulnerability-free, statistica
 
 Treat each condition as a blocker rather than weakening the workflow:
 
-- the GitHub Release tag is not canonical;
+- the GitHub Release is a prerelease;
+- the release tag is not canonical;
+- the checked-out tag commit differs from the release event commit;
+- the released commit is not reachable from the default branch;
 - tag and package versions differ;
 - tests, coverage, Ruff, or compilation fail;
 - wheel or source distribution contents are incomplete;
