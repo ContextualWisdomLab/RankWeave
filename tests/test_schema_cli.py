@@ -54,7 +54,12 @@ def test_schema_console_and_module_entrypoints_are_byte_identical_under_ascii_lo
         env=environment,
     )
     console = subprocess.run(
-        [sys.executable, "-c", "from rankweave.cli import main; raise SystemExit(main())", *arguments],
+        [
+            sys.executable,
+            "-c",
+            "from rankweave.cli import main; raise SystemExit(main())",
+            *arguments,
+        ],
         check=False,
         capture_output=True,
         env=environment,

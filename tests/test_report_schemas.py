@@ -4,6 +4,7 @@ import json
 import pytest
 from jsonschema import Draft202012Validator, ValidationError
 
+import rankweave.report_schemas as report_schemas
 from rankweave import (
     ReportSchemaDescriptor,
     available_report_schemas,
@@ -131,7 +132,14 @@ def test_packaged_schemas_are_draft_2020_12_and_meta_schema_valid(
     assert text.endswith("\n")
     assert json.loads(text) == schema
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
-    assert schema["schema_version"] if False else True
+    expected_transport = (
+        f"rankweave.trec-comparison.{schema_version}"
+        if report_type == "pairwise"
+        else f"rankweave.trec-family-comparison.{schema_version}"
+    )
+    assert schema["properties"]["schema_version"]["const"] == (
+        expected_transport
+    )
     Draft202012Validator.check_schema(schema)
 
 
@@ -161,6 +169,30 @@ def test_schema_loaders_fail_closed_for_unknown_selectors(
         load_report_schema_text(report_type, schema_version)
     with pytest.raises(ValueError, match=message):
         load_report_schema(report_type, schema_version)
+
+
+def test_missing_validated_descriptor_fails_closed(monkeypatch):
+    monkeypatch.setattr(report_schemas, "_REPORT_SCHEMAS", ())
+
+    with pytest.raises(
+        RuntimeError,
+        match="validated report schema descriptor is missing",
+    ):
+        report_schemas.load_report_schema_text("pairwise", "v1")
+
+
+def test_packaged_schema_root_must_be_a_json_object(monkeypatch):
+    monkeypatch.setattr(
+        report_schemas,
+        "load_report_schema_text",
+        lambda *_arguments: "[]\n",
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="packaged report schema root must be a JSON object",
+    ):
+        report_schemas.load_report_schema("pairwise", "v1")
 
 
 @pytest.mark.parametrize(
