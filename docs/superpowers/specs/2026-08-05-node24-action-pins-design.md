@@ -56,7 +56,7 @@ Do not alter Python 3.10–3.13 coverage, frozen uv installation, wheel/sdist in
 
 ## Documentation
 
-Update `CHANGELOG.md` under `Unreleased` and add a maintainer rule to `AGENTS.md` and `CLAUDE.md` stating that repository-owned package-CI JavaScript actions must use reviewed Node.js 24-compatible releases pinned by full commit SHA. This does not create a package release because shipped Python behavior is unchanged.
+Record the trust decision in `docs/adr/0001-package-ci-action-runtime.md` and add the operational invariant to `CLAUDE.md`. The package changelog and version remain unchanged because no distributed Python behavior changes; the commit and ADR are the auditable CI-maintenance record.
 
 ## Failure handling
 
