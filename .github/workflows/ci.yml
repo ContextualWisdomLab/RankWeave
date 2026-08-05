@@ -134,6 +134,25 @@ jobs:
                   f"{sorted(missing_source_members)!r}"
               )
           PY
+      - name: Exercise release checksum handoff
+        run: |
+          set -euo pipefail
+          mkdir -p release-handoff
+          (
+            cd dist
+            sha256sum *.whl *.tar.gz
+          ) > release-handoff/SHA256SUMS
+          manifest_sha256="$(
+            sha256sum release-handoff/SHA256SUMS | cut -d ' ' -f1
+          )"
+          printf '%s  %s\n' \
+            "$manifest_sha256" \
+            release-handoff/SHA256SUMS | \
+            sha256sum --check --strict -
+          (
+            cd dist
+            sha256sum --check --strict ../release-handoff/SHA256SUMS
+          )
       - run: uv venv .package-smoke --python 3.13
       - run: >-
           uv pip install --python .package-smoke/bin/python
