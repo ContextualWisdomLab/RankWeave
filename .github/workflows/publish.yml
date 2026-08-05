@@ -160,6 +160,7 @@ jobs:
               "rankweave/__main__.py",
               "rankweave/artifact_verification.py",
               "rankweave/cli.py",
+              "rankweave/cross_validation.py",
               "rankweave/report_schemas.py",
               "rankweave/schemas/artifact-verification-v1.schema.json",
               "rankweave/schemas/trec-comparison-v1.schema.json",
