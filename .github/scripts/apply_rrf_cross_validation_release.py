@@ -45,6 +45,7 @@ for version_path in (
     "uv.lock",
     "README.md",
     "docs/releasing.md",
+    ".github/workflows/ci.yml",
 ):
     replace_all(version_path, "0.17.0", "0.18.0")
 
@@ -190,3 +191,77 @@ insert_before(
     "## Availability-time backtesting\n",
     RESEARCH_SECTION,
 )
+
+CI_SMOKE_MARKER = """          assert isinstance(
+              backtest.windows[0],
+              rankweave.WeightedConvexBacktestWindow,
+          )
+          PY
+"""
+CI_SMOKE_REPLACEMENT = """          assert isinstance(
+              backtest.windows[0],
+              rankweave.WeightedConvexBacktestWindow,
+          )
+
+          rrf_cross_validation = (
+              rankweave.cross_validate_weighted_reciprocal_rank_fusion(
+                  {
+                      "q1": {
+                          "lexical": ["a", "x"],
+                          "dense": ["x", "a"],
+                      },
+                      "q2": {
+                          "lexical": ["y", "b"],
+                          "dense": ["b", "y"],
+                      },
+                      "q3": {
+                          "lexical": ["c", "z"],
+                          "dense": ["z", "c"],
+                      },
+                      "q4": {
+                          "lexical": ["w", "d"],
+                          "dense": ["d", "w"],
+                      },
+                  },
+                  {
+                      "q1": {"a": 1},
+                      "q2": {"b": 1},
+                      "q3": {"c": 1},
+                      "q4": {"d": 1},
+                  },
+                  {
+                      "dense-heavy": {"lexical": 0.1, "dense": 0.9},
+                      "lexical-heavy": {"lexical": 0.9, "dense": 0.1},
+                  },
+                  {"q1": "a", "q2": "b", "q3": "a", "q4": "b"},
+                  cutoff=1,
+                  rank_constant_eta=17,
+              )
+          )
+          assert len(rrf_cross_validation.folds) == 2
+          assert rrf_cross_validation.rank_constant_eta == 17
+          assert (
+              rrf_cross_validation.out_of_fold_evaluation.aggregate.query_count
+              == 4
+          )
+          assert isinstance(
+              rrf_cross_validation,
+              rankweave.WeightedRRFCrossValidationReport,
+          )
+          assert isinstance(
+              rrf_cross_validation.folds[0],
+              rankweave.WeightedRRFCrossValidationFold,
+          )
+          PY
+"""
+if CI_SMOKE_MARKER not in read(".github/workflows/ci.yml"):
+    raise SystemExit("ci.yml: installed temporal smoke marker is absent")
+write(
+    ".github/workflows/ci.yml",
+    read(".github/workflows/ci.yml").replace(
+        CI_SMOKE_MARKER,
+        CI_SMOKE_REPLACEMENT,
+        1,
+    ),
+)
+write(".github/generated-ci.yml", read(".github/workflows/ci.yml"))
