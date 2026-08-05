@@ -279,10 +279,13 @@ def test_backtest_rejects_within_window_training_held_out_overlap():
         _backtest(windows=(first, second))
 
 
-@pytest.mark.parametrize("training_time", [
-    datetime(2026, 1, 3, 10, tzinfo=UTC),
-    datetime(2026, 1, 3, 12, tzinfo=UTC),
-])
+@pytest.mark.parametrize(
+    "training_time",
+    [
+        datetime(2026, 1, 3, 10, tzinfo=UTC),
+        datetime(2026, 1, 3, 12, tzinfo=UTC),
+    ],
+)
 def test_backtest_rejects_same_time_or_future_training_evidence(training_time):
     available_times = _available_times()
     available_times["q1"] = training_time
@@ -331,7 +334,10 @@ def test_backtest_rejects_initial_training_query_later_held_out():
         held_out_query_ids=("q0", "q4", "q5"),
     )
 
-    with pytest.raises(ValueError, match="initial training queries may not be held out"):
+    with pytest.raises(
+        ValueError,
+        match="initial training queries may not be held out",
+    ):
         _backtest(windows=(first, second))
 
 
@@ -364,7 +370,10 @@ def test_backtest_propagates_out_of_domain_score():
     results = _scored_results()
     results["q0"]["lexical"][0] = ("r0", 1.1)
 
-    with pytest.raises(ValueError, match=r"score for channel 'lexical'.*\[0, 1\]"):
+    with pytest.raises(
+        ValueError,
+        match=r"score for channel 'lexical'.*\[0, 1\]",
+    ):
         _backtest(channel_results_by_query=results)
 
 
