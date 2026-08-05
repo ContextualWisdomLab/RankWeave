@@ -1,8 +1,8 @@
 name: Repair PR 26 schema tests
 
 on:
-  push:
-    branches: [main]
+  pull_request_target:
+    types: [synchronize]
 
 permissions:
   contents: write
@@ -13,7 +13,10 @@ concurrency:
 
 jobs:
   repair-and-verify:
-    if: github.event.head_commit.message == 'ci: add one-shot PR 26 schema test repair'
+    if: >-
+      github.event.pull_request.number == 26 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'feat/report-json-schemas'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
