@@ -27,6 +27,22 @@ max(training available time) < min(held-out available time)
 The strict inequality prevents same-instant observations from being split across
 training and assessment.
 
+```mermaid
+flowchart LR
+    W0[Initial warm-up queries] -->|fit policy A| H1[Held-out window 1]
+    H1 -->|evidence becomes available| T1[Expanded training evidence]
+    T1 -->|fit policy B| H2[Held-out window 2]
+    H2 -->|append exact held-out rankings| OOS[Out-of-sample report]
+    W0 -->|all evidence after assessment| FINAL[Final all-data tuning]
+    T1 --> FINAL
+    H2 --> FINAL
+```
+
+The out-of-sample path always flows from earlier available evidence to a later
+assessment. `final_tuning` deliberately sits on a separate path because it uses
+all available evidence and is a deployment recommendation rather than a
+historical performance estimate.
+
 ## Public API
 
 ```python
