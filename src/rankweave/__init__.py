@@ -125,8 +125,11 @@ from rankweave.tuning import (
     MEAN_RECALL_OBJECTIVE,
     MEAN_RECIPROCAL_RANK_OBJECTIVE,
     SUPPORTED_TUNING_OBJECTIVES,
+    WeightedConvexTuningReport,
+    WeightedConvexTuningTrial,
     WeightedRRFTuningReport,
     WeightedRRFTuningTrial,
+    tune_weighted_convex_fusion,
     tune_weighted_reciprocal_rank_fusion,
 )
 
@@ -181,6 +184,8 @@ __all__ = [
     "TrecRunFamilyComparisonReport",
     "WORD_SIMILARITY_THEORETICAL_BOUNDS",
     "WeightedChannelContribution",
+    "WeightedConvexTuningReport",
+    "WeightedConvexTuningTrial",
     "WeightedRRFTuningReport",
     "WeightedRRFTuningTrial",
     "WeightedRankContribution",
@@ -204,6 +209,7 @@ __all__ = [
     "reciprocal_rank_fuse",
     "reciprocal_rank_fusion_score",
     "theoretical_min_max_normalize",
+    "tune_weighted_convex_fusion",
     "tune_weighted_reciprocal_rank_fusion",
     "weighted_convex_combination_score",
     "weighted_convex_fuse",
