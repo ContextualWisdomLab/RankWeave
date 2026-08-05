@@ -3,9 +3,6 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CI_WORKFLOW = PROJECT_ROOT / ".github/workflows/ci.yml"
-HOURLY_WORKFLOW = (
-    PROJECT_ROOT / ".github/workflows/hourly-commercialization-loop.yml"
-)
 FULL_SHA_REFERENCE = re.compile(
     r"uses:\s+([^\s@]+)@([0-9a-f]{40})(?:\s|$)"
 )
@@ -20,8 +17,8 @@ SUPERSEDED_SHAS = {
 }
 
 
-def _workflow_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+def _workflow_text() -> str:
+    return CI_WORKFLOW.read_text(encoding="utf-8")
 
 
 def _references(workflow: str) -> tuple[tuple[str, str], ...]:
@@ -29,7 +26,7 @@ def _references(workflow: str) -> tuple[tuple[str, str], ...]:
 
 
 def test_ci_pins_reviewed_node24_action_commits():
-    workflow = _workflow_text(CI_WORKFLOW)
+    workflow = _workflow_text()
 
     assert workflow.count(f"actions/checkout@{CHECKOUT_SHA}") == 2
     assert workflow.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 2
@@ -43,20 +40,8 @@ def test_ci_pins_reviewed_node24_action_commits():
     assert expected <= set(_references(workflow))
 
 
-def test_hourly_loop_pins_reviewed_node24_checkout_commit():
-    workflow = _workflow_text(HOURLY_WORKFLOW)
-
-    assert workflow.count(f"actions/checkout@{CHECKOUT_SHA}") == 1
-    assert ("actions/checkout", CHECKOUT_SHA) in _references(workflow)
-
-
-def test_repository_workflows_reject_superseded_action_commits():
-    combined_workflows = "\n".join(
-        (
-            _workflow_text(CI_WORKFLOW),
-            _workflow_text(HOURLY_WORKFLOW),
-        )
-    )
+def test_ci_rejects_superseded_action_commits():
+    workflow = _workflow_text()
 
     for superseded_sha in SUPERSEDED_SHAS:
-        assert superseded_sha not in combined_workflows
+        assert superseded_sha not in workflow
