@@ -224,7 +224,7 @@ CHANGELOG_ENTRY = """## [0.15.0] - 2026-08-05
 """
 _insert_before(
     "CHANGELOG.md",
-    "## [0.14.0] - 2026-08-05\n",
+    "## [0.14.0] — 2026-08-05\n",
     CHANGELOG_ENTRY,
 )
 
