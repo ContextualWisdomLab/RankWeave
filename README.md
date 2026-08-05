@@ -497,3 +497,15 @@ rankweave verify-artifacts \
 ```
 
 Candidate-family verification uses ordered, repeatable `--candidate ID=PATH` arguments. Exit status `0` means all bytes match, `1` means at least one artifact differs, and `2` means the command or evidence is invalid. A match is an integrity comparison only—not authentication, signature verification, provenance verification, or a SLSA claim.
+
+## Trusted distribution and provenance
+
+RankWeave releases are built from the exact published GitHub Release tag, tested at 100% production statement and branch coverage, transferred between jobs as one immutable distribution artifact, and published through PyPI Trusted Publishing after the protected `pypi` environment approves the deployment.
+
+After a version has been published and independently verified, install it from PyPI:
+
+```bash
+python -m pip install rankweave==0.14.0
+```
+
+Before the first Trusted Publisher is configured or when a version has not been published, use a reviewed source checkout instead of assuming that the PyPI name is owned by this project. See [`docs/releasing.md`](docs/releasing.md) for the exact publisher identity, release procedure, and GitHub/PyPI attestation verification boundaries.

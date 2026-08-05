@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a tokenless, environment-gated, attested PyPI publication workflow for the already-versioned RankWeave 0.14.0 release and move repository-owned JavaScript actions to pinned Node.js 24-compatible releases.
+**Goal:** Add a tokenless, environment-gated, attested PyPI publication workflow for the already-versioned RankWeave 0.14.0 release.
 
 **Architecture:** A read-only build job rebuilds and validates the exact GitHub Release tag, then uploads one immutable distribution artifact. Separate provenance and `pypi` environment jobs download that artifact; the former creates GitHub build provenance and the latter publishes with PyPI OIDC and no registry secret. Stdlib tests enforce the workflow as a security contract.
 
@@ -18,7 +18,7 @@
 - The publishing job uses the protected GitHub environment `pypi`.
 - Build, provenance, and publication are separate jobs with least privilege.
 - Existing 100% production statement/branch coverage and production docstring gates remain intact.
-- Existing NVIDIA/OpenCode autonomous workflow secrets and central reusable-workflow SHAs are unchanged.
+- Existing CI, hourly automation, NVIDIA/OpenCode secrets, and central reusable-workflow SHAs are unchanged.
 
 ---
 
@@ -203,86 +203,7 @@ git add .github/workflows/publish.yml tests/test_publish_workflow.py
 git commit -m "ci: add tokenless attested PyPI publication"
 ```
 
-### Task 3: Migrate repository-owned actions to Node.js 24 releases
-
-**Files:**
-- Modify: `.github/workflows/ci.yml`
-- Modify: `.github/workflows/hourly-commercialization-loop.yml`
-- Test: `tests/test_publish_workflow.py`
-
-**Interfaces:**
-- Consumes: the current CI and hourly workflow behavior.
-- Produces: identical behavior with pinned checkout v6.0.2, setup-python v6.2.0, and setup-uv v8.1.0 action runtimes.
-
-- [ ] **Step 1: Extend tests to enforce Node.js 24 action SHAs**
-
-```python
-@pytest.mark.parametrize(
-    "path",
-    [
-        ".github/workflows/ci.yml",
-        ".github/workflows/hourly-commercialization-loop.yml",
-    ],
-)
-def test_repository_owned_workflows_use_current_node24_actions(path):
-    text = _workflow_text(path)
-    assert "actions/checkout@11d5960" not in text
-    assert "actions/setup-python@a26af69" not in text
-    assert "astral-sh/setup-uv@c771a70" not in text
-```
-
-Also assert that every occurrence uses the allowlisted full SHA. The hourly workflow's central reusable workflow SHAs and OpenCode/NVIDIA configuration must remain byte-identical.
-
-- [ ] **Step 2: Run the focused test and observe failure**
-
-Run:
-
-```bash
-uv run --frozen --extra dev --python 3.13 \
-  python -m pytest -q tests/test_publish_workflow.py
-```
-
-Expected: FAIL on the older checkout/setup action SHAs.
-
-- [ ] **Step 3: Replace only repository-owned action references**
-
-Replace:
-
-```text
-actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-→ actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-
-actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-→ actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
-
-astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
-→ astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
-```
-
-Update comments to v6.0.2, v6.2.0, and v8.1.0. Do not modify reusable workflow SHAs, OpenCode version/hash, permissions, cron schedule, prompts, or secret names.
-
-- [ ] **Step 4: Run focused and complete tests**
-
-Run:
-
-```bash
-uv run --frozen --extra dev --python 3.13 python -m ruff check .
-uv run --frozen --extra dev --python 3.13 python -m coverage run -m pytest -q
-uv run --frozen --extra dev --python 3.13 python -m coverage report
-```
-
-Expected: all tests pass and production statement/branch coverage remains 100%.
-
-- [ ] **Step 5: Commit runtime hardening**
-
-```bash
-git add .github/workflows/ci.yml \
-  .github/workflows/hourly-commercialization-loop.yml \
-  tests/test_publish_workflow.py
-git commit -m "ci: move repository actions to Node.js 24 releases"
-```
-
-### Task 4: Document setup, provenance boundaries, and release operations
+### Task 3: Document setup, provenance boundaries, and release operations
 
 **Files:**
 - Create: `docs/releasing.md`
@@ -365,7 +286,7 @@ git commit -m "docs: govern trusted RankWeave releases"
 
 ## Plan self-review
 
-- **Spec coverage:** release-only trigger, tag/version gate, complete build gate, immutable handoff, GitHub provenance, PyPI OIDC, environment protection, Node.js 24 migration, documentation, and trust boundaries all map to tasks.
+- **Spec coverage:** release-only trigger, tag/version gate, complete build gate, immutable handoff, GitHub provenance, PyPI OIDC, environment protection, documentation, and trust boundaries all map to tasks.
 - **Placeholder scan:** no TBD, TODO, deferred implementation, or unspecified validation remains.
 - **Type and name consistency:** artifact name is always `rankweave-distributions`; environment is always `pypi`; workflow is always `publish.yml`; action SHAs match the design.
 - **Scope:** one supply-chain/distribution subsystem; no runtime API, statistical model, database, or UI changes.

@@ -94,10 +94,6 @@ The workflow uses current stable, Node.js 24-compatible releases pinned to full 
 - `actions/attest` v4.2.2 — `1e69f48acb82d1966a394da916b4c1698aa569d6`
 - `pypa/gh-action-pypi-publish` v1.14.2 — `dc37677b2e1c63e2034f94d8a5b11f265b73ba33`
 
-## Repository action-runtime hardening
-
-The normal CI workflow and the hourly product loop currently use older Node.js 20 action releases and emit deprecation warnings. This slice updates repository-owned `actions/checkout`, `actions/setup-python`, and `astral-sh/setup-uv` references to the same pinned Node.js 24-compatible releases. It does not change the immutable central reusable-workflow SHAs or the NVIDIA/OpenCode key model.
-
 ## Tests
 
 `tests/test_publish_workflow.py` treats the workflow as a security-sensitive contract and verifies:
@@ -110,8 +106,7 @@ The normal CI workflow and the hourly product loop currently use older Node.js 2
 - artifact upload/download use the expected immutable names and fail-closed options;
 - provenance permissions are minimal and `actions/attest` is present;
 - publishing uses environment `pypi`, OIDC, and no package-registry secret;
-- no `COPILOT_GITHUB_TOKEN` appears;
-- CI and hourly workflow action references are Node.js 24-compatible pinned releases.
+- no `COPILOT_GITHUB_TOKEN` appears.
 
 The existing Python 3.10–3.13 matrix remains the runtime compatibility gate. The release build uses Python 3.13 as the deterministic packaging interpreter.
 
