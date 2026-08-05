@@ -12,11 +12,11 @@ from rankweave.cli import (
     FAMILY_OUTPUT_SCHEMA_VERSION_V2,
     OUTPUT_SCHEMA_VERSION,
     OUTPUT_SCHEMA_VERSION_V2,
+    _artifact_digest_to_dict,
     _BoundedTextArtifact,
+    _family_artifacts_to_dict,
     _FamilyArtifactEvidence,
     _NamedArtifactEvidence,
-    _artifact_digest_to_dict,
-    _family_artifacts_to_dict,
     _pairwise_artifacts_to_dict,
     main,
 )
