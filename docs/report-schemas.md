@@ -58,3 +58,7 @@ identifiers. Additive package releases may retain the same schema resources. An
 incompatible transport change requires a new transport identifier, new packaged
 schema, complete regression coverage, installed-wheel smoke, documentation, and
 release notes.
+
+## Artifact-verification transport
+
+`rankweave schema --report-type verification --schema-version v1` emits the packaged Draft 2020-12 contract for `rankweave.artifact-verification.v1`. The schema is structurally strict and documents cross-field invariants that the producer and verification core enforce. Structural conformance alone is not evidence that the report producer or artifact source is trusted.

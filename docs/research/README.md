@@ -309,3 +309,13 @@ Smucker, M. D., Allan, J., & Carterette, B. (2007). A comparison of statistical
 significance tests for information retrieval evaluation. In *Proceedings of the
 Sixteenth ACM Conference on Information and Knowledge Management* (pp. 623–632).
 Association for Computing Machinery. https://doi.org/10.1145/1321440.1321528
+
+### Artifact integrity and JSON interoperability
+
+Bray, T. (2017). *The JavaScript Object Notation (JSON) Data Interchange Format* (RFC 8259). RFC Editor. https://doi.org/10.17487/RFC8259
+
+National Institute of Standards and Technology. (2015). *Secure Hash Standard (SHS)* (FIPS PUB 180-4). U.S. Department of Commerce. https://doi.org/10.6028/NIST.FIPS.180-4
+
+Supply-chain Levels for Software Artifacts. (n.d.). *Build: Verifying artifacts (SLSA specification v1.2)*. OpenSSF. Retrieved August 5, 2026, from https://slsa.dev/spec/v1.2/verifying-artifacts
+
+RFC 8259 says object names should be unique for interoperable interpretation and excludes `NaN` and infinity from JSON numbers. FIPS 180-4 specifies SHA-256 for change detection; NIST has announced a future revision but FIPS 180-4 remains the published standard. SLSA v1.2 verification additionally requires trusted provenance/attestation checks and matching an attestation subject to the artifact digest, so RankWeave's unsigned local comparison makes no SLSA claim.

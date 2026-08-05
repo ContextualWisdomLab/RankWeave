@@ -187,6 +187,36 @@ def _add_shared_comparison_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+
+def _reject_nonstandard_json_number(raw_value: str) -> Any:
+    """Reject NaN and infinity spellings that RFC 8259 excludes."""
+    raise ValueError(
+        f"report JSON contains non-standard number {raw_value!r}"
+    )
+
+
+def _reject_duplicate_json_names(
+    pairs: list[tuple[str, Any]],
+) -> dict[str, Any]:
+    """Build one object while rejecting ambiguous duplicate member names."""
+    result: dict[str, Any] = {}
+    for name, value in pairs:
+        if name in result:
+            raise ValueError(
+                f"report JSON contains duplicate object name {name!r}"
+            )
+        result[name] = value
+    return result
+
+
+def _load_report_json(text: str) -> Any:
+    """Parse one interoperable RFC 8259 report JSON value."""
+    return json.loads(
+        text,
+        parse_constant=_reject_nonstandard_json_number,
+        object_pairs_hook=_reject_duplicate_json_names,
+    )
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the stable RankWeave command-line parser."""
     parser = _ArgumentParser(
@@ -254,7 +284,7 @@ def build_parser() -> argparse.ArgumentParser:
     schema_parser.add_argument(
         "--report-type",
         required=True,
-        choices=("pairwise", "family"),
+        choices=("pairwise", "family", "verification"),
     )
     schema_parser.add_argument(
         "--schema-version",
@@ -650,7 +680,7 @@ def _run_verify_artifacts(
         arguments.report,
         arguments.max_input_bytes,
     )
-    report_data = json.loads(report_artifact.text)
+    report_data = _load_report_json(report_artifact.text)
     baseline_run_bytes = _read_bytes_bounded(
         arguments.baseline_run,
         arguments.max_input_bytes,

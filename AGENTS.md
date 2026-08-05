@@ -194,3 +194,7 @@ As of 2026-08-04, code-owner review requirements
 ContextualWisdomLab organization. The organization currently has one maintainer,
 so a code-owner approval gate cannot be satisfied. Do not re-enable these
 settings or add CODEOWNERS-based merge gates until multiple maintainers exist.
+
+## RankWeave 0.14 verification gate
+
+Changes to artifact verification must preserve raw-byte hashing, independent digest and byte-count comparison, exact family order, path/payload non-disclosure, strict persisted JSON, console/module parity, the packaged verification schema, and 100% production statement and branch coverage. Do not describe a digest match as authentication, attestation, provenance verification, or a SLSA level.

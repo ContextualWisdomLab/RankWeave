@@ -63,3 +63,7 @@ introduced. A release synchronizes package metadata, public version, version
 tests, installed-wheel assertions, documentation, and `CHANGELOG.md`. Every
 production statement and branch, plus every public module, class, function, and
 method docstring, remains covered by the repository quality gates.
+
+## Exact artifact-verification boundary
+
+`artifact_verification.py` is a pure bytes-and-mappings core with no filesystem, JSON, provider, network, or database access. `cli.py` is the bounded filesystem and strict RFC 8259 boundary. The output transport is path-free and independently reusable by naruon or another MSA consumer. SHA-256 equality is deliberately separated from authentication and provenance policy.

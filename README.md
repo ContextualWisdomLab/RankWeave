@@ -483,3 +483,17 @@ python -m pip wheel . --no-deps --wheel-dir dist
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
+
+## Verify persisted artifact evidence
+
+RankWeave 0.14.0 can compare explicit local files with the unsigned SHA-256 and raw byte-count evidence in a persisted v2 report without exposing file paths or payloads:
+
+```bash
+rankweave verify-artifacts \
+  --report comparison.json \
+  --baseline-run baseline.run \
+  --candidate-run candidate.run \
+  --qrels qrels.txt
+```
+
+Candidate-family verification uses ordered, repeatable `--candidate ID=PATH` arguments. Exit status `0` means all bytes match, `1` means at least one artifact differs, and `2` means the command or evidence is invalid. A match is an integrity comparison only—not authentication, signature verification, provenance verification, or a SLSA claim.

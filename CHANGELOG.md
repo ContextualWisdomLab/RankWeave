@@ -4,6 +4,21 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-08-05
+
+### Added
+- Pure standard-library `verify_report_artifacts` APIs for exact pairwise and candidate-family v2 input verification.
+- The `rankweave verify-artifacts` console and module command with deterministic JSON, exit `0` for a match, exit `1` for an evidence mismatch, and stderr-only exit `2` for invalid input.
+- A strict JSON Schema Draft 2020-12 resource for `rankweave.artifact-verification.v1` and installed-wheel command/resource smoke tests.
+
+### Changed
+- Persisted reports are parsed as interoperable RFC 8259 JSON: duplicate member names and non-standard `NaN` or infinity numbers fail closed.
+- Candidate-family verification requires report, evidence, and caller-supplied candidate order to agree exactly.
+
+### Security
+- Verification output excludes local paths and artifact payloads and compares both SHA-256 and raw byte counts.
+- A successful comparison is explicitly not producer authentication, signature or provenance verification, an attestation, or a SLSA-level claim.
+
 ## [0.13.0] — 2026-08-05
 
 ### Added

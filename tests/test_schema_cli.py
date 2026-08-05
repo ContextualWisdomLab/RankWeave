@@ -15,6 +15,7 @@ from rankweave.cli import main
         ("pairwise", "v2"),
         ("family", "v1"),
         ("family", "v2"),
+        ("verification", "v1"),
     ],
 )
 def test_schema_command_emits_exact_packaged_utf8_text(

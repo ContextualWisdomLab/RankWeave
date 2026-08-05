@@ -13,3 +13,7 @@ requires synchronized schema, tests, installed-wheel smoke, documentation, and
 release metadata. Do not use `COPILOT_GITHUB_TOKEN`; the governed product loop
 uses the existing `NVIDIA_NIM_API_KEY` OpenCode path without altering review
 agent credentials.
+
+## Artifact verification
+
+Keep the verification core standard-library-only and transport-neutral. Filesystem and JSON concerns belong in the CLI adapter. A mismatch is a normal machine-readable exit-1 result; malformed evidence remains stderr-only exit 2. Every new output field requires schema, docs, wheel-smoke, and coverage updates.
