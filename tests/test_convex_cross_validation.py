@@ -128,9 +128,9 @@ def test_cross_validation_rejects_missing_and_extra_fold_assignments():
     with pytest.raises(
         ValueError,
         match=(
-            "fold assignments must match scored queries; "
-            "missing assignments=\['query-a2'\], "
-            "extra assignments=\['extra-query'\]"
+            r"fold assignments must match scored queries; "
+            r"missing assignments=\['query-a2'\], "
+            r"extra assignments=\['extra-query'\]"
         ),
     ):
         cross_validate_weighted_convex_fusion(
