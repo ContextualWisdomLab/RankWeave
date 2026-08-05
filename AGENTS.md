@@ -71,10 +71,17 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   independent of the process locale. Expected usage, file, UTF-8, size, TREC,
   evaluation, and statistical errors write one stderr line, no stdout, and exit
   `2`. Pairwise and family schemas are independently versioned.
+- **Artifact provenance is opt-in and exact.** Default CLI output must remain the
+  exact v1 contract. `--include-artifact-digests` emits only the corresponding
+  v2 schema. Hash the same bounded raw bytes that are later decoded, record raw
+  byte counts, preserve candidate order, and never emit local paths. A SHA-256
+  digest is an integrity binding, not a signature, producer authentication,
+  trusted-execution proof, or SLSA-level claim.
 - **CLI input is bounded.** Every artifact read requests no more than
   `max_input_bytes + 1`. Never replace it with `read()`, `read_bytes()`, or any
   other unbounded operation after a size check. The limit applies separately to
-  the baseline, qrels, and every candidate artifact.
+  the baseline, qrels, and every candidate artifact. Digest mode must not cause
+  a second file read.
 - **Significance is not business value.** Documentation reports effect size
   with raw or adjusted p-values and never presents statistical significance as
   practical significance, independent test performance, or valuation.
@@ -129,7 +136,7 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   `rankweave.__version__`, the expected version test, and `CHANGELOG.md`
   together. The wheel preserves `py.typed`, the CLI modules, and the installed
   console script, and passes isolated installation smoke tests for both console
-  and module entrypoints.
+  and module entrypoints, including every new schema mode.
 
 ## Develop
 
@@ -152,8 +159,8 @@ python -m pip wheel . --no-deps --wheel-dir dist
 - `src/rankweave/trec_comparison.py` — direct three-artifact paired comparison.
 - `src/rankweave/trec_family_comparison.py` — named candidate-family
   comparison with Holm family-wise correction.
-- `src/rankweave/cli.py` — bounded pairwise/family input, JSON projection, and
-  exit contracts.
+- `src/rankweave/cli.py` — bounded pairwise/family input, v1/v2 JSON
+  projection, exact artifact evidence, and exit contracts.
 - `src/rankweave/__main__.py` — module entrypoint only.
 - `src/rankweave/query_normalization.py` — NFC query normalization.
 - `.github/workflows/hourly-commercialization-loop.yml` — hourly governed
@@ -163,7 +170,8 @@ python -m pip wheel . --no-deps --wheel-dir dist
 - `docs/trec-interoperability.md` — interchange contracts.
 - `docs/trec-run-comparison.md` — direct pairwise TREC workflow.
 - `docs/trec-family-comparison.md` — candidate-family and Holm workflow.
-- `docs/cli.md` — installed commands, JSON schemas, and operator boundaries.
+- `docs/cli.md` — installed commands, v1/v2 JSON schemas, artifact verification,
+  and operator boundaries.
 - `docs/superpowers/specs/` and `docs/superpowers/plans/` — reviewed designs
   and executable implementation plans.
 - `tests/` — hand-computed behavior and contract tests.
