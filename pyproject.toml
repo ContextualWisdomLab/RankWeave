@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.31.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -58,12 +58,15 @@ Issues = "https://github.com/ContextualWisdomLab/rankweave/issues"
 
 [project.optional-dependencies]
 dev = [
-    "coverage[toml]>=7.6",
-    "jsonschema>=4.23,<5",
-    "pytest>=8",
-    "ruff>=0.6",
-    "tomli>=2",
+    "coverage[toml]==7.15.2",
+    "jsonschema==4.26.0",
+    "pytest==9.1.1",
+    "ruff==0.15.22",
+    "tomli==2.4.1",
 ]
+
+[tool.uv]
+required-version = "==0.11.29"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rankweave"]
