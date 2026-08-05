@@ -77,10 +77,15 @@ jobs:
           required_members = {
               "rankweave/__init__.py",
               "rankweave/__main__.py",
+              "rankweave/_validation.py",
+              "rankweave/artifact_verification.py",
               "rankweave/cli.py",
               "rankweave/comparison.py",
               "rankweave/evaluation.py",
+              "rankweave/query_normalization.py",
+              "rankweave/ranked_list_fusion.py",
               "rankweave/report_schemas.py",
+              "rankweave/score_fusion.py",
               "rankweave/schemas/__init__.py",
               "rankweave/schemas/trec-comparison-v1.schema.json",
               "rankweave/schemas/trec-comparison-v2.schema.json",
@@ -109,9 +114,12 @@ jobs:
 
           import rankweave
 
-          assert version("rankweave") == "0.13.0"
-          assert rankweave.__version__ == "0.13.0"
+          assert version("rankweave") == "0.14.0"
+          assert rankweave.__version__ == "0.14.0"
           assert find_spec("jsonschema") is None
+          assert callable(rankweave.verify_report_artifacts)
+          assert rankweave.PAIRWISE_REPORT_SCHEMA_VERSION.endswith(".v2")
+          assert rankweave.FAMILY_REPORT_SCHEMA_VERSION.endswith(".v2")
 
           expected = [
               ("pairwise", "v1", "rankweave.trec-comparison.v1"),
@@ -240,6 +248,44 @@ jobs:
               --include-artifact-digests > family-v2.module.json
             cmp family-v2.json family-v2.module.json
 
+            "$venv_bin/rankweave" verify-artifacts \
+              --report pairwise-v2.json \
+              --baseline-run baseline.run \
+              --candidate-run candidate.run \
+              --qrels qrels.txt > pairwise-verification.json
+            "$venv_bin/python" -m rankweave verify-artifacts \
+              --report pairwise-v2.json \
+              --baseline-run baseline.run \
+              --candidate-run candidate.run \
+              --qrels qrels.txt > pairwise-verification.module.json
+            cmp pairwise-verification.json pairwise-verification.module.json
+
+            "$venv_bin/rankweave" verify-artifacts \
+              --report family-v2.json \
+              --baseline-run baseline.run \
+              --candidate first=candidate.run \
+              --candidate second=candidate-b.run \
+              --qrels qrels.txt > family-verification.json
+            "$venv_bin/python" -m rankweave verify-artifacts \
+              --report family-v2.json \
+              --baseline-run baseline.run \
+              --candidate first=candidate.run \
+              --candidate second=candidate-b.run \
+              --qrels qrels.txt > family-verification.module.json
+            cmp family-verification.json family-verification.module.json
+
+            cp candidate.run candidate-mismatch.run
+            printf '# mismatch\n' >> candidate-mismatch.run
+            set +e
+            "$venv_bin/rankweave" verify-artifacts \
+              --report pairwise-v2.json \
+              --baseline-run baseline.run \
+              --candidate-run candidate-mismatch.run \
+              --qrels qrels.txt > pairwise-mismatch.json
+            mismatch_status=$?
+            set -e
+            test "$mismatch_status" -eq 1
+
             "$venv_bin/python" - <<'PY'
           import json
           from pathlib import Path
@@ -253,8 +299,29 @@ jobs:
           for file_name, schema_id in expected_reports.items():
               report = json.loads(Path(file_name).read_text(encoding="utf-8"))
               assert report["schema_version"] == schema_id
-              assert report["rankweave_version"] == "0.13.0"
+              assert report["rankweave_version"] == "0.14.0"
               assert ("artifacts" in report) == schema_id.endswith(".v2")
+
+          for file_name, expected_count in (
+              ("pairwise-verification.json", 3),
+              ("family-verification.json", 4),
+          ):
+              verification = json.loads(
+                  Path(file_name).read_text(encoding="utf-8")
+              )
+              assert verification["schema_version"] == (
+                  "rankweave.artifact-verification.v1"
+              )
+              assert verification["rankweave_version"] == "0.14.0"
+              assert verification["verified"] is True
+              assert verification["artifact_count"] == expected_count
+              assert verification["mismatch_count"] == 0
+
+          mismatch = json.loads(
+              Path("pairwise-mismatch.json").read_text(encoding="utf-8")
+          )
+          assert mismatch["verified"] is False
+          assert mismatch["mismatch_count"] == 1
           PY
           )
       - run: uv pip check --python .package-smoke/bin/python
