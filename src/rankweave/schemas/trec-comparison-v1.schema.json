@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:contextualwisdomlab:rankweave:trec-comparison:v1",
+  "title": "RankWeave pairwise TREC comparison report v1",
+  "description": "The default pairwise RankWeave CLI transport without input-artifact digest evidence.",
+  "$comment": "query_count equals the length of query_differences and nonzero_difference_count counts non-zero difference values; these cross-field invariants are guaranteed by RankWeave generation but are not expressible in portable Draft 2020-12 JSON Schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "rankweave_version",
+    "baseline_run_id",
+    "candidate_run_id",
+    "cutoff",
+    "metric_name",
+    "alternative",
+    "query_count",
+    "nonzero_difference_count",
+    "baseline_mean",
+    "candidate_mean",
+    "mean_difference",
+    "p_value",
+    "method",
+    "randomizations_evaluated",
+    "random_seed",
+    "query_differences"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "rankweave.trec-comparison.v1"
+    },
+    "rankweave_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "baseline_run_id": {
+      "$ref": "#/$defs/run_id"
+    },
+    "candidate_run_id": {
+      "$ref": "#/$defs/run_id"
+    },
+    "cutoff": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "metric_name": {
+      "$ref": "#/$defs/metric_name"
+    },
+    "alternative": {
+      "$ref": "#/$defs/alternative"
+    },
+    "query_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "nonzero_difference_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "baseline_mean": {
+      "$ref": "#/$defs/unit_interval"
+    },
+    "candidate_mean": {
+      "$ref": "#/$defs/unit_interval"
+    },
+    "mean_difference": {
+      "$ref": "#/$defs/signed_unit_interval"
+    },
+    "p_value": {
+      "$ref": "#/$defs/unit_interval"
+    },
+    "method": {
+      "$ref": "#/$defs/method"
+    },
+    "randomizations_evaluated": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "random_seed": {
+      "oneOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "query_differences": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/query_difference"
+      }
+    }
+  },
+  "$defs": {
+    "run_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,20}$"
+    },
+    "metric_name": {
+      "enum": [
+        "precision_at_k",
+        "recall_at_k",
+        "reciprocal_rank_at_k",
+        "ndcg_at_k"
+      ]
+    },
+    "alternative": {
+      "enum": [
+        "two-sided",
+        "candidate-greater",
+        "candidate-less"
+      ]
+    },
+    "method": {
+      "enum": [
+        "exact",
+        "monte-carlo"
+      ]
+    },
+    "unit_interval": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "signed_unit_interval": {
+      "type": "number",
+      "minimum": -1,
+      "maximum": 1
+    },
+    "query_difference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_id",
+        "baseline_value",
+        "candidate_value",
+        "difference"
+      ],
+      "properties": {
+        "query_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "baseline_value": {
+          "$ref": "#/$defs/unit_interval"
+        },
+        "candidate_value": {
+          "$ref": "#/$defs/unit_interval"
+        },
+        "difference": {
+          "$ref": "#/$defs/signed_unit_interval"
+        }
+      }
+    }
+  }
+}
