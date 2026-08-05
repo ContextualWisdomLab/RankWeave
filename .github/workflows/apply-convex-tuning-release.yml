@@ -49,7 +49,17 @@ jobs:
         run: |
           set -euo pipefail
           python .github/scripts/apply_convex_tuning_release.py
-          uv lock --offline
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("uv.lock")
+          content = path.read_text(encoding="utf-8")
+          old = 'name = "rankweave"\nversion = "0.14.0"'
+          new = 'name = "rankweave"\nversion = "0.15.0"'
+          if content.count(old) != 1:
+              raise SystemExit("uv.lock local rankweave version is not unique")
+          path.write_text(content.replace(old, new, 1), encoding="utf-8")
+          PY
           rm .github/scripts/apply_convex_tuning_release.py
           uv sync --frozen --extra dev --python 3.13
           uv run --frozen --extra dev --python 3.13 \
