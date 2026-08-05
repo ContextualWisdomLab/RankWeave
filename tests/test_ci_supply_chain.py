@@ -1,12 +1,47 @@
+import re
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CI_WORKFLOW = PROJECT_ROOT / ".github/workflows/ci.yml"
-CHECKOUT_SHA = "11d5960a326750d5838078e36cf38b85af677262"
+FULL_SHA_REFERENCE = re.compile(
+    r"uses:\s+([^\s@]+)@([0-9a-f]{40})(?:\s|$)"
+)
+
+CHECKOUT_SHA = "de0fac2e4500dabe0009e67214ff5f5447ce83dd"
+SETUP_PYTHON_SHA = "a309ff8b426b58ec0e2a45f0f869d46889d02405"
+SETUP_UV_SHA = "08807647e7069bb48b6ef5acd8ec9567f424441b"
+SUPERSEDED_SHAS = {
+    "11d5960a326750d5838078e36cf38b85af677262",
+    "a26af69be951a213d495a4c3e4e4022e16d87065",
+    "c771a70e6277c0a99b617c7a806ffedaca235ff9",
+}
 
 
-def test_ci_pins_checkout_to_reviewed_commit_sha():
-    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+def _workflow_text() -> str:
+    return CI_WORKFLOW.read_text(encoding="utf-8")
+
+
+def _references(workflow: str) -> tuple[tuple[str, str], ...]:
+    return tuple(FULL_SHA_REFERENCE.findall(workflow))
+
+
+def test_ci_pins_reviewed_node24_action_commits():
+    workflow = _workflow_text()
 
     assert workflow.count(f"actions/checkout@{CHECKOUT_SHA}") == 2
-    assert "actions/checkout@11d5960a32675040c1d81818171ca7d0f3653254e" not in workflow
+    assert workflow.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 2
+    assert workflow.count(f"astral-sh/setup-uv@{SETUP_UV_SHA}") == 2
+
+    expected = {
+        ("actions/checkout", CHECKOUT_SHA),
+        ("actions/setup-python", SETUP_PYTHON_SHA),
+        ("astral-sh/setup-uv", SETUP_UV_SHA),
+    }
+    assert expected <= set(_references(workflow))
+
+
+def test_ci_rejects_superseded_action_commits():
+    workflow = _workflow_text()
+
+    for superseded_sha in SUPERSEDED_SHAS:
+        assert superseded_sha not in workflow
