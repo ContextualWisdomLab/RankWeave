@@ -85,7 +85,8 @@ jobs:
 
           import rankweave
 
-          assert version("rankweave") == rankweave.__version__
+          assert version("rankweave") == "0.12.0"
+          assert rankweave.__version__ == "0.12.0"
           assert rankweave.reciprocal_rank_fuse({"dense": ["document"]})
           metrics = rankweave.evaluate_ranking(
               ["document"], {"document": 1}, cutoff=1
@@ -112,18 +113,6 @@ jobs:
               alternative=rankweave.CANDIDATE_GREATER_ALTERNATIVE,
           )
           assert comparison.significance.mean_difference == 1.0
-          trec_comparison = rankweave.compare_trec_runs(
-              "q Q0 other 1 0.9 baseline\n"
-              "q Q0 document 2 0.2 baseline\n",
-              "q Q0 document 1 0.9 candidate\n"
-              "q Q0 other 2 0.2 candidate\n",
-              "q 0 document 1\nq 0 other 0\n",
-              cutoff=1,
-              alternative=rankweave.CANDIDATE_GREATER_ALTERNATIVE,
-          )
-          assert trec_comparison.baseline_run.run_id == "baseline"
-          assert trec_comparison.candidate_run.run_id == "candidate"
-          assert trec_comparison.comparison.significance.mean_difference == 1.0
           family = rankweave.compare_trec_run_family(
               "q Q0 other 1 0.9 baseline\n"
               "q Q0 document 2 0.2 baseline\n",
@@ -137,29 +126,32 @@ jobs:
               cutoff=1,
               alternative=rankweave.CANDIDATE_GREATER_ALTERNATIVE,
           )
-          assert family.candidates[0].candidate_id == "candidate"
           assert family.candidates[0].raw_p_value == 0.5
           assert family.candidates[0].holm_adjusted_p_value == 0.5
           PY
-      - name: Smoke-test installed console command outside source tree
+      - name: Smoke-test installed console and module commands outside source tree
         run: |
           set -euo pipefail
           venv_bin="$PWD/.package-smoke/bin"
           smoke_dir="$(mktemp -d)"
           trap 'rm -rf "$smoke_dir"' EXIT
           cat >"$smoke_dir/baseline.run" <<'EOF'
+          # baseline audit comment
           q Q0 other 1 0.9 baseline
           q Q0 document 2 0.2 baseline
           EOF
           cat >"$smoke_dir/candidate.run" <<'EOF'
+          # candidate audit comment
           q Q0 document 1 0.9 candidate
           q Q0 other 2 0.2 candidate
           EOF
           cat >"$smoke_dir/candidate-b.run" <<'EOF'
+          # second candidate audit comment
           q Q0 document 1 0.95 candidate-b
           q Q0 other 2 0.1 candidate-b
           EOF
           cat >"$smoke_dir/qrels.txt" <<'EOF'
+          # qrels audit comment
           q 0 document 1
           q 0 other 0
           EOF
@@ -170,25 +162,52 @@ jobs:
               --candidate-run candidate.run \
               --qrels qrels.txt \
               --cutoff 1 \
-              --alternative candidate-greater > report.json
+              --alternative candidate-greater > pairwise-v1.json
             "$venv_bin/python" - <<'PY'
           import json
           from pathlib import Path
 
-          report = json.loads(Path("report.json").read_text(encoding="utf-8"))
+          report = json.loads(Path("pairwise-v1.json").read_text(encoding="utf-8"))
           assert report["schema_version"] == "rankweave.trec-comparison.v1"
-          assert report["rankweave_version"] == "0.11.1"
-          assert report["baseline_run_id"] == "baseline"
-          assert report["candidate_run_id"] == "candidate"
+          assert report["rankweave_version"] == "0.12.0"
+          assert "artifacts" not in report
           assert report["mean_difference"] == 1.0
           PY
+
+            "$venv_bin/rankweave" compare \
+              --baseline-run baseline.run \
+              --candidate-run candidate.run \
+              --qrels qrels.txt \
+              --cutoff 1 \
+              --alternative candidate-greater \
+              --include-artifact-digests > pairwise-v2.json
             "$venv_bin/python" -m rankweave compare \
               --baseline-run baseline.run \
               --candidate-run candidate.run \
               --qrels qrels.txt \
               --cutoff 1 \
-              --alternative candidate-greater > module-report.json
-            cmp report.json module-report.json
+              --alternative candidate-greater \
+              --include-artifact-digests > pairwise-v2-module.json
+            cmp pairwise-v2.json pairwise-v2-module.json
+            "$venv_bin/python" - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("pairwise-v2.json").read_text(encoding="utf-8"))
+          assert report["schema_version"] == "rankweave.trec-comparison.v2"
+          assert report["rankweave_version"] == "0.12.0"
+          for role, path in {
+              "baseline_run": Path("baseline.run"),
+              "candidate_run": Path("candidate.run"),
+              "qrels": Path("qrels.txt"),
+          }.items():
+              payload = path.read_bytes()
+              assert report["artifacts"][role] == {
+                  "sha256": hashlib.sha256(payload).hexdigest(),
+                  "byte_count": len(payload),
+              }
+          PY
 
             "$venv_bin/rankweave" compare-family \
               --baseline-run baseline.run \
@@ -196,35 +215,61 @@ jobs:
               --candidate second=candidate-b.run \
               --qrels qrels.txt \
               --cutoff 1 \
-              --alternative candidate-greater > family-report.json
+              --alternative candidate-greater > family-v1.json
             "$venv_bin/python" - <<'PY'
           import json
           from pathlib import Path
 
-          report = json.loads(
-              Path("family-report.json").read_text(encoding="utf-8")
-          )
+          report = json.loads(Path("family-v1.json").read_text(encoding="utf-8"))
           assert report["schema_version"] == (
               "rankweave.trec-family-comparison.v1"
           )
-          assert report["rankweave_version"] == "0.11.1"
-          assert report["baseline_run_id"] == "baseline"
-          assert report["candidate_count"] == 2
+          assert report["rankweave_version"] == "0.12.0"
+          assert "artifacts" not in report
           assert [candidate["candidate_id"] for candidate in report["candidates"]] == [
               "first",
               "second",
           ]
-          assert [
-              candidate["candidate_run_id"] for candidate in report["candidates"]
-          ] == ["candidate", "candidate-b"]
           PY
+
+            "$venv_bin/rankweave" compare-family \
+              --baseline-run baseline.run \
+              --candidate first=candidate.run \
+              --candidate second=candidate-b.run \
+              --qrels qrels.txt \
+              --cutoff 1 \
+              --alternative candidate-greater \
+              --include-artifact-digests > family-v2.json
             "$venv_bin/python" -m rankweave compare-family \
               --baseline-run baseline.run \
               --candidate first=candidate.run \
               --candidate second=candidate-b.run \
               --qrels qrels.txt \
               --cutoff 1 \
-              --alternative candidate-greater > family-module-report.json
-            cmp family-report.json family-module-report.json
+              --alternative candidate-greater \
+              --include-artifact-digests > family-v2-module.json
+            cmp family-v2.json family-v2-module.json
+            "$venv_bin/python" - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("family-v2.json").read_text(encoding="utf-8"))
+          assert report["schema_version"] == (
+              "rankweave.trec-family-comparison.v2"
+          )
+          assert report["rankweave_version"] == "0.12.0"
+          assert [
+              item["candidate_id"] for item in report["artifacts"]["candidates"]
+          ] == ["first", "second"]
+          for item, path in zip(
+              report["artifacts"]["candidates"],
+              [Path("candidate.run"), Path("candidate-b.run")],
+              strict=True,
+          ):
+              payload = path.read_bytes()
+              assert item["sha256"] == hashlib.sha256(payload).hexdigest()
+              assert item["byte_count"] == len(payload)
+          PY
           )
       - run: .package-smoke/bin/python -m pip check

@@ -29,10 +29,9 @@ python -m rankweave compare \
   --cutoff 10
 ```
 
-### Pairwise success schema
+### Pairwise v1 success schema
 
-Success emits one UTF-8 JSON document followed by a newline. The stable schema
-identifier is:
+The default emits one UTF-8 JSON document with schema identifier:
 
 ```text
 rankweave.trec-comparison.v1
@@ -96,9 +95,9 @@ not contain `=` or leading or trailing whitespace. Command-line order is
 preserved as statistical-family and tie-breaking evidence; RankWeave never
 discovers candidates by scanning a directory.
 
-### Candidate-family success schema
+### Candidate-family v1 success schema
 
-Success emits one UTF-8 JSON document with schema identifier:
+The default emits one UTF-8 JSON document with schema identifier:
 
 ```text
 rankweave.trec-family-comparison.v1
@@ -140,6 +139,81 @@ Holm adjustment controls false rejection across the candidate family supplied
 before results are inspected. It does not measure effect size, operational
 value, latency, cost, safety, or permission to deploy a candidate.
 
+## Exact input-artifact evidence
+
+Add `--include-artifact-digests` when a stored report must be bound to the exact
+run and qrels bytes that produced it:
+
+```bash
+rankweave compare \
+  --baseline-run baseline.run \
+  --candidate-run candidate.run \
+  --qrels qrels.txt \
+  --cutoff 10 \
+  --include-artifact-digests > comparison.json
+```
+
+```bash
+rankweave compare-family \
+  --baseline-run baseline.run \
+  --candidate lexical=lexical.run \
+  --candidate hybrid=hybrid.run \
+  --qrels qrels.txt \
+  --cutoff 10 \
+  --include-artifact-digests > family-comparison.json
+```
+
+The flag changes the schema identifier because existing consumers may enforce
+an exact v1 field set and order:
+
+- pairwise: `rankweave.trec-comparison.v2`;
+- candidate family: `rankweave.trec-family-comparison.v2`.
+
+Both v2 schemas insert `artifacts` immediately after `rankweave_version`.
+Every evidence record contains:
+
+```json
+{
+  "sha256": "64 lowercase hexadecimal characters",
+  "byte_count": 1234
+}
+```
+
+Pairwise `artifacts` contains `baseline_run`, `candidate_run`, and `qrels`.
+Family `artifacts` contains `baseline_run`, `qrels`, and an ordered `candidates`
+array. Every candidate evidence entry contains its explicit `candidate_id`,
+`sha256`, and `byte_count`.
+
+The digest is computed over the exact bytes read before UTF-8 decoding. Comments,
+line endings, trailing whitespace, and different Unicode byte sequences
+therefore affect artifact identity even when TREC evaluation ignores or
+normalizes some of those distinctions. `byte_count` is the raw byte length, not
+Unicode character count.
+
+Local input paths are deliberately excluded. A report can cross machines,
+containers, tenants, and organizations without disclosing mutable filesystem
+locations.
+
+SHA-256 evidence supports later byte-for-byte verification, but it does not
+authenticate the report producer, sign the report, prove trusted execution, or
+establish a SLSA level. Consumers needing authenticity must protect or sign the
+report and independently acquire the artifacts being verified.
+
+### Verification example
+
+```python
+import hashlib
+import json
+from pathlib import Path
+
+report = json.loads(Path("comparison.json").read_text(encoding="utf-8"))
+expected = report["artifacts"]["candidate_run"]
+actual_bytes = Path("candidate.run").read_bytes()
+
+assert len(actual_bytes) == expected["byte_count"]
+assert hashlib.sha256(actual_bytes).hexdigest() == expected["sha256"]
+```
+
 ## Shared options
 
 | Option | Required | Default | Contract |
@@ -153,6 +227,7 @@ value, latency, cost, safety, or permission to deploy a candidate.
 | `--seed` | no | `0` | Signed ASCII decimal integer. |
 | `--max-input-bytes` | no | `67108864` | Positive per-artifact byte ceiling. |
 | `--pretty` | no | false | Emit deterministic two-space JSON. |
+| `--include-artifact-digests` | no | false | Emit path-free v2 SHA-256 and byte-count evidence. |
 
 Pairwise comparison additionally requires `--candidate-run`. Candidate-family
 comparison additionally requires one or more `--candidate ID=PATH` options and
@@ -186,7 +261,8 @@ are not converted into success-like JSON.
 ## Resource boundary
 
 Every baseline, candidate, and qrels artifact is checked before reading and is
-then read with an explicit `max_input_bytes + 1` ceiling. The second check
+then read with an explicit `max_input_bytes + 1` ceiling. The same bounded byte
+payload is hashed, counted, and strictly decoded once. The second size check
 rejects a file that grows after its initial size observation without first
 loading an unbounded payload. The default limit is 64 MiB **per artifact** and
 can be lowered by the caller. A ceiling that cannot be represented by the
@@ -198,7 +274,7 @@ limit, and durable-job policy before invoking RankWeave.
 
 ## CI examples
 
-Pairwise comparison:
+Pairwise comparison with evidence:
 
 ```bash
 set -euo pipefail
@@ -209,10 +285,11 @@ rankweave compare \
   --qrels artifacts/qrels.txt \
   --cutoff 20 \
   --alternative candidate-greater \
+  --include-artifact-digests \
   --pretty > artifacts/comparison.json
 ```
 
-Candidate-family comparison:
+Candidate-family comparison with evidence:
 
 ```bash
 set -euo pipefail
@@ -225,6 +302,7 @@ rankweave compare-family \
   --cutoff 20 \
   --alternative candidate-greater \
   --familywise-alpha 0.05 \
+  --include-artifact-digests \
   --pretty > artifacts/family-comparison.json
 ```
 
@@ -234,8 +312,9 @@ adjusted p-value is sufficient by itself.
 
 ## Compatibility
 
-The JSON schemas are versioned independently from the package. Additive package
-releases may retain the `v1` identifiers; an incompatible transport change
-requires a new schema identifier. Full parsed TREC artifacts and immutable
-comparison reports remain available through the Python API rather than being
-reconstructed from the CLI projections.
+The v1 schemas remain the default and are unchanged. V2 is opt-in and adds
+artifact evidence while preserving all statistical field meanings. Schema
+identifiers are versioned independently from the package; any future
+incompatible transport change requires another identifier. Full parsed TREC
+artifacts and immutable comparison reports remain available through the Python
+API rather than being reconstructed from CLI projections.

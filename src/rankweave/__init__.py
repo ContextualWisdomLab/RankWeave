@@ -117,7 +117,7 @@ from rankweave.tuning import (
     tune_weighted_reciprocal_rank_fusion,
 )
 
-__version__ = "0.11.1"
+__version__ = "0.12.0"
 
 __all__ = [
     "AggregateRankingMetrics",

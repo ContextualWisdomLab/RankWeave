@@ -28,6 +28,8 @@ remains suitable both as a standalone package and as a small MSA module.
   a named family of candidates against one baseline.
 - **Shell-ready evidence:** `rankweave compare` and `rankweave compare-family`
   emit versioned JSON audit reports without requiring Python glue.
+- **Exact artifact binding:** opt-in v2 reports retain SHA-256 and raw byte counts
+  for every run and qrels input without exposing local paths.
 - **Fail-closed contracts:** malformed values, duplicate identifiers, missing
   queries, and invalid artifacts raise stable validation errors.
 - **Portable core:** Apache-2.0, typed, Python 3.10+, and stdlib-only runtime.
@@ -258,10 +260,9 @@ rankweave compare \
 ```
 
 The equivalent module invocation is `python -m rankweave compare ...`.
-Successful execution emits one UTF-8 JSON document with schema identifier
-`rankweave.trec-comparison.v1` and returns `0`. Expected usage, filesystem,
-UTF-8, size, TREC, evaluation, and statistical validation failures emit no JSON,
-write one `rankweave: error: ...` line to stderr, and return `2`.
+Default execution emits `rankweave.trec-comparison.v1` JSON. Expected usage,
+filesystem, UTF-8, size, TREC, evaluation, and statistical validation failures
+emit no JSON, write one `rankweave: error: ...` line to stderr, and return `2`.
 
 ## Compare a TREC candidate family with Holm correction
 
@@ -324,21 +325,50 @@ rankweave compare-family \
   --pretty > family-comparison.json
 ```
 
-The equivalent module invocation is
-`python -m rankweave compare-family ...`. Repeatable `--candidate ID=PATH`
-options define the complete family and preserve command-line order. Success
-emits `rankweave.trec-family-comparison.v1` JSON with each candidate's effect,
-raw p-value, Holm-adjusted p-value, family-wise decision, run provenance, and
-complete per-query differences.
+Repeatable `--candidate ID=PATH` options define the complete family and preserve
+command-line order. Default execution emits
+`rankweave.trec-family-comparison.v1` JSON with each candidate's effect, raw and
+Holm-adjusted p-values, family-wise decision, run provenance, and complete
+per-query differences.
 
-Both CLI workflows accept local files only and delegate all parsing,
-evaluation, randomization, and adjustment behavior to the native Python APIs.
-Inputs default to a 64 MiB limit **per artifact**. Each read requests at most the
-configured limit plus one byte, so a file that grows after its initial size
-check cannot trigger an unbounded in-memory read. A configured limit that is too
-large for the platform's binary read API is rejected as a validation error.
+## Bind reports to exact input bytes
 
-See [RankWeave command-line interface](docs/cli.md).
+Run tags are descriptive provenance and may repeat. Add
+`--include-artifact-digests` when a persisted report must identify the exact
+baseline, candidate, and qrels bytes that were evaluated:
+
+```bash
+rankweave compare \
+  --baseline-run baseline.run \
+  --candidate-run candidate.run \
+  --qrels qrels.txt \
+  --cutoff 10 \
+  --include-artifact-digests > comparison.json
+```
+
+```bash
+rankweave compare-family \
+  --baseline-run baseline.run \
+  --candidate model-a=model-a.run \
+  --candidate model-b=model-b.run \
+  --qrels qrels.txt \
+  --cutoff 10 \
+  --include-artifact-digests > family-comparison.json
+```
+
+Digest mode uses the opt-in schemas `rankweave.trec-comparison.v2` and
+`rankweave.trec-family-comparison.v2`. Each artifact record contains a SHA-256
+hex digest and exact raw `byte_count`; candidate evidence retains the declared
+family order. Local paths are never emitted.
+
+Hashes cover the original bounded bytes before UTF-8 decoding. Comments, line
+endings, and trailing whitespace therefore change artifact identity even when
+they do not change the evaluated ranking. SHA-256 evidence is an integrity
+binding, not a signature, producer-authentication mechanism, trusted-execution
+proof, or SLSA-level claim.
+
+See [RankWeave command-line interface](docs/cli.md) for v1/v2 field order,
+verification examples, and operator boundaries.
 
 ## Input and determinism guarantees
 
@@ -349,7 +379,14 @@ See [RankWeave command-line interface](docs/cli.md).
 - complete-list ties preserve first-seen order;
 - comparisons align by query ID and use local seeded randomness only;
 - family p-value ties are resolved by candidate input order;
-- public result, evaluation, comparison, tuning, and TREC records are frozen.
+- public result, evaluation, comparison, tuning, and TREC records are frozen;
+- CLI artifact digests bind exact raw bytes and disclose no local path.
+
+Both CLI workflows accept local files only and delegate all parsing,
+evaluation, randomization, and adjustment behavior to the native Python APIs.
+Inputs default to a 64 MiB limit **per artifact**. The same bounded payload is
+hashed, counted, and strictly decoded once, so a file that grows after its
+initial size check cannot trigger an unbounded in-memory read.
 
 ## Hourly governed development loop
 
@@ -361,19 +398,21 @@ bounded buyer-visible product proposal when the governed PR queue is empty`.
 PR inspection, review repair, and merge decisions use immutable reusable
 workflows from the organization's central `.github` repository. The local
 product stage uses a hash-pinned OpenCode binary with the official NVIDIA
-provider and a step-scoped `NVIDIA_NIM_API_KEY` secret. It cannot use Bash,
-fetch the web, read untrusted GitHub issues or PRs, access external paths, or
-hold a GitHub token while authoring.
+provider and `NVIDIA_NIM_API_KEY`; it does not use GitHub Copilot Agent Tasks or
+alter the existing review-agent credential path.
 
 The workflow first permits edits only to tests and a design specification, then
 runs pytest without network or inherited credentials and requires a genuine
 failed test. Only then may the agent implement one bounded production change.
-A deterministic gate rejects protected, binary, symlink, oversized, or overly
-broad diffs. Ruff, the complete tests, 100% line/branch coverage, wheel build,
-offline installation, import smoke, and `pip check` run in a network-isolated
-process. Before opening one PR, the workflow rechecks both the open-PR queue and
-the exact `main` commit; stale or competing work is discarded. Generated work
-is never self-approved, merged, published, or released.
+`AGENTS.md`, workflow, ownership, security, environment, and repository-control
+files remain maintainer-owned and outside autonomous scope. Ruff, the complete
+tests, 100% line/branch coverage, wheel build, offline installation, import
+smoke, and `pip check` run in a network-isolated process.
+
+Before requesting the short-lived OIDC-derived GitHub App token, the workflow
+rechecks both the open-PR queue and exact `main` SHA. It repeats both checks
+immediately before opening one PR. Generated work is never self-approved,
+merged, published, or released.
 
 See [Hourly commercialization loop](docs/operations/hourly-commercialization-loop.md)
 for the credential, sandbox, failure, and operating contracts.
@@ -387,6 +426,9 @@ for the credential, sandbox, failure, and operating contracts.
 - Smucker et al. (2007) — paired IR significance testing.
 - Holm (1979) — sequentially rejective family-wise error control.
 - NIST TREC and `trec_eval` — interchange and evaluation reference behavior.
+- FIPS 180-4 — SHA-256 definition for exact artifact-byte evidence.
+- SLSA v1.2 — provenance subject-digest and verification framing.
+- RFC 8259 — interoperable UTF-8 JSON transport.
 - Unicode UAX #15 — NFC normalization.
 
 Full APA 7th edition references are in [`docs/research/`](docs/research/).

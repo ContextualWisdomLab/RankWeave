@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
 import sys
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -32,9 +34,46 @@ from rankweave.trec_family_comparison import (
 )
 
 OUTPUT_SCHEMA_VERSION = "rankweave.trec-comparison.v1"
+OUTPUT_SCHEMA_VERSION_V2 = "rankweave.trec-comparison.v2"
 FAMILY_OUTPUT_SCHEMA_VERSION = "rankweave.trec-family-comparison.v1"
+FAMILY_OUTPUT_SCHEMA_VERSION_V2 = "rankweave.trec-family-comparison.v2"
 DEFAULT_MAX_INPUT_BYTES = 64 * 1024 * 1024
 _SIGNED_DECIMAL_PATTERN = re.compile(r"[+-]?[0-9]+")
+
+
+@dataclass(frozen=True)
+class _BoundedTextArtifact:
+    """One strictly decoded local artifact and its exact raw-byte evidence."""
+
+    text: str
+    sha256: str
+    byte_count: int
+
+
+@dataclass(frozen=True)
+class _PairwiseArtifactEvidence:
+    """Exact input-artifact evidence for one pairwise comparison."""
+
+    baseline_run: _BoundedTextArtifact
+    candidate_run: _BoundedTextArtifact
+    qrels: _BoundedTextArtifact
+
+
+@dataclass(frozen=True)
+class _NamedArtifactEvidence:
+    """One explicit candidate identifier and its exact input evidence."""
+
+    candidate_id: str
+    artifact: _BoundedTextArtifact
+
+
+@dataclass(frozen=True)
+class _FamilyArtifactEvidence:
+    """Exact ordered input evidence for one candidate-family comparison."""
+
+    baseline_run: _BoundedTextArtifact
+    qrels: _BoundedTextArtifact
+    candidates: tuple[_NamedArtifactEvidence, ...]
 
 
 class _UsageError(ValueError):
@@ -135,6 +174,11 @@ def _add_shared_comparison_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="indent JSON output with two spaces",
     )
+    parser.add_argument(
+        "--include-artifact-digests",
+        action="store_true",
+        help="emit v2 JSON with SHA-256 and exact byte counts for every input",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -174,8 +218,11 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def read_text_bounded(path: str | Path, max_input_bytes: int) -> str:
-    """Read one strict-UTF-8 file after pre-read and bounded read checks."""
+def _read_text_artifact_bounded(
+    path: str | Path,
+    max_input_bytes: int,
+) -> _BoundedTextArtifact:
+    """Read, hash, count, and strictly decode one bounded local artifact."""
     file_path = Path(path)
     pre_read_size = file_path.stat().st_size
     if pre_read_size > max_input_bytes:
@@ -192,9 +239,19 @@ def read_text_bounded(path: str | Path, max_input_bytes: int) -> str:
             f"{file_path}: exceeds max-input-bytes {max_input_bytes}"
         )
     try:
-        return raw_bytes.decode("utf-8", errors="strict")
+        decoded_text = raw_bytes.decode("utf-8", errors="strict")
     except UnicodeDecodeError as exc:
         raise ValueError(f"{file_path}: must be valid UTF-8") from exc
+    return _BoundedTextArtifact(
+        text=decoded_text,
+        sha256=hashlib.sha256(raw_bytes).hexdigest(),
+        byte_count=len(raw_bytes),
+    )
+
+
+def read_text_bounded(path: str | Path, max_input_bytes: int) -> str:
+    """Read one strict-UTF-8 file after pre-read and bounded read checks."""
+    return _read_text_artifact_bounded(path, max_input_bytes).text
 
 
 def parse_candidate_specifications(
@@ -243,40 +300,110 @@ def _query_difference_to_dict(
     }
 
 
-def comparison_to_dict(report: TrecRunComparisonReport) -> dict[str, Any]:
-    """Project a complete TREC comparison to the stable JSON v1 schema."""
-    if not isinstance(report, TrecRunComparisonReport):
-        raise ValueError("report must be TrecRunComparisonReport")
-    comparison = report.comparison
-    significance = comparison.significance
+def _artifact_digest_to_dict(artifact: _BoundedTextArtifact) -> dict[str, Any]:
+    """Project one bounded artifact to path-free digest evidence."""
+    if not isinstance(artifact, _BoundedTextArtifact):
+        raise ValueError("artifact evidence must be a bounded text artifact")
     return {
-        "schema_version": OUTPUT_SCHEMA_VERSION,
-        "rankweave_version": _rankweave_version(),
-        "baseline_run_id": report.baseline_run.run_id,
-        "candidate_run_id": report.candidate_run.run_id,
-        "cutoff": comparison.baseline.cutoff,
-        "metric_name": significance.metric_name,
-        "alternative": significance.alternative,
-        "query_count": significance.query_count,
-        "nonzero_difference_count": significance.nonzero_difference_count,
-        "baseline_mean": significance.baseline_mean,
-        "candidate_mean": significance.candidate_mean,
-        "mean_difference": significance.mean_difference,
-        "p_value": significance.p_value,
-        "method": significance.method,
-        "randomizations_evaluated": significance.randomizations_evaluated,
-        "random_seed": significance.random_seed,
-        "query_differences": [
-            _query_difference_to_dict(difference)
-            for difference in significance.query_differences
+        "sha256": artifact.sha256,
+        "byte_count": artifact.byte_count,
+    }
+
+
+def _pairwise_artifacts_to_dict(
+    evidence: _PairwiseArtifactEvidence,
+) -> dict[str, Any]:
+    """Project pairwise artifact evidence in stable role order."""
+    if not isinstance(evidence, _PairwiseArtifactEvidence):
+        raise ValueError("pairwise artifact evidence has the wrong type")
+    return {
+        "baseline_run": _artifact_digest_to_dict(evidence.baseline_run),
+        "candidate_run": _artifact_digest_to_dict(evidence.candidate_run),
+        "qrels": _artifact_digest_to_dict(evidence.qrels),
+    }
+
+
+def _family_artifacts_to_dict(
+    report: TrecRunFamilyComparisonReport[str],
+    evidence: _FamilyArtifactEvidence,
+) -> dict[str, Any]:
+    """Project ordered family artifact evidence after identifier alignment."""
+    if not isinstance(evidence, _FamilyArtifactEvidence):
+        raise ValueError("family artifact evidence has the wrong type")
+    expected_candidate_ids = tuple(
+        candidate.candidate_id for candidate in report.candidates
+    )
+    evidence_candidate_ids = tuple(
+        candidate.candidate_id for candidate in evidence.candidates
+    )
+    if evidence_candidate_ids != expected_candidate_ids:
+        raise ValueError(
+            "artifact evidence candidate identifiers must match report order"
+        )
+    return {
+        "baseline_run": _artifact_digest_to_dict(evidence.baseline_run),
+        "qrels": _artifact_digest_to_dict(evidence.qrels),
+        "candidates": [
+            {
+                "candidate_id": candidate.candidate_id,
+                **_artifact_digest_to_dict(candidate.artifact),
+            }
+            for candidate in evidence.candidates
         ],
     }
 
 
+def comparison_to_dict(
+    report: TrecRunComparisonReport,
+    *,
+    artifact_evidence: _PairwiseArtifactEvidence | None = None,
+) -> dict[str, Any]:
+    """Project a complete TREC comparison to a stable JSON schema."""
+    if not isinstance(report, TrecRunComparisonReport):
+        raise ValueError("report must be TrecRunComparisonReport")
+    comparison = report.comparison
+    significance = comparison.significance
+    payload: dict[str, Any] = {
+        "schema_version": (
+            OUTPUT_SCHEMA_VERSION
+            if artifact_evidence is None
+            else OUTPUT_SCHEMA_VERSION_V2
+        ),
+        "rankweave_version": _rankweave_version(),
+    }
+    if artifact_evidence is not None:
+        payload["artifacts"] = _pairwise_artifacts_to_dict(artifact_evidence)
+    payload.update(
+        {
+            "baseline_run_id": report.baseline_run.run_id,
+            "candidate_run_id": report.candidate_run.run_id,
+            "cutoff": comparison.baseline.cutoff,
+            "metric_name": significance.metric_name,
+            "alternative": significance.alternative,
+            "query_count": significance.query_count,
+            "nonzero_difference_count": significance.nonzero_difference_count,
+            "baseline_mean": significance.baseline_mean,
+            "candidate_mean": significance.candidate_mean,
+            "mean_difference": significance.mean_difference,
+            "p_value": significance.p_value,
+            "method": significance.method,
+            "randomizations_evaluated": significance.randomizations_evaluated,
+            "random_seed": significance.random_seed,
+            "query_differences": [
+                _query_difference_to_dict(difference)
+                for difference in significance.query_differences
+            ],
+        }
+    )
+    return payload
+
+
 def family_comparison_to_dict(
     report: TrecRunFamilyComparisonReport[str],
+    *,
+    artifact_evidence: _FamilyArtifactEvidence | None = None,
 ) -> dict[str, Any]:
-    """Project a candidate-family comparison to the stable JSON v1 schema."""
+    """Project a candidate-family comparison to a stable JSON schema."""
     if not isinstance(report, TrecRunFamilyComparisonReport):
         raise ValueError("report must be TrecRunFamilyComparisonReport")
     first_comparison = report.candidates[0].comparison
@@ -314,68 +441,97 @@ def family_comparison_to_dict(
                 ],
             }
         )
-    return {
-        "schema_version": FAMILY_OUTPUT_SCHEMA_VERSION,
+    payload: dict[str, Any] = {
+        "schema_version": (
+            FAMILY_OUTPUT_SCHEMA_VERSION
+            if artifact_evidence is None
+            else FAMILY_OUTPUT_SCHEMA_VERSION_V2
+        ),
         "rankweave_version": _rankweave_version(),
-        "baseline_run_id": report.baseline_run.run_id,
-        "cutoff": first_comparison.baseline.cutoff,
-        "metric_name": report.metric_name,
-        "alternative": report.alternative,
-        "familywise_alpha": report.familywise_alpha,
-        "candidate_count": len(candidates),
-        "candidates": candidates,
     }
+    if artifact_evidence is not None:
+        payload["artifacts"] = _family_artifacts_to_dict(
+            report,
+            artifact_evidence,
+        )
+    payload.update(
+        {
+            "baseline_run_id": report.baseline_run.run_id,
+            "cutoff": first_comparison.baseline.cutoff,
+            "metric_name": report.metric_name,
+            "alternative": report.alternative,
+            "familywise_alpha": report.familywise_alpha,
+            "candidate_count": len(candidates),
+            "candidates": candidates,
+        }
+    )
+    return payload
 
 
 def _run_compare(arguments: argparse.Namespace) -> dict[str, Any]:
     """Execute the compare subcommand and return its JSON-ready payload."""
-    baseline_run_text = read_text_bounded(
+    baseline_run = _read_text_artifact_bounded(
         arguments.baseline_run,
         arguments.max_input_bytes,
     )
-    candidate_run_text = read_text_bounded(
+    candidate_run = _read_text_artifact_bounded(
         arguments.candidate_run,
         arguments.max_input_bytes,
     )
-    qrels_text = read_text_bounded(
+    qrels = _read_text_artifact_bounded(
         arguments.qrels,
         arguments.max_input_bytes,
     )
     report = compare_trec_runs(
-        baseline_run_text,
-        candidate_run_text,
-        qrels_text,
+        baseline_run.text,
+        candidate_run.text,
+        qrels.text,
         cutoff=arguments.cutoff,
         metric_name=arguments.metric,
         alternative=arguments.alternative,
         randomization_count=arguments.randomizations,
         random_seed=arguments.seed,
     )
-    return comparison_to_dict(report)
+    artifact_evidence = (
+        _PairwiseArtifactEvidence(
+            baseline_run=baseline_run,
+            candidate_run=candidate_run,
+            qrels=qrels,
+        )
+        if arguments.include_artifact_digests
+        else None
+    )
+    return comparison_to_dict(report, artifact_evidence=artifact_evidence)
 
 
 def _run_compare_family(arguments: argparse.Namespace) -> dict[str, Any]:
     """Execute compare-family and return its JSON-ready payload."""
     candidate_paths = parse_candidate_specifications(arguments.candidate_specs)
-    baseline_run_text = read_text_bounded(
+    baseline_run = _read_text_artifact_bounded(
         arguments.baseline_run,
         arguments.max_input_bytes,
     )
-    candidate_run_texts = {
-        candidate_id: read_text_bounded(
-            candidate_path,
-            arguments.max_input_bytes,
+    candidate_runs = tuple(
+        _NamedArtifactEvidence(
+            candidate_id=candidate_id,
+            artifact=_read_text_artifact_bounded(
+                candidate_path,
+                arguments.max_input_bytes,
+            ),
         )
         for candidate_id, candidate_path in candidate_paths.items()
-    }
-    qrels_text = read_text_bounded(
+    )
+    qrels = _read_text_artifact_bounded(
         arguments.qrels,
         arguments.max_input_bytes,
     )
     report = compare_trec_run_family(
-        baseline_run_text,
-        candidate_run_texts,
-        qrels_text,
+        baseline_run.text,
+        {
+            candidate.candidate_id: candidate.artifact.text
+            for candidate in candidate_runs
+        },
+        qrels.text,
         cutoff=arguments.cutoff,
         metric_name=arguments.metric,
         alternative=arguments.alternative,
@@ -383,7 +539,19 @@ def _run_compare_family(arguments: argparse.Namespace) -> dict[str, Any]:
         randomization_count=arguments.randomizations,
         random_seed=arguments.seed,
     )
-    return family_comparison_to_dict(report)
+    artifact_evidence = (
+        _FamilyArtifactEvidence(
+            baseline_run=baseline_run,
+            qrels=qrels,
+            candidates=candidate_runs,
+        )
+        if arguments.include_artifact_digests
+        else None
+    )
+    return family_comparison_to_dict(
+        report,
+        artifact_evidence=artifact_evidence,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
