@@ -64,12 +64,13 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   randomization, or Holm logic in `cli.py`.
 - **CLI families are explicit and ordered.** Parse repeatable `--candidate
   ID=PATH` inputs in command-line order. Reject empty, duplicate, non-printable,
-  or whitespace-padded candidate IDs. Never scan a directory or use an
-  unordered collection to define the statistical family.
+  `=`-containing, or whitespace-padded candidate IDs. Never scan a directory or
+  use an unordered collection to define the statistical family.
 - **CLI transport is stable.** Success writes exactly one versioned UTF-8 JSON
-  document and a newline to stdout with exit `0`. Expected usage, file, UTF-8,
-  size, TREC, evaluation, and statistical errors write one stderr line, no
-  stdout, and exit `2`. Pairwise and family schemas are independently versioned.
+  document and a newline to the standard-output byte stream with exit `0`,
+  independent of the process locale. Expected usage, file, UTF-8, size, TREC,
+  evaluation, and statistical errors write one stderr line, no stdout, and exit
+  `2`. Pairwise and family schemas are independently versioned.
 - **CLI input is bounded.** Every artifact read requests no more than
   `max_input_bytes + 1`. Never replace it with `read()`, `read_bytes()`, or any
   other unbounded operation after a size check. The limit applies separately to
@@ -94,9 +95,14 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   product-development stage uses a hash-pinned OpenCode binary and the official
   built-in NVIDIA provider; do not replace either with an unpinned installer,
   moving branch, or dynamically selected custom provider package.
-- **Provider credentials are authoring-only.** `NVIDIA_NIM_API_KEY` is scoped to
-  static OpenCode steps. No provider key, GitHub token, or OIDC request token may
-  be present in a process that executes model-authored Python.
+- **Agent-control policy is maintainer-owned.** `AGENTS.md` is a reviewed
+  agent-control file. Autonomous product authoring must deny it in OpenCode edit
+  permissions and in the deterministic diff gate; only an explicit maintainer
+  PR may change this file.
+- **Provider credentials are narrowly scoped.** `NVIDIA_NIM_API_KEY` may appear
+  only in the eligibility gate and static OpenCode authoring steps. No provider
+  key, GitHub token, or OIDC request token may be present in a process that
+  executes model-authored Python.
 - **Autonomous tools are non-executing.** OpenCode authoring phases deny Bash,
   web access, external directories, LSP, subagents, skills, and questions. The
   model may edit bounded repository files; deterministic workflow steps alone
@@ -112,9 +118,11 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   network, `env -i`, an isolated PID namespace, and a fresh `/proc`. Record and
   compare workspace manifests so tests or imports cannot rewrite the proposal.
 - **Single-flight autonomous development.** The hourly product loop starts only
-  after central governance succeeds and no PR is open. Recheck both the queue
-  and exact base SHA before mutation. Open one PR only; never approve, merge,
-  publish, release, rebase, or hide a stale generated proposal.
+  after central governance succeeds and no PR is open. Recheck the open-PR queue
+  and exact base SHA before requesting the short-lived OIDC-derived mutation
+  token, then repeat both checks immediately before opening the PR. Open one PR
+  only; never approve, merge, publish, release, rebase, or hide a stale generated
+  proposal.
 - **Complete quality gates.** Production docstrings and both line and branch
   coverage remain at 100%.
 - **Release metadata stays synchronized.** A release updates `pyproject.toml`,
