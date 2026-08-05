@@ -153,6 +153,12 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   console script, and passes isolated installation smoke tests for both console
   and module entrypoints, including every new schema mode.
 
+- **Availability time is the experiment clock.** Temporal backtests require
+  caller-proven, timezone-aware availability timestamps. Training evidence must
+  precede every held-out window strictly, future assessment queries may not enter
+  earlier training sets, and all-data final tuning must remain distinct from
+  out-of-sample performance.
+
 ## Develop
 
 ```bash
@@ -171,6 +177,7 @@ python -m pip wheel . --no-deps --wheel-dir dist
 - `src/rankweave/comparison.py` — exact and Monte Carlo paired randomization.
 - `src/rankweave/cross_validation.py` — explicit blocked folds, fold-local selection, and out-of-fold evidence.
 - `src/rankweave/tuning.py` — validation-set convex-score and weighted-RRF policy selection.
+- `src/rankweave/temporal_backtesting.py` — availability-time backtesting and audit evidence.
 - `src/rankweave/trec.py` — strict TREC parsing, formatting, and evaluation.
 - `src/rankweave/trec_comparison.py` — direct three-artifact paired comparison.
 - `src/rankweave/trec_family_comparison.py` — named candidate-family

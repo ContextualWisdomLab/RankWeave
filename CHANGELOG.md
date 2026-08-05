@@ -4,6 +4,36 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-05
+
+### Added
+- Public `WeightedConvexBacktestWindowDefinition`,
+  `WeightedConvexBacktestWindow`, `WeightedConvexBacktestReport`, and
+  `backtest_weighted_convex_fusion` APIs for availability-time-respecting
+  historical assessment of fixed convex score-fusion policy selection.
+- Exact per-window training and held-out membership, normalized UTC time bounds,
+  full tuning evidence, selected fixed weights, held-out rankings and metrics,
+  one original-order out-of-sample evaluation, and a separately labelled
+  all-data final tuning recommendation.
+- Dedicated temporal backtesting documentation, an accepted ADR, release
+  packaging smoke, and APA 7th grounding in Tashman (2000), Bergmeir and
+  Benítez (2012), and Cerqueira et al. (2020).
+
+### Validation
+- Scored results, judgments, and availability timestamps must contain exactly
+  the same non-empty query set; availability timestamps must be timezone-aware.
+- Caller-defined windows must be unique, ordered, non-overlapping, complete, and
+  strictly forward in UTC. A future assessment query cannot appear in an
+  earlier training set, and same-instant training and assessment are rejected.
+- Selection is performed only on each window's declared training queries. The
+  chosen fixed policy is applied unchanged to held-out queries.
+
+### Compatibility
+- Runtime remains standard-library-only, Python 3.10+, deterministic,
+  store-agnostic, standalone-usable, and suitable for naruon or another MSA
+  consumer. RankWeave does not infer timestamps, generate windows, access a
+  database, or claim that all-data final tuning is out-of-sample evidence.
+
 ## [0.16.0] - 2026-08-05
 
 ### Added

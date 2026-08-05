@@ -167,6 +167,7 @@ jobs:
               "rankweave/schemas/trec-comparison-v2.schema.json",
               "rankweave/schemas/trec-family-comparison-v1.schema.json",
               "rankweave/schemas/trec-family-comparison-v2.schema.json",
+              "rankweave/temporal_backtesting.py",
               "rankweave/py.typed",
           }
           missing_wheel_members = required_wheel_members - wheel_members

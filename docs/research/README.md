@@ -181,6 +181,35 @@ users, tenants, events, projects, or time windows together when the deployment
 question requires it. Symmetric blocked folds are not automatically
 rolling-origin forecasting evidence.
 
+## Availability-time backtesting
+
+`backtest_weighted_convex_fusion` evaluates an ordered sequence of explicit
+historical assessment windows. It uses the earliest time at which each query's
+complete scored results and judgments were available, rather than event or
+creation time, and requires every training timestamp to precede the next
+held-out window strictly. Each selected fixed policy is applied unchanged to its
+held-out queries. The reconstructed aggregate is out-of-sample evidence for the
+declared selection procedure; the separate all-data final tuning report is a
+future recommendation, not held-out performance.
+
+This contract follows rolling-origin and time-series performance-estimation
+literature while remaining conservative about scope: RankWeave does not infer a
+stochastic time-series model, establish causality, or validate the provenance of
+a caller-supplied availability timestamp.
+
+Bergmeir, C., & Benítez, J. M. (2012). On the use of cross-validation for time
+series predictor evaluation. *Information Sciences, 191*, 192–213.
+https://doi.org/10.1016/j.ins.2011.12.028
+
+Cerqueira, V., Torgo, L., & Mozetič, I. (2020). Evaluating time series
+forecasting models: An empirical study on performance estimation methods.
+*Machine Learning, 109*(11), 1997–2028.
+https://doi.org/10.1007/s10994-020-05910-7
+
+Tashman, L. J. (2000). Out-of-sample tests of forecasting accuracy: An analysis
+and review. *International Journal of Forecasting, 16*(4), 437–450.
+https://doi.org/10.1016/S0169-2070(00)00065-0
+
 ## TREC interchange contract
 
 RankWeave uses the reference formats as the compatibility baseline and applies

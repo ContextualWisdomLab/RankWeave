@@ -130,7 +130,7 @@ def test_pairwise_verification_success_is_path_free_json(tmp_path, capsys):
         "artifacts",
     ]
     assert payload["schema_version"] == VERIFICATION_OUTPUT_SCHEMA_VERSION
-    assert payload["rankweave_version"] == "0.16.0"
+    assert payload["rankweave_version"] == "0.17.0"
     assert payload["report_schema_version"] == "rankweave.trec-comparison.v2"
     assert payload["verified"] is True
     assert payload["artifact_count"] == 3

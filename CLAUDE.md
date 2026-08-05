@@ -29,6 +29,13 @@ in original query order, and keep the all-data deployment recommendation
 separate from held-out evidence. Do not add random splitting, hidden grouping,
 or duplicate fusion and evaluation arithmetic.
 
+## Temporal backtesting
+
+Treat availability time as a required evidence boundary, not a convenience
+sort key. Keep windows caller-owned, explicit, complete, strictly forward, and
+free of future assessment queries in earlier training sets. Preserve full
+window evidence and never describe all-data final tuning as held-out quality.
+
 ## Artifact verification
 
 Keep the verification core standard-library-only and transport-neutral. Filesystem and JSON concerns belong in the CLI adapter. A mismatch is a normal machine-readable exit-1 result; malformed evidence remains stderr-only exit 2. Every new output field requires schema, docs, wheel-smoke, and coverage updates.
