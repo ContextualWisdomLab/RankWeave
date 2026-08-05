@@ -104,6 +104,12 @@ from rankweave.score_fusion import (
     weighted_convex_combination_score,
     weighted_reciprocal_rank_fusion_score,
 )
+from rankweave.temporal_backtesting import (
+    WeightedConvexBacktestReport,
+    WeightedConvexBacktestWindow,
+    WeightedConvexBacktestWindowDefinition,
+    backtest_weighted_convex_fusion,
+)
 from rankweave.trec import (
     TrecQrelEntry,
     TrecQrels,
@@ -189,6 +195,9 @@ __all__ = [
     "TrecRunFamilyComparisonReport",
     "WORD_SIMILARITY_THEORETICAL_BOUNDS",
     "WeightedChannelContribution",
+    "WeightedConvexBacktestReport",
+    "WeightedConvexBacktestWindow",
+    "WeightedConvexBacktestWindowDefinition",
     "WeightedConvexCrossValidationFold",
     "WeightedConvexCrossValidationReport",
     "WeightedConvexTuningReport",
@@ -197,6 +206,7 @@ __all__ = [
     "WeightedRRFTuningTrial",
     "WeightedRankContribution",
     "available_report_schemas",
+    "backtest_weighted_convex_fusion",
     "compare_ranking_reports",
     "compare_rankings",
     "compare_trec_run_family",
