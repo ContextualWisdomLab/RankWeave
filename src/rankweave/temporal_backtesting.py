@@ -185,8 +185,9 @@ def _validate_window_structure(
     validated_windows = []
     seen_window_ids: set[WindowIdentifier] = set()
     seen_held_out: set[QueryIdentifier] = set()
+    held_out_window_index: dict[QueryIdentifier, int] = {}
 
-    for window in window_snapshot:
+    for window_index, window in enumerate(window_snapshot):
         if not isinstance(window, WeightedConvexBacktestWindowDefinition):
             raise ValueError(
                 "windows must contain WeightedConvexBacktestWindowDefinition "
@@ -232,6 +233,9 @@ def _validate_window_structure(
                 f"{sorted(repeated, key=repr)!r}"
             )
         seen_held_out.update(held_out_query_ids)
+        held_out_window_index.update(
+            {query_id: window_index for query_id in held_out_query_ids}
+        )
         validated_windows.append(
             WeightedConvexBacktestWindowDefinition(
                 window_id=window.window_id,
@@ -248,6 +252,20 @@ def _validate_window_structure(
             "initial training queries may not be held out later: "
             f"{sorted(initial_reused_as_held_out, key=repr)!r}"
         )
+
+    for training_window_index, window in enumerate(validated_windows):
+        trained_before_assessment = tuple(
+            query_id
+            for query_id in window.training_query_ids
+            if query_id in held_out_window_index
+            and held_out_window_index[query_id] > training_window_index
+        )
+        if trained_before_assessment:
+            raise ValueError(
+                "queries may not be used for training before their held-out "
+                f"window: {sorted(trained_before_assessment, key=repr)!r}"
+            )
+
     missing_from_accounting = query_universe - (
         initial_training_set | seen_held_out
     )
