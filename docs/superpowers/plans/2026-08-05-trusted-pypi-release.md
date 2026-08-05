@@ -1,22 +1,25 @@
 # Trusted PyPI Release Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a tokenless, environment-gated, attested PyPI publication workflow for the already-versioned RankWeave 0.14.0 release.
 
-**Architecture:** A read-only build job rebuilds and validates the exact GitHub Release tag, then uploads one immutable distribution artifact. Separate provenance and `pypi` environment jobs download that artifact; the former creates GitHub build provenance and the latter publishes with PyPI OIDC and no registry secret. Stdlib tests enforce the workflow as a security contract.
+**Architecture:** A read-only build job validates the exact stable GitHub Release object, released commit, default-branch reachability, package version, full quality gate, wheel, and source distribution. It exports a SHA-256 manifest digest and uploads the two distributions plus manifest as one immutable Actions artifact. Separate provenance and protected `pypi` jobs verify the manifest and both distribution hashes before attesting or publishing with OIDC.
 
-**Tech Stack:** GitHub Actions, uv 0.11.29, Python 3.13 `tomllib`, PyPI Trusted Publishing, PEP 740 attestations, GitHub Artifact Attestations, pytest, Ruff, coverage.py.
+**Tech Stack:** GitHub Actions, uv 0.11.29, Python 3.13 `tomllib`, GNU `sha256sum`, PyPI Trusted Publishing, PEP 740 attestations, GitHub Artifact Attestations, pytest, Ruff, coverage.py.
 
 ## Global Constraints
 
 - RankWeave runtime remains Python 3.10+ and standard-library-only.
 - The package version remains exactly `0.14.0`; this slice changes release infrastructure, not runtime APIs.
 - Every third-party action is pinned to a full 40-character commit SHA.
-- Publication is triggered only by a published GitHub Release.
+- Publication is triggered only by a published, non-prerelease GitHub Release.
+- The checked-out tag commit must equal the release event commit and be reachable from the default branch.
 - PyPI authentication uses OIDC Trusted Publishing; no username, password, API token, or package-registry secret is permitted.
 - The publishing job uses the protected GitHub environment `pypi`.
 - Build, provenance, and publication are separate jobs with least privilege.
+- Downstream jobs verify the manifest digest from a build-job output and then verify the wheel and sdist checksums.
+- The workflow does not use the nonexistent `download-artifact` input `digest-mismatch`; GitHub's automatic archive validation is warning-only on mismatch.
 - Existing 100% production statement/branch coverage and production docstring gates remain intact.
 - Existing CI, hourly automation, NVIDIA/OpenCode secrets, and central reusable-workflow SHAs are unchanged.
 
@@ -29,18 +32,31 @@
 - Test: `tests/test_publish_workflow.py`
 
 **Interfaces:**
-- Consumes: repository text files under `.github/workflows/`.
-- Produces: `_workflow_text(path: str) -> str`, `_action_references(text: str) -> tuple[str, ...]`, and regression tests that define the complete publication contract.
+- Consumes repository text files under `.github/workflows/` and `docs/releasing.md`.
+- Produces text-level regression tests defining trigger, commit identity, version, job, permission, checksum, provenance, publication, and documentation contracts.
 
-- [ ] **Step 1: Write the failing workflow tests**
+- [ ] **Step 1: Write the red tests**
+
+Require:
 
 ```python
-from pathlib import Path
-import re
+assert "on:\n  release:\n    types: [published]\n" in trigger_block
+assert "workflow_dispatch:" not in trigger_block
+assert "RELEASE_PRERELEASE" in build_block
+assert '"merge-base",' in build_block
+assert '"--is-ancestor",' in build_block
+assert "manifest-sha256" in build_block
+assert "sha256sum *.whl *.tar.gz > SHA256SUMS" in build_block
+assert "digest-mismatch:" not in workflow_text
+assert "EXPECTED_MANIFEST_SHA256" in provenance_block
+assert "EXPECTED_MANIFEST_SHA256" in publish_block
+assert "environment:\n      name: pypi\n" in publish_block
+assert "PYPI_API_TOKEN" not in publish_block
+```
 
-ROOT = Path(__file__).resolve().parents[1]
-SHA_ACTION = re.compile(r"uses:\s+([^\s@]+)@([0-9a-f]{40})(?:\s|$)")
+Require the exact allowlisted action SHAs:
 
+```python
 EXPECTED_ACTIONS = {
     "actions/checkout": "de0fac2e4500dabe0009e67214ff5f5447ce83dd",
     "actions/setup-python": "a309ff8b426b58ec0e2a45f0f869d46889d02405",
@@ -50,44 +66,9 @@ EXPECTED_ACTIONS = {
     "actions/attest": "1e69f48acb82d1966a394da916b4c1698aa569d6",
     "pypa/gh-action-pypi-publish": "dc37677b2e1c63e2034f94d8a5b11f265b73ba33",
 }
-
-
-def _workflow_text(path):
-    return (ROOT / path).read_text(encoding="utf-8")
-
-
-def test_publish_workflow_is_release_only_and_tokenless():
-    text = _workflow_text(".github/workflows/publish.yml")
-    assert "release:" in text
-    assert "types: [published]" in text
-    assert "workflow_dispatch:" not in text
-    assert "PYPI_API_TOKEN" not in text
-    assert "password:" not in text
-    assert "environment:" in text and "name: pypi" in text
-
-
-def test_publish_workflow_separates_build_provenance_and_publish():
-    text = _workflow_text(".github/workflows/publish.yml")
-    assert "  build:" in text
-    assert "  provenance:" in text
-    assert "  publish:" in text
-    assert "needs: build" in text
-    assert "needs: [build, provenance]" in text
-    assert "uv run --frozen --extra dev --python 3.13 python -m coverage report" in text
-    assert "github.event.release.tag_name" in text
-
-
-def test_publish_workflow_pins_every_external_action():
-    text = _workflow_text(".github/workflows/publish.yml")
-    found = dict(SHA_ACTION.findall(text))
-    assert found == EXPECTED_ACTIONS
 ```
 
-Add focused tests for exact job permissions, immutable artifact name `rankweave-distributions`, `if-no-files-found: error`, `include-hidden-files: false`, download `digest-mismatch: error`, `subject-path: dist/*`, `environment.url`, and the absence of `COPILOT_GITHUB_TOKEN`.
-
-- [ ] **Step 2: Run the focused tests and observe the red state**
-
-Run:
+- [ ] **Step 2: Run focused tests and observe the red state**
 
 ```bash
 uv run --frozen --extra dev --python 3.13 \
@@ -103,15 +84,15 @@ git add tests/test_publish_workflow.py
 git commit -m "test(red): specify tokenless attested PyPI releases"
 ```
 
-### Task 2: Implement the split release workflow
+### Task 2: Implement the release-only build and immutable handoff
 
 **Files:**
 - Create: `.github/workflows/publish.yml`
-- Test: `tests/test_publish_workflow.py`
+- Modify: `tests/test_publish_workflow.py`
 
 **Interfaces:**
-- Consumes: GitHub Release event fields, `pyproject.toml`, `src/rankweave/__init__.py`, `uv.lock`, and repository tests.
-- Produces: immutable Actions artifact `rankweave-distributions`, GitHub attestations for `dist/*`, and PyPI publication through environment `pypi`.
+- Consumes GitHub Release event fields, default-branch Git history, `pyproject.toml`, `rankweave.__version__`, `uv.lock`, and repository tests.
+- Produces Actions artifact `rankweave-distributions` containing one wheel, one sdist, and `SHA256SUMS`; build output `manifest-sha256`.
 
 - [ ] **Step 1: Create the release-only workflow skeleton**
 
@@ -131,140 +112,134 @@ concurrency:
 
 - [ ] **Step 2: Implement the read-only build job**
 
-Use checkout v6.0.2, setup-python v6.2.0, and setup-uv v8.1.0 at the exact SHAs in the design. Set `persist-credentials: false`, checkout `github.event.release.tag_name`, and grant only `contents: read`.
+Use checkout v6.0.2 with `fetch-depth: 0`, setup-python v6.2.0, and setup-uv v8.1.0 at the exact SHAs above. Set `persist-credentials: false` and grant only `contents: read`.
 
-Add a Python `tomllib` step that:
+Validate:
 
-```python
-from pathlib import Path
-import os
-import re
-import tomllib
+```text
+release.prerelease == false
+release tag matches vMAJOR.MINOR.PATCH
+checked-out HEAD == github.sha
+HEAD is an ancestor of origin/${default_branch}
+tag == v${project.version}
+rankweave.__version__ == project.version
+```
 
-release_tag = os.environ["RELEASE_TAG"]
-if re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", release_tag) is None:
-    raise SystemExit(f"release tag is not canonical: {release_tag!r}")
-project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-version = project["project"]["version"]
-if release_tag != f"v{version}":
-    raise SystemExit(
-        f"release tag {release_tag!r} does not match project version {version!r}"
-    )
-Path(os.environ["GITHUB_OUTPUT"]).write_text(
-    f"version={version}\n",
-    encoding="utf-8",
+Run frozen sync, compileall, Ruff, complete pytest coverage, `uv build --wheel --sdist --out-dir dist`, and archive inspection.
+
+- [ ] **Step 3: Record the distribution manifest and immutable output**
+
+```bash
+(
+  cd dist
+  sha256sum *.whl *.tar.gz > SHA256SUMS
 )
+manifest_sha256="$(sha256sum dist/SHA256SUMS | cut -d ' ' -f1)"
+printf 'manifest-sha256=%s\n' "$manifest_sha256" >> "$GITHUB_OUTPUT"
 ```
 
-Then run frozen sync, compileall, Ruff, full coverage, `uv build --wheel --sdist --out-dir dist`, archive inspection, and upload through `actions/upload-artifact` v7.0.1 with `if-no-files-found: error`, `include-hidden-files: false`, and `retention-days: 7`.
+Expose the step output as the build job output. Upload `dist/` with `if-no-files-found: error`, `include-hidden-files: false`, and seven-day retention.
 
-- [ ] **Step 3: Implement the provenance job**
-
-```yaml
-  provenance:
-    needs: build
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-```
-
-Download `rankweave-distributions` using download-artifact v8.0.1 with `digest-mismatch: error`, then call actions/attest v4.2.2 with `subject-path: dist/*`.
-
-- [ ] **Step 4: Implement the protected PyPI publishing job**
-
-```yaml
-  publish:
-    needs: [build, provenance]
-    environment:
-      name: pypi
-      url: https://pypi.org/p/rankweave
-    permissions:
-      id-token: write
-```
-
-Download the same artifact with digest mismatch failure and invoke `pypa/gh-action-pypi-publish` v1.14.2 at its exact SHA. Do not add any action inputs for credentials or alternate repositories.
-
-- [ ] **Step 5: Run focused tests**
-
-Run:
+- [ ] **Step 4: Run focused tests**
 
 ```bash
 uv run --frozen --extra dev --python 3.13 \
   python -m pytest -q tests/test_publish_workflow.py
 ```
 
-Expected: PASS for release-only trigger, job separation, least privilege, pinned actions, artifact handoff, provenance, and tokenless publication.
+Expected: publication trigger, exact action pins, release identity, build gate, manifest, and upload contracts pass.
 
-- [ ] **Step 6: Commit the workflow**
-
-```bash
-git add .github/workflows/publish.yml tests/test_publish_workflow.py
-git commit -m "ci: add tokenless attested PyPI publication"
-```
-
-### Task 3: Document setup, provenance boundaries, and release operations
+### Task 3: Implement verified provenance and protected publication
 
 **Files:**
-- Create: `docs/releasing.md`
-- Modify: `README.md`
-- Modify: `ARCHITECTURE.md`
-- Modify: `AGENTS.md`
-- Modify: `CLAUDE.md`
-- Modify: `CHANGELOG.md`
-- Modify: `docs/research/README.md`
-- Test: `tests/test_publish_workflow.py`
+- Modify: `.github/workflows/publish.yml`
+- Modify: `tests/test_publish_workflow.py`
 
 **Interfaces:**
-- Consumes: the final workflow contract and official PyPI/GitHub/SLSA documentation.
-- Produces: exact one-time setup, governed release procedure, verification commands, APA 7 references, and explicit trust boundaries.
+- Consumes the immutable artifact and `needs.build.outputs.manifest-sha256`.
+- Produces GitHub provenance attestations for wheel/sdist and PyPI publication through environment `pypi`.
 
-- [ ] **Step 1: Create operational release documentation**
+- [ ] **Step 1: Implement the provenance job**
 
-Document the exact Trusted Publisher tuple:
-
-```text
-PyPI project: rankweave
-Owner: ContextualWisdomLab
-Repository: RankWeave
-Workflow: publish.yml
-Environment: pypi
+```yaml
+provenance:
+  needs: build
+  permissions:
+    contents: read
+    id-token: write
+    attestations: write
 ```
 
-Document protected environment setup, version synchronization, GitHub Release tag `v${version}`, publication failure modes, `gh attestation verify dist/* --repo ContextualWisdomLab/RankWeave`, and PyPI attestation verification. State that the external PyPI and GitHub environment setup cannot be completed by repository code.
+After download, fail closed:
 
-- [ ] **Step 2: Synchronize architecture and contributor contracts**
-
-Update:
-
-- README installation to prefer PyPI only after the Trusted Publisher has successfully published the version;
-- `ARCHITECTURE.md` with build → immutable artifact → provenance → environment-gated OIDC publication;
-- `AGENTS.md` and `CLAUDE.md` with release workflow invariants and prohibition on token fallback;
-- `CHANGELOG.md` under a new `Unreleased` infrastructure/security section without changing package version.
-
-- [ ] **Step 3: Add APA 7 references**
-
-Add official references for:
-
-```text
-Python Packaging Authority. (n.d.). Publishing with a Trusted Publisher. PyPI documentation. Retrieved August 5, 2026, from https://docs.pypi.org/trusted-publishers/using-a-publisher/
-
-Trail of Bits. (2023). PEP 740 – Index support for digital attestations. Python Enhancement Proposals. https://peps.python.org/pep-0740/
-
-GitHub. (n.d.). Using artifact attestations to establish provenance for builds. GitHub Docs. Retrieved August 5, 2026, from https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations
-
-Supply-chain Levels for Software Artifacts. (n.d.). Build: Verifying artifacts (SLSA specification v1.2). OpenSSF. Retrieved August 5, 2026, from https://slsa.dev/spec/v1.2/verifying-artifacts
+```bash
+printf '%s  %s\n' \
+  "$EXPECTED_MANIFEST_SHA256" \
+  dist/SHA256SUMS | sha256sum --check --strict -
+(
+  cd dist
+  sha256sum --check --strict SHA256SUMS
+)
 ```
 
-Explain that attestations establish signed statements about build provenance; they do not prove statistical correctness, absence of vulnerabilities, or downstream policy compliance.
+Attest only `dist/*.whl` and `dist/*.tar.gz` through actions/attest v4.2.2.
 
-- [ ] **Step 4: Add documentation assertions to workflow tests**
+- [ ] **Step 2: Implement the protected PyPI job**
 
-Assert that `docs/releasing.md` contains the exact publisher tuple, version/tag gate, environment protection, GitHub attestation verification, PyPI attestation terminology, and no API-token fallback.
+```yaml
+publish:
+  needs: [build, provenance]
+  environment:
+    name: pypi
+    url: https://pypi.org/p/rankweave
+  permissions:
+    id-token: write
+```
 
-- [ ] **Step 5: Run complete verification**
+Repeat the same fail-closed manifest and file verification, then invoke `pypa/gh-action-pypi-publish` v1.14.2. Supply only `packages-dir: dist/`; do not add credentials, alternate repository, or skip-existing inputs.
 
-Run:
+- [ ] **Step 3: Run focused and complete tests**
+
+```bash
+uv run --frozen --extra dev --python 3.13 python -m ruff check .
+uv run --frozen --extra dev --python 3.13 python -m coverage run -m pytest -q
+uv run --frozen --extra dev --python 3.13 python -m coverage report
+```
+
+Expected: complete suite passes with production statement and branch coverage at 100%.
+
+### Task 4: Exercise both release archives in ordinary pull-request CI
+
+**Files:**
+- Modify: `.github/workflows/ci.yml`
+- Modify: `tests/test_publish_workflow.py`
+
+- [ ] **Step 1: Build wheel and sdist in the package job**
+
+Replace the wheel-only build with:
+
+```bash
+uv build --wheel --sdist --out-dir dist
+```
+
+- [ ] **Step 2: Inspect source-distribution contents**
+
+Require exactly one `rankweave-*.tar.gz` and verify:
+
+```text
+pyproject.toml
+README.md
+CHANGELOG.md
+LICENSE
+src/rankweave/__init__.py
+tests/test_version.py
+```
+
+- [ ] **Step 3: Add workflow regression assertions**
+
+Require the sdist build command, inspection step, exact-count failure, CHANGELOG, and version test in `tests/test_publish_workflow.py`.
+
+- [ ] **Step 4: Run complete verification**
 
 ```bash
 uv run --frozen --extra dev --python 3.13 python -m compileall -q src
@@ -274,21 +249,74 @@ uv run --frozen --extra dev --python 3.13 python -m coverage report
 uv build --wheel --sdist --out-dir dist
 ```
 
-Expected: complete suite passes, production statement/branch coverage is 100%, and both wheel and sdist build.
+### Task 5: Document setup, provenance boundaries, and release operations
 
-- [ ] **Step 6: Commit documentation**
+**Files:**
+- Create: `docs/releasing.md`
+- Modify: `README.md`
+- Modify: `ARCHITECTURE.md`
+- Modify: `AGENTS.md`
+- Modify: `CLAUDE.md`
+- Modify: `CHANGELOG.md`
+- Modify: `docs/research/README.md`
+- Modify: `tests/test_publish_workflow.py`
+
+- [ ] **Step 1: Document exact external configuration**
+
+```text
+PyPI project: rankweave
+Owner: ContextualWisdomLab
+Repository: RankWeave
+Workflow: publish.yml
+Environment: pypi
+```
+
+Document required environment reviewers, release tag `v${version}`, stable/default-branch commit gate, publication failure modes, seven-day workflow-artifact retention, PyPI as the durable distribution surface, `gh attestation verify`, and PyPI PEP 740 verification. State that external PyPI and GitHub environment setup cannot be completed by repository code.
+
+- [ ] **Step 2: Synchronize architecture and contributor contracts**
+
+Document:
+
+```text
+exact stable release object
+-> full quality gate
+-> wheel and sdist inspection
+-> SHA256SUMS plus manifest job output
+-> immutable workflow artifact
+-> verified downstream handoff
+-> GitHub provenance
+-> protected PyPI OIDC publication
+```
+
+Prohibit registry-token fallback, unsupported action inputs, `skip-existing`, and claims that attestations prove scientific validity.
+
+- [ ] **Step 3: Add APA 7 references**
+
+```text
+Python Packaging Authority. (n.d.). Publishing with a Trusted Publisher. PyPI documentation. Retrieved August 5, 2026, from https://docs.pypi.org/trusted-publishers/using-a-publisher/
+
+Trail of Bits. (2023). PEP 740—Index support for digital attestations. Python Enhancement Proposals. https://peps.python.org/pep-0740/
+
+GitHub. (n.d.). Using artifact attestations to establish provenance for builds. GitHub Docs. Retrieved August 5, 2026, from https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations
+
+GitHub. (n.d.). Storing and sharing data from a workflow. GitHub Docs. Retrieved August 5, 2026, from https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/storing-and-sharing-data-from-a-workflow
+
+Supply-chain Levels for Software Artifacts. (n.d.). Build: Verifying artifacts (SLSA specification v1.2). OpenSSF. Retrieved August 5, 2026, from https://slsa.dev/spec/v1.2/verifying-artifacts
+```
+
+- [ ] **Step 4: Verify documentation contracts and complete suite**
 
 ```bash
-git add README.md ARCHITECTURE.md AGENTS.md CLAUDE.md CHANGELOG.md \
-  docs/releasing.md docs/research/README.md tests/test_publish_workflow.py
-git commit -m "docs: govern trusted RankWeave releases"
+uv run --frozen --extra dev --python 3.13 python -m ruff check .
+uv run --frozen --extra dev --python 3.13 python -m coverage run -m pytest -q
+uv run --frozen --extra dev --python 3.13 python -m coverage report
 ```
 
 ## Plan self-review
 
-- **Spec coverage:** release-only trigger, tag/version gate, complete build gate, immutable handoff, GitHub provenance, PyPI OIDC, environment protection, documentation, and trust boundaries all map to tasks.
+- **Spec coverage:** stable release identity, default-branch reachability, tag/version gate, complete build gate, wheel/sdist inspection, explicit manifest verification, GitHub provenance, PyPI OIDC, environment protection, PR archive testing, documentation, and trust boundaries map to tasks.
 - **Placeholder scan:** no TBD, TODO, deferred implementation, or unspecified validation remains.
-- **Type and name consistency:** artifact name is always `rankweave-distributions`; environment is always `pypi`; workflow is always `publish.yml`; action SHAs match the design.
+- **Type and name consistency:** artifact name is always `rankweave-distributions`; manifest is always `dist/SHA256SUMS`; environment is always `pypi`; workflow is always `publish.yml`; action SHAs match the design.
 - **Scope:** one supply-chain/distribution subsystem; no runtime API, statistical model, database, or UI changes.
 
 ## Execution mode
