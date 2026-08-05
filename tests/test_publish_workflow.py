@@ -112,7 +112,8 @@ def test_build_job_checks_exact_release_identity_and_default_branch_reachability
     assert "RELEASE_TAG: ${{ github.event.release.tag_name }}" in build_block
     assert "release tag is not canonical" in build_block
     assert "stable package publication rejects prereleases" in build_block
-    assert "does not match release event commit" in build_block
+    assert "checked-out commit" in build_block
+    assert "release event commit" in build_block
     assert '"merge-base",' in build_block
     assert '"--is-ancestor",' in build_block
     assert "released commit must be reachable from the default branch" in (
