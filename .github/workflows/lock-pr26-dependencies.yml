@@ -1,0 +1,282 @@
+name: Lock PR 26 dependencies
+
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rankweave-pr-26-dependency-lock
+  cancel-in-progress: true
+
+jobs:
+  lock-and-verify:
+    if: >-
+      github.event.pull_request.number == 26 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'feat/report-json-schemas'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feat/report-json-schemas
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.29"
+          enable-cache: false
+
+      - name: Pin build and development inputs
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("pyproject.toml")
+          text = path.read_text(encoding="utf-8")
+          replacements = {
+              'requires = ["hatchling"]': 'requires = ["hatchling==1.31.0"]',
+              '"coverage[toml]>=7.6",': '"coverage[toml]==7.15.2",',
+              '"jsonschema>=4.23,<5",': '"jsonschema==4.26.0",',
+              '"pytest>=8",': '"pytest==9.1.1",',
+              '"ruff>=0.6",': '"ruff==0.15.22",',
+              '"tomli>=2",': '"tomli==2.4.1",',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f"missing dependency anchor: {old}")
+              text = text.replace(old, new, 1)
+          marker = "\n[tool.hatch.build.targets.wheel]\n"
+          if marker not in text:
+              raise SystemExit("missing uv configuration anchor")
+          text = text.replace(
+              marker,
+              '\n[tool.uv]\nrequired-version = "==0.11.29"\n\n'
+              + marker.lstrip("\n"),
+              1,
+          )
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Generate cross-version lock
+        run: uv lock --upgrade
+
+      - name: Install locked development environment
+        run: uv sync --frozen --extra dev --python 3.13
+
+      - name: Install locked CI workflow
+        run: |
+          cat >.github/workflows/ci.yml <<'YAML'
+          name: ci
+
+          on:
+            push:
+              branches: [main]
+            pull_request:
+
+          permissions:
+            contents: read
+
+          concurrency:
+            group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+            cancel-in-progress: true
+
+          jobs:
+            test:
+              runs-on: ubuntu-latest
+              timeout-minutes: 10
+              strategy:
+                fail-fast: false
+                matrix:
+                  python-version: ["3.10", "3.11", "3.12", "3.13"]
+              steps:
+                - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+                  with:
+                    persist-credentials: false
+                - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+                  with:
+                    python-version: ${{ matrix.python-version }}
+                - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+                  with:
+                    version: "0.11.29"
+                    enable-cache: false
+                - run: uv sync --frozen --extra dev --python "${{ matrix.python-version }}"
+                - run: uv run --frozen --extra dev --python "${{ matrix.python-version }}" python -m compileall -q src
+                - run: uv run --frozen --extra dev --python "${{ matrix.python-version }}" python -m ruff check .
+                - run: uv run --frozen --extra dev --python "${{ matrix.python-version }}" python -m coverage run -m pytest -q
+                - run: uv run --frozen --extra dev --python "${{ matrix.python-version }}" python -m coverage report
+
+            package:
+              runs-on: ubuntu-latest
+              timeout-minutes: 10
+              steps:
+                - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+                  with:
+                    persist-credentials: false
+                - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+                  with:
+                    python-version: "3.13"
+                - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+                  with:
+                    version: "0.11.29"
+                    enable-cache: false
+                - run: uv sync --frozen --extra dev --python 3.13
+                - run: uv build --wheel --out-dir dist
+                - name: Verify wheel contents
+                  run: |
+                    uv run --frozen --extra dev --python 3.13 python - <<'PY'
+                    from pathlib import Path
+                    from zipfile import ZipFile
+
+                    wheel_path = next(Path("dist").glob("rankweave-*.whl"))
+                    with ZipFile(wheel_path) as wheel_file:
+                        wheel_members = set(wheel_file.namelist())
+                    required_members = {
+                        "rankweave/__init__.py",
+                        "rankweave/__main__.py",
+                        "rankweave/cli.py",
+                        "rankweave/comparison.py",
+                        "rankweave/evaluation.py",
+                        "rankweave/report_schemas.py",
+                        "rankweave/schemas/__init__.py",
+                        "rankweave/schemas/trec-comparison-v1.schema.json",
+                        "rankweave/schemas/trec-comparison-v2.schema.json",
+                        "rankweave/schemas/trec-family-comparison-v1.schema.json",
+                        "rankweave/schemas/trec-family-comparison-v2.schema.json",
+                        "rankweave/trec.py",
+                        "rankweave/trec_comparison.py",
+                        "rankweave/trec_family_comparison.py",
+                        "rankweave/tuning.py",
+                        "rankweave/py.typed",
+                    }
+                    missing_members = required_members - wheel_members
+                    if missing_members:
+                        raise SystemExit(f"wheel is missing: {sorted(missing_members)!r}")
+                    PY
+                - run: uv venv .package-smoke --python 3.13 --no-project
+                - run: >-
+                    uv pip install --python .package-smoke/bin/python
+                    --no-index --find-links dist rankweave
+                - name: Smoke-test installed wheel APIs and resources
+                  run: |
+                    .package-smoke/bin/python - <<'PY'
+                    import json
+                    from importlib.metadata import version
+                    from importlib.util import find_spec
+
+                    import rankweave
+
+                    assert version("rankweave") == "0.13.0"
+                    assert rankweave.__version__ == "0.13.0"
+                    assert find_spec("jsonschema") is None
+                    expected = [
+                        ("pairwise", "v1", "rankweave.trec-comparison.v1"),
+                        ("pairwise", "v2", "rankweave.trec-comparison.v2"),
+                        ("family", "v1", "rankweave.trec-family-comparison.v1"),
+                        ("family", "v2", "rankweave.trec-family-comparison.v2"),
+                    ]
+                    descriptors = rankweave.available_report_schemas()
+                    assert [
+                        (
+                            descriptor.report_type,
+                            descriptor.schema_version,
+                            descriptor.transport_schema_id,
+                        )
+                        for descriptor in descriptors
+                    ] == expected
+                    for descriptor in descriptors:
+                        text = rankweave.load_report_schema_text(
+                            descriptor.report_type,
+                            descriptor.schema_version,
+                        )
+                        schema = rankweave.load_report_schema(
+                            descriptor.report_type,
+                            descriptor.schema_version,
+                        )
+                        assert text.endswith("\n")
+                        assert json.loads(text) == schema
+                        assert schema["properties"]["schema_version"]["const"] == (
+                            descriptor.transport_schema_id
+                        )
+                    PY
+                - name: Smoke-test installed console and module commands outside source tree
+                  run: |
+                    set -euo pipefail
+                    venv_bin="$PWD/.package-smoke/bin"
+                    smoke_dir="$(mktemp -d)"
+                    trap 'rm -rf "$smoke_dir"' EXIT
+                    cat >"$smoke_dir/baseline.run" <<'EOF'
+                    q Q0 other 1 0.9 baseline
+                    q Q0 document 2 0.2 baseline
+                    EOF
+                    cat >"$smoke_dir/candidate.run" <<'EOF'
+                    q Q0 document 1 0.9 candidate
+                    q Q0 other 2 0.2 candidate
+                    EOF
+                    cat >"$smoke_dir/candidate-b.run" <<'EOF'
+                    q Q0 document 1 0.95 candidate-b
+                    q Q0 other 2 0.1 candidate-b
+                    EOF
+                    cat >"$smoke_dir/qrels.txt" <<'EOF'
+                    q 0 document 1
+                    q 0 other 0
+                    EOF
+                    (
+                      cd "$smoke_dir"
+                      for report_type in pairwise family; do
+                        for schema_version in v1 v2; do
+                          output="${report_type}-${schema_version}.schema.json"
+                          module_output="${report_type}-${schema_version}.module.schema.json"
+                          "$venv_bin/rankweave" schema --report-type "$report_type" --schema-version "$schema_version" >"$output"
+                          "$venv_bin/python" -m rankweave schema --report-type "$report_type" --schema-version "$schema_version" >"$module_output"
+                          cmp "$output" "$module_output"
+                        done
+                      done
+                      "$venv_bin/rankweave" compare --baseline-run baseline.run --candidate-run candidate.run --qrels qrels.txt --cutoff 1 >pairwise-v1.json
+                      "$venv_bin/rankweave" compare --baseline-run baseline.run --candidate-run candidate.run --qrels qrels.txt --cutoff 1 --include-artifact-digests >pairwise-v2.json
+                      "$venv_bin/rankweave" compare-family --baseline-run baseline.run --candidate first=candidate.run --candidate second=candidate-b.run --qrels qrels.txt --cutoff 1 >family-v1.json
+                      "$venv_bin/rankweave" compare-family --baseline-run baseline.run --candidate first=candidate.run --candidate second=candidate-b.run --qrels qrels.txt --cutoff 1 --include-artifact-digests >family-v2.json
+                      "$venv_bin/python" - <<'PY'
+                    import json
+                    from pathlib import Path
+                    expected = {
+                        "pairwise-v1.json": "rankweave.trec-comparison.v1",
+                        "pairwise-v2.json": "rankweave.trec-comparison.v2",
+                        "family-v1.json": "rankweave.trec-family-comparison.v1",
+                        "family-v2.json": "rankweave.trec-family-comparison.v2",
+                    }
+                    for file_name, schema_id in expected.items():
+                        report = json.loads(Path(file_name).read_text(encoding="utf-8"))
+                        assert report["schema_version"] == schema_id
+                        assert report["rankweave_version"] == "0.13.0"
+                    PY
+                    )
+                - run: uv pip check --python .package-smoke/bin/python
+          YAML
+
+      - name: Verify locked source and package
+        run: |
+          uv run --frozen --extra dev --python 3.13 python -m ruff check .
+          uv run --frozen --extra dev --python 3.13 python -m coverage run -m pytest -q
+          uv run --frozen --extra dev --python 3.13 python -m coverage report
+          uv build --wheel --out-dir dist
+
+      - name: Commit locked toolchain and remove this workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm .github/workflows/lock-pr26-dependencies.yml
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml uv.lock .github/workflows/ci.yml
+          git add -u .github/workflows/lock-pr26-dependencies.yml
+          git -c core.hooksPath=/dev/null commit \
+            -m "ci: lock RankWeave development dependencies with uv"
+          git -c core.hooksPath=/dev/null push \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/feat/report-json-schemas"
