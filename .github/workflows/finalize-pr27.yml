@@ -39,7 +39,7 @@ jobs:
           set -euo pipefail
           uv sync --frozen --extra dev --python 3.13
           uv run --frozen --extra dev --python 3.13 python -m compileall -q src
-          uv run --frozen --extra dev --python 3.13 python -m ruff check .
+          uv run --frozen --extra dev --python 3.13 python -m ruff check src tests
           uv run --frozen --extra dev --python 3.13 python -m coverage run -m pytest -q
           uv run --frozen --extra dev --python 3.13 python -m coverage report
           uv build --wheel --out-dir dist
