@@ -4,6 +4,38 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-08-05
+
+### Added
+- Public `WeightedConvexCrossValidationFold`,
+  `WeightedConvexCrossValidationReport`, and
+  `cross_validate_weighted_convex_fusion` APIs for caller-owned blocked fold
+  assessment of convex scored-channel policy selection.
+- Fold-local training reports, immutable training and held-out query memberships,
+  complete held-out evaluations, one original-order out-of-fold evaluation, and
+  a separate full-data final policy recommendation.
+- Dedicated leakage-boundary documentation and APA 7th grounding in Stone
+  (1974), Cawley and Talbot (2010), Roberts et al. (2017), and a clearly
+  identified 2026 retrieval preprint.
+
+### Validation
+- Scored results, judgments, and fold assignments must contain exactly the same
+  non-empty query set; at least two distinct hashable fold identifiers are
+  required.
+- Every fold selects only on complementary queries and applies the selected
+  weights unchanged to its held-out queries. Invalid scores, weights, duplicate
+  items, undeclared channels, objectives, and cutoffs remain fail-closed through
+  established public contracts.
+- Explicit fold IDs make grouping auditable but do not prove a split is
+  leakage-safe. Consumers remain responsible for keeping dependent query
+  families and temporal blocks together when required.
+
+### Compatibility
+- Runtime remains standard-library-only, Python 3.10+, deterministic,
+  store-agnostic, standalone-usable, and suitable for naruon or another MSA
+  consumer. No random splitter, database, network, or numerical dependency is
+  introduced.
+
 ## [0.15.0] - 2026-08-05
 
 ### Added

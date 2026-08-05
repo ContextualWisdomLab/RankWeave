@@ -81,6 +81,7 @@ jobs:
               "rankweave/artifact_verification.py",
               "rankweave/cli.py",
               "rankweave/comparison.py",
+              "rankweave/cross_validation.py",
               "rankweave/evaluation.py",
               "rankweave/query_normalization.py",
               "rankweave/ranked_list_fusion.py",
@@ -167,8 +168,8 @@ jobs:
 
           import rankweave
 
-          assert version("rankweave") == "0.15.0"
-          assert rankweave.__version__ == "0.15.0"
+          assert version("rankweave") == "0.16.0"
+          assert rankweave.__version__ == "0.16.0"
           assert find_spec("jsonschema") is None
 
           expected = [
@@ -256,6 +257,50 @@ jobs:
           assert isinstance(
               tuning.trials[0],
               rankweave.WeightedConvexTuningTrial,
+          )
+
+          cross_validation = rankweave.cross_validate_weighted_convex_fusion(
+              {
+                  "q1": {
+                      "lexical": [("a", 1.0), ("x", 0.0)],
+                      "dense": [("x", 1.0), ("a", 0.0)],
+                  },
+                  "q2": {
+                      "lexical": [("y", 1.0), ("b", 0.0)],
+                      "dense": [("b", 1.0), ("y", 0.0)],
+                  },
+                  "q3": {
+                      "lexical": [("c", 0.9), ("z", 0.1)],
+                      "dense": [("z", 0.9), ("c", 0.1)],
+                  },
+                  "q4": {
+                      "lexical": [("w", 0.9), ("d", 0.1)],
+                      "dense": [("d", 0.9), ("w", 0.1)],
+                  },
+              },
+              {
+                  "q1": {"a": 1},
+                  "q2": {"b": 1},
+                  "q3": {"c": 1},
+                  "q4": {"d": 1},
+              },
+              {
+                  "dense-heavy": {"lexical": 0.1, "dense": 0.9},
+                  "lexical-heavy": {"lexical": 0.9, "dense": 0.1},
+              },
+              {"q1": "a", "q2": "b", "q3": "a", "q4": "b"},
+              cutoff=1,
+          )
+          assert len(cross_validation.folds) == 2
+          assert cross_validation.out_of_fold_evaluation.aggregate.query_count == 4
+          assert cross_validation.final_tuning.best_policy_id == "dense-heavy"
+          assert isinstance(
+              cross_validation,
+              rankweave.WeightedConvexCrossValidationReport,
+          )
+          assert isinstance(
+              cross_validation.folds[0],
+              rankweave.WeightedConvexCrossValidationFold,
           )
           PY
       - name: Smoke-test installed console and module commands outside source tree
@@ -364,7 +409,7 @@ jobs:
               assert payload["schema_version"] == (
                   "rankweave.artifact-verification.v1"
               )
-              assert payload["rankweave_version"] == "0.15.0"
+              assert payload["rankweave_version"] == "0.16.0"
               assert payload["verified"] is True
               assert payload["artifact_count"] == expected_count
               assert payload["mismatch_count"] == 0

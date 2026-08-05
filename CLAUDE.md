@@ -21,6 +21,14 @@ Keep scored-policy selection as deterministic composition of
 weight order, exact first-policy ties, query-set parity, and the independent
 held-out-test boundary. Do not add a runtime optimizer or numerical dependency.
 
+## Explicit-fold cross-validation
+
+Keep folds caller-owned and immutable. Tune each policy only on the complementary
+queries, apply it unchanged to held-out queries, reconstruct out-of-fold metrics
+in original query order, and keep the all-data deployment recommendation
+separate from held-out evidence. Do not add random splitting, hidden grouping,
+or duplicate fusion and evaluation arithmetic.
+
 ## Artifact verification
 
 Keep the verification core standard-library-only and transport-neutral. Filesystem and JSON concerns belong in the CLI adapter. A mismatch is a normal machine-readable exit-1 result; malformed evidence remains stderr-only exit 2. Every new output field requires schema, docs, wheel-smoke, and coverage updates.

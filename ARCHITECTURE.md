@@ -48,6 +48,7 @@ scientific validity.
 - `ranked_list_fusion.py` — complete-list fusion and contribution evidence.
 - `evaluation.py` — precision, recall, reciprocal rank, and graded nDCG.
 - `comparison.py` — exact and deterministic Monte Carlo paired randomization.
+- `cross_validation.py` — caller-owned blocked folds, fold-local policy selection, and out-of-fold evaluation.
 - `tuning.py` — validation-set convex-score and weighted-RRF policy selection.
 - `trec.py` — strict TREC parsing, formatting, and evaluation.
 - `trec_comparison.py` — direct pairwise TREC comparison orchestration.
@@ -65,6 +66,18 @@ all effectiveness calculation to `evaluate_rankings`. Candidate insertion order
 is preserved as the exact tie breaker, and every trial retains its complete
 immutable evaluation. Grid generation, score normalization, validation splits,
 cross-validation, and final held-out inference remain caller responsibilities.
+
+## Explicit-fold assessment boundary
+
+`cross_validation.py` evaluates the policy-selection procedure rather than
+relabeling full-data tuning as test performance. Each fold delegates selection
+to `tune_weighted_convex_fusion`, held-out fusion to `weighted_convex_fuse`, and
+all metrics to `evaluate_rankings`. Fold order follows first query appearance;
+training, held-out, and reconstructed out-of-fold query order remain explicit.
+The caller owns fold grouping because only the consumer knows which translations,
+revisions, users, tenants, events, projects, or time windows must not cross the
+training boundary. Random fold generation and rolling-origin forecasting are
+outside this module.
 
 ## Compatibility and release policy
 

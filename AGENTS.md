@@ -101,6 +101,11 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   immutable evaluation, and treat the supplied policy order as audit evidence.
   Do not normalize provider scores, generate a hidden search space, or present
   validation selection as held-out effectiveness.
+- **Cross-validation folds are caller-owned.** Explicit-fold assessment must
+  tune only on the complementary queries, apply the selected fixed policy
+  unchanged to held-out queries, restore original query order for out-of-fold
+  evidence, and keep full-data final tuning separate. Never generate hidden
+  random folds or imply that an arbitrary grouping is leakage-safe.
 - **Strict TREC boundaries.** Four-column qrels and six-column run artifacts
   reject malformed, duplicate, non-finite, or unserializable state. Qrels
   relevance is a signed ASCII-decimal integer in `[-127, 127]`; portable run
@@ -164,7 +169,8 @@ python -m pip wheel . --no-deps --wheel-dir dist
 - `src/rankweave/ranked_list_fusion.py` — complete-list fusion and audit data.
 - `src/rankweave/evaluation.py` — precision, recall, RR, and graded nDCG.
 - `src/rankweave/comparison.py` — exact and Monte Carlo paired randomization.
-- `src/rankweave/tuning.py` — validation-set weighted-RRF policy selection.
+- `src/rankweave/cross_validation.py` — explicit blocked folds, fold-local selection, and out-of-fold evidence.
+- `src/rankweave/tuning.py` — validation-set convex-score and weighted-RRF policy selection.
 - `src/rankweave/trec.py` — strict TREC parsing, formatting, and evaluation.
 - `src/rankweave/trec_comparison.py` — direct three-artifact paired comparison.
 - `src/rankweave/trec_family_comparison.py` — named candidate-family
