@@ -10,6 +10,29 @@ from rankweave import (
 UTC = timezone.utc
 
 
+def _minimal_arguments():
+    return {
+        "channel_results_by_query": {
+            "q0": {"lexical": [("a", 1.0)]},
+            "q1": {"lexical": [("b", 1.0)]},
+        },
+        "relevance_by_query": {"q0": {"a": 1}, "q1": {"b": 1}},
+        "candidate_channel_weights": {"lexical-only": {"lexical": 1.0}},
+        "available_time_by_query": {
+            "q0": datetime(2026, 1, 1, tzinfo=UTC),
+            "q1": datetime(2026, 1, 2, tzinfo=UTC),
+        },
+        "windows": (
+            WeightedConvexBacktestWindowDefinition(
+                window_id="window-1",
+                training_query_ids=("q0",),
+                held_out_query_ids=("q1",),
+            ),
+        ),
+        "cutoff": 1,
+    }
+
+
 def test_backtest_rejects_training_on_a_query_before_its_future_assessment():
     results = {
         query_id: {
@@ -56,3 +79,31 @@ def test_backtest_rejects_training_on_a_query_before_its_future_assessment():
             windows,
             cutoff=1,
         )
+
+
+def test_backtest_rejects_non_window_definition_record():
+    arguments = _minimal_arguments()
+    arguments["windows"] = (object(),)
+
+    with pytest.raises(
+        ValueError,
+        match="windows must contain WeightedConvexBacktestWindowDefinition",
+    ):
+        backtest_weighted_convex_fusion(**arguments)
+
+
+def test_backtest_rejects_unhashable_window_query_identifier():
+    arguments = _minimal_arguments()
+    arguments["windows"] = (
+        WeightedConvexBacktestWindowDefinition(
+            window_id="window-1",
+            training_query_ids=(["not-hashable"],),
+            held_out_query_ids=("q1",),
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="training query identifier must be hashable",
+    ):
+        backtest_weighted_convex_fusion(**arguments)
