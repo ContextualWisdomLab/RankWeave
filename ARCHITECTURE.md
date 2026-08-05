@@ -50,6 +50,7 @@ scientific validity.
 - `comparison.py` — exact and deterministic Monte Carlo paired randomization.
 - `cross_validation.py` — caller-owned blocked folds, fold-local policy selection, and out-of-fold evaluation.
 - `tuning.py` — validation-set convex-score and weighted-RRF policy selection.
+- `temporal_backtesting.py` — availability-time historical policy assessment.
 - `trec.py` — strict TREC parsing, formatting, and evaluation.
 - `trec_comparison.py` — direct pairwise TREC comparison orchestration.
 - `trec_family_comparison.py` — ordered family comparison and Holm correction.
@@ -78,6 +79,16 @@ The caller owns fold grouping because only the consumer knows which translations
 revisions, users, tenants, events, projects, or time windows must not cross the
 training boundary. Random fold generation and rolling-origin forecasting are
 outside this module.
+
+## Availability-time backtesting boundary
+
+`temporal_backtesting.py` is deterministic experiment orchestration. It delegates
+policy selection to `tune_weighted_convex_fusion`, list fusion to
+`weighted_convex_fuse`, and effectiveness calculation to `evaluate_rankings`.
+The caller owns availability provenance and explicit assessment windows.
+RankWeave normalizes aware datetimes to UTC, enforces strictly forward training
+and held-out evidence, preserves every window result, reconstructs one
+out-of-sample evaluation, and labels all-data final tuning separately.
 
 ## Compatibility and release policy
 

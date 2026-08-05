@@ -478,6 +478,21 @@ does not authenticate a report, verify external artifact bytes, or establish
 that a statistical conclusion is scientifically valid. See
 [Report JSON Schemas](docs/report-schemas.md).
 
+## Backtest convex policies by availability time
+
+Use `backtest_weighted_convex_fusion` when a policy must be selected only from
+information available before each historical assessment window. The caller
+supplies timezone-aware availability timestamps and explicit ordered windows;
+RankWeave rejects future-evidence leakage, overlapping held-out windows,
+incomplete query accounting, and ambiguous same-instant boundaries.
+
+Each window preserves the complete training tuning report, selected fixed
+weights, held-out rankings, and held-out evaluation. The report also reconstructs
+one original-order out-of-sample evaluation and keeps the all-data final policy
+recommendation separate from prospective evidence.
+
+See [Temporal convex-fusion backtesting](docs/temporal-convex-backtesting.md).
+
 ## Input and determinism guarantees
 
 - numeric fusion, evaluation, and comparison inputs are finite;
