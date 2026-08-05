@@ -107,17 +107,17 @@ def test_distribution_handoff_is_checksum_verified_before_use():
     publish_block = _job_block(workflow_text, "publish", None)
 
     assert (
-        "manifest-sha256: ${{ steps.distributions.outputs.manifest-sha256 }}"
+        "manifest_sha256: ${{ steps.distributions.outputs.manifest_sha256 }}"
         in build_block
     )
     assert ") > release-handoff/SHA256SUMS" in build_block
     assert "sha256sum release-handoff/SHA256SUMS" in build_block
-    assert "manifest-sha256=%s" in build_block
+    assert "manifest_sha256=%s" in build_block
     for job_block in (provenance_block, publish_block):
         assert "Verify immutable distribution handoff" in job_block
         assert (
             "EXPECTED_MANIFEST_SHA256: "
-            "${{ needs.build.outputs.manifest-sha256 }}"
+            "${{ needs.build.outputs.manifest_sha256 }}"
         ) in job_block
         assert "handoff/release-handoff/SHA256SUMS" in job_block
         assert "sha256sum --check --strict -" in job_block
