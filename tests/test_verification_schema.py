@@ -27,7 +27,7 @@ def _record(role, payload, candidate_id=None):
 def _verification_document():
     return {
         "schema_version": "rankweave.artifact-verification.v1",
-        "rankweave_version": "0.16.0",
+        "rankweave_version": "0.17.0",
         "report_schema_version": "rankweave.trec-comparison.v2",
         "verified": True,
         "artifact_count": 3,
