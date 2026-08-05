@@ -114,32 +114,31 @@ git add .github/workflows/ci.yml tests/test_ci_supply_chain.py
 git commit -m "ci: pin Node.js 24-compatible package actions"
 ```
 
-### Task 3: Synchronize governance documentation and verify the exact head
+### Task 3: Record the trust decision and verify the exact head
 
 **Files:**
-- Modify: `AGENTS.md`
+- Create: `docs/adr/0001-package-ci-action-runtime.md`
 - Modify: `CLAUDE.md`
-- Modify: `CHANGELOG.md`
 - Modify: `docs/superpowers/specs/2026-08-05-node24-action-pins-design.md`
 - Modify: `docs/superpowers/plans/2026-08-05-node24-action-pins.md`
 
 **Interfaces:**
 - Consumes: the final checked-in package-CI action pins.
-- Produces: maintainer guidance and release-history evidence without changing package version.
+- Produces: an accepted ADR and agent-facing operational invariant without changing package version or package changelog.
 
-- [ ] **Step 1: Record the maintainer invariant**
+- [ ] **Step 1: Record the ADR**
 
-Add a concise rule to both agent guidance files:
+Document context, reviewed tag-to-SHA identities, the full-SHA decision, rejected moving tags, consequences, executable tests, and the separate privileged-hourly-workflow boundary.
+
+- [ ] **Step 2: Record the contributor invariant**
+
+Add to `CLAUDE.md`:
 
 ```text
 Repository-owned package-CI JavaScript actions must use reviewed Node.js
 24-compatible releases pinned to full commit SHAs. Moving tags and
 compatibility-warning fallbacks are not accepted trust inputs.
 ```
-
-- [ ] **Step 2: Update the Unreleased changelog**
-
-Add `Changed` and `Security` entries describing the Node.js 24-compatible package-CI pins and expanded regression coverage. Do not create a new package release section.
 
 - [ ] **Step 3: Run complete verification**
 
@@ -158,7 +157,7 @@ Expected: the complete suite passes; production statement/branch coverage remain
 - [ ] **Step 4: Commit documentation**
 
 ```bash
-git add AGENTS.md CLAUDE.md CHANGELOG.md \
+git add CLAUDE.md docs/adr/0001-package-ci-action-runtime.md \
   docs/superpowers/specs/2026-08-05-node24-action-pins-design.md \
   docs/superpowers/plans/2026-08-05-node24-action-pins.md
 git commit -m "docs: govern package-CI action runtimes"
@@ -166,10 +165,10 @@ git commit -m "docs: govern package-CI action runtimes"
 
 ## Plan self-review
 
-- **Spec coverage:** package-CI pins, stale-pin rejection, exact SHA syntax, separate hourly control-plane scope, documentation, and complete verification all map to tasks.
+- **Spec coverage:** package-CI pins, stale-pin rejection, exact SHA syntax, separate hourly control-plane scope, ADR, contributor guidance, and complete verification all map to tasks.
 - **Placeholder scan:** no TBD, TODO, deferred implementation, or unspecified validation remains.
 - **Name consistency:** the three action SHA constants match the reviewed official tag refs in every task.
-- **Scope:** one package-CI supply-chain subsystem; no runtime Python, statistical, database, UI, release publication, hourly control-plane, or central workflow change.
+- **Scope:** one package-CI supply-chain subsystem; no runtime Python, statistical, database, UI, release publication, hourly control-plane, package changelog, or central workflow change.
 
 ## Execution mode
 
