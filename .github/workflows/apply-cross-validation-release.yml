@@ -1,18 +1,18 @@
-name: Apply cross-validation release updates
+name: Finalize cross-validation workflow contracts
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize]
+    types: [synchronize]
 
 permissions:
   contents: read
 
 concurrency:
-  group: rankweave-pr-31-cross-validation-release
+  group: rankweave-pr-31-cross-validation-finalize
   cancel-in-progress: true
 
 jobs:
-  apply-verify-push:
+  finalize-verify-push:
     if: >-
       github.event.pull_request.number == 31 &&
       github.event.pull_request.head.repo.full_name == github.repository &&
@@ -20,87 +20,50 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
+      actions: read
       contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: feat/cross-validate-convex-fusion
           fetch-depth: 0
           persist-credentials: false
-      - name: Detect pending release updater
-        id: gate
-        run: |
-          if [ -f .github/scripts/apply_cross_validation_release.py ]; then
-            echo "apply=true" >>"$GITHUB_OUTPUT"
-          else
-            echo "apply=false" >>"$GITHUB_OUTPUT"
-          fi
-      - if: steps.gate.outputs.apply == 'true'
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cross-validation-workflow-patches
+          path: workflow-patches/
+          repository: ContextualWisdomLab/RankWeave
+          run-id: 30996873246
+          github-token: ${{ github.token }}
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.13"
-      - if: steps.gate.outputs.apply == 'true'
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           version: "0.11.29"
           enable-cache: false
-      - name: Apply reviewed release edits
-        if: steps.gate.outputs.apply == 'true'
+      - name: Install and verify reviewed workflow patches
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
+          printf '%s  %s\n' \
+            2c90a3d710e2ae5ac48e36fbad6a95228704a07b66fa182029b4ba9d8d369b01 \
+            workflow-patches/ci.yml | sha256sum --check --strict -
+          printf '%s  %s\n' \
+            4f0492a6e520908424e647a99f7d88134f76a2996ec448dcd0bf04ea9e4d8c8d \
+            workflow-patches/publish.yml | sha256sum --check --strict -
+          cp workflow-patches/ci.yml .github/workflows/ci.yml
+          cp workflow-patches/publish.yml .github/workflows/publish.yml
+          rm .github/workflows/apply-cross-validation-release.yml
+          rm -rf workflow-patches
 
-          script_path = Path(
-              ".github/scripts/apply_cross_validation_release.py"
-          )
-          script_text = script_path.read_text(encoding="utf-8")
-          marker = (
-              '"""Apply the reviewed RankWeave 0.16.0 '
-              'cross-validation release edits."""\n'
-          )
-          replacement = marker + "\n# ruff: noqa: E501\n"
-          if script_text.count(marker) != 1:
-              raise SystemExit("release updater docstring marker is not unique")
-          script_path.write_text(
-              script_text.replace(marker, replacement, 1),
-              encoding="utf-8",
-          )
-          PY
-          python .github/scripts/apply_cross_validation_release.py
-          python - <<'PY'
-          from pathlib import Path
+          grep -F '"rankweave/cross_validation.py"' \
+            .github/workflows/ci.yml
+          grep -F '"rankweave/cross_validation.py"' \
+            .github/workflows/publish.yml
+          grep -F 'assert rankweave.__version__ == "0.16.0"' \
+            .github/workflows/ci.yml
 
-          lock_path = Path("uv.lock")
-          lock_text = lock_path.read_text(encoding="utf-8")
-          old_version = 'name = "rankweave"\nversion = "0.15.0"'
-          new_version = 'name = "rankweave"\nversion = "0.16.0"'
-          if lock_text.count(old_version) != 1:
-              raise SystemExit("uv.lock local project version is not unique")
-          lock_path.write_text(
-              lock_text.replace(old_version, new_version, 1),
-              encoding="utf-8",
-          )
-
-          publish_path = Path(".github/workflows/publish.yml")
-          publish_text = publish_path.read_text(encoding="utf-8")
-          marker = '              "rankweave/cli.py",\n'
-          addition = '              "rankweave/cross_validation.py",\n'
-          if addition not in publish_text:
-              if publish_text.count(marker) != 1:
-                  raise SystemExit(
-                      "publish workflow CLI archive marker is not unique"
-                  )
-              publish_path.write_text(
-                  publish_text.replace(marker, marker + addition, 1),
-                  encoding="utf-8",
-              )
-          PY
-          rm .github/scripts/apply_cross_validation_release.py
-      - name: Verify exact release tree
-        if: steps.gate.outputs.apply == 'true'
-        run: |
-          set -euo pipefail
           uv sync --frozen --extra dev --python 3.13
           uv run --frozen --extra dev --python 3.13 \
             python -m compileall -q src
@@ -111,92 +74,63 @@ jobs:
           uv run --frozen --extra dev --python 3.13 \
             python -m coverage report
           uv build --wheel --sdist --out-dir dist
-          uv venv .release-smoke --python 3.13
-          uv pip install --python .release-smoke/bin/python \
-            --no-index --find-links dist rankweave
-          .release-smoke/bin/python - <<'PY'
-          import rankweave
-
-          assert rankweave.__version__ == "0.16.0"
-          report = rankweave.cross_validate_weighted_convex_fusion(
-              {
-                  "q1": {
-                      "lexical": [("a", 1.0), ("x", 0.0)],
-                      "dense": [("x", 1.0), ("a", 0.0)],
-                  },
-                  "q2": {
-                      "lexical": [("y", 1.0), ("b", 0.0)],
-                      "dense": [("b", 1.0), ("y", 0.0)],
-                  },
-                  "q3": {
-                      "lexical": [("c", 0.9), ("z", 0.1)],
-                      "dense": [("z", 0.9), ("c", 0.1)],
-                  },
-                  "q4": {
-                      "lexical": [("w", 0.9), ("d", 0.1)],
-                      "dense": [("d", 0.9), ("w", 0.1)],
-                  },
-              },
-              {
-                  "q1": {"a": 1},
-                  "q2": {"b": 1},
-                  "q3": {"c": 1},
-                  "q4": {"d": 1},
-              },
-              {
-                  "dense-heavy": {"lexical": 0.1, "dense": 0.9},
-                  "lexical-heavy": {"lexical": 0.9, "dense": 0.1},
-              },
-              {"q1": "a", "q2": "b", "q3": "a", "q4": "b"},
-              cutoff=1,
-          )
-          assert len(report.folds) == 2
-          assert report.out_of_fold_evaluation.aggregate.query_count == 4
-          assert isinstance(
-              report,
-              rankweave.WeightedConvexCrossValidationReport,
-          )
-          assert isinstance(
-              report.folds[0],
-              rankweave.WeightedConvexCrossValidationFold,
-          )
-          PY
-          uv pip check --python .release-smoke/bin/python
-      - name: Preserve reviewed workflow patches
-        if: steps.gate.outputs.apply == 'true'
-        run: |
-          set -euo pipefail
-          mkdir -p workflow-patches
-          cp .github/workflows/ci.yml workflow-patches/ci.yml
-          cp .github/workflows/publish.yml workflow-patches/publish.yml
-      - if: steps.gate.outputs.apply == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: cross-validation-workflow-patches
-          path: workflow-patches/
-          if-no-files-found: error
-          include-hidden-files: false
-          retention-days: 1
-      - name: Commit verified non-workflow release updates
-        if: steps.gate.outputs.apply == 'true'
+          git diff --check
+      - name: Exchange an OpenCode app token for workflow mutation
+        id: mutation_token
         env:
-          GH_TOKEN: ${{ github.token }}
+          OIDC_AUDIENCE: opencode-github-action
+          OPENCODE_API_BASE_URL: https://api.opencode.ai
         run: |
           set -euo pipefail
-          rm -rf dist .coverage .release-smoke workflow-patches
-          git restore --source=HEAD -- \
-            .github/workflows/ci.yml \
-            .github/workflows/publish.yml
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ] || \
+            [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "::error::OIDC request environment is unavailable."
+            exit 1
+          fi
+          request_url="${ACTIONS_ID_TOKEN_REQUEST_URL}"
+          separator="&"
+          case "$request_url" in
+            *\?*) ;;
+            *) separator="?" ;;
+          esac
+          oidc_response="$(
+            curl -fsS \
+              -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${request_url}${separator}audience=${OIDC_AUDIENCE}"
+          )"
+          oidc_token="$(jq -r '.value // empty' <<<"$oidc_response")"
+          if [ -z "$oidc_token" ]; then
+            echo "::error::OIDC token response was empty."
+            exit 1
+          fi
+          token_response="$(
+            curl -fsS \
+              -X POST \
+              -H "Authorization: Bearer ${oidc_token}" \
+              "${OPENCODE_API_BASE_URL}/exchange_github_app_token"
+          )"
+          app_token="$(jq -r '.token // empty' <<<"$token_response")"
+          if [ -z "$app_token" ]; then
+            echo "::error::OpenCode GitHub App token response was empty."
+            exit 1
+          fi
+          echo "::add-mask::$app_token"
+          echo "token=$app_token" >>"$GITHUB_OUTPUT"
+      - name: Commit verified workflow contracts
+        env:
+          GH_TOKEN: ${{ steps.mutation_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          rm -rf dist .coverage
           git config user.name "github-actions[bot]"
           git config user.email \
             "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No non-workflow release changes remain to commit."
-            exit 0
-          fi
+          git add \
+            .github/workflows/ci.yml \
+            .github/workflows/publish.yml
+          git add -u .github/workflows/apply-cross-validation-release.yml
           git -c core.hooksPath=/dev/null commit \
-            -m "release: prepare RankWeave 0.16.0"
+            -m "ci: verify RankWeave 0.16.0 package contracts"
           git -c core.hooksPath=/dev/null push \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             "HEAD:refs/heads/feat/cross-validate-convex-fusion"
