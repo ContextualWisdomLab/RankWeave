@@ -298,7 +298,7 @@ def test_backtest_rejects_query_held_out_more_than_once():
     first, second = _windows()
     second = WeightedConvexBacktestWindowDefinition(
         window_id=second.window_id,
-        training_query_ids=second.training_query_ids,
+        training_query_ids=("q0", "q1", "q2"),
         held_out_query_ids=("q3", "q5"),
     )
 
