@@ -4,6 +4,22 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-08-05
+
+### Added
+- Opt-in `--include-artifact-digests` support for `rankweave compare` and `rankweave compare-family`.
+- Versioned `rankweave.trec-comparison.v2` and `rankweave.trec-family-comparison.v2` JSON contracts that bind reports to every exact input artifact with SHA-256 and raw byte counts.
+- Ordered candidate-family digest evidence that preserves the explicit statistical-family order while excluding mutable or sensitive local paths.
+- Regression coverage proving exact-byte hashing, Unicode byte counts, raw-comment sensitivity, path non-disclosure, v1 compatibility, and locale-independent UTF-8 v2 output.
+
+### Changed
+- Bounded CLI reads now hash, count, and strictly decode the same raw byte payload in one pass; the public `read_text_bounded` compatibility helper continues to return decoded text only.
+- Existing v1 JSON remains the default and retains its exact field order. Digest evidence is additive only through the explicit flag and new v2 schema identifiers.
+
+### Security
+- SHA-256 evidence is documented as an integrity binding rather than a signature, producer authentication mechanism, trusted-execution claim, or SLSA level.
+- Reports never expose the input file paths used to compute artifact digests.
+
 ## [0.11.1] — 2026-08-05
 
 ### Fixed
