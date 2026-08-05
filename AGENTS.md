@@ -77,6 +77,11 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   byte counts, preserve candidate order, and never emit local paths. A SHA-256
   digest is an integrity binding, not a signature, producer authentication,
   trusted-execution proof, or SLSA-level claim.
+- **Report schemas are public compatibility contracts.** The packaged Draft
+  2020-12 resources must describe every emitted pairwise and family v1/v2
+  document exactly. Keep all objects strict, preserve stable resource discovery
+  order, validate real generated reports in development tests, and verify every
+  resource from an installed wheel. Do not add a runtime validator dependency.
 - **CLI input is bounded.** Every artifact read requests no more than
   `max_input_bytes + 1`. Never replace it with `read()`, `read_bytes()`, or any
   other unbounded operation after a size check. The limit applies separately to
@@ -161,6 +166,8 @@ python -m pip wheel . --no-deps --wheel-dir dist
   comparison with Holm family-wise correction.
 - `src/rankweave/cli.py` — bounded pairwise/family input, v1/v2 JSON
   projection, exact artifact evidence, and exit contracts.
+- `src/rankweave/report_schemas.py` — stable schema discovery and package-resource loading.
+- `src/rankweave/schemas/` — strict Draft 2020-12 report contracts shipped in the wheel.
 - `src/rankweave/__main__.py` — module entrypoint only.
 - `src/rankweave/query_normalization.py` — NFC query normalization.
 - `.github/workflows/hourly-commercialization-loop.yml` — hourly governed
@@ -170,8 +177,10 @@ python -m pip wheel . --no-deps --wheel-dir dist
 - `docs/trec-interoperability.md` — interchange contracts.
 - `docs/trec-run-comparison.md` — direct pairwise TREC workflow.
 - `docs/trec-family-comparison.md` — candidate-family and Holm workflow.
-- `docs/cli.md` — installed commands, v1/v2 JSON schemas, artifact verification,
+- `docs/cli.md` — installed commands, report transports, artifact verification,
   and operator boundaries.
+- `docs/report-schemas.md` — machine-readable schema discovery, validation,
+  compatibility, and interpretation boundaries.
 - `docs/superpowers/specs/` and `docs/superpowers/plans/` — reviewed designs
   and executable implementation plans.
 - `tests/` — hand-computed behavior and contract tests.

@@ -214,6 +214,34 @@ assert len(actual_bytes) == expected["byte_count"]
 assert hashlib.sha256(actual_bytes).hexdigest() == expected["sha256"]
 ```
 
+## Emit machine-readable report schemas
+
+The installed package exposes each stable report contract as canonical UTF-8
+JSON Schema Draft 2020-12 text:
+
+```bash
+rankweave schema \
+  --report-type pairwise \
+  --schema-version v2 > pairwise-v2.schema.json
+```
+
+```bash
+python -m rankweave schema \
+  --report-type family \
+  --schema-version v1 > family-v1.schema.json
+```
+
+`--report-type` accepts `pairwise` or `family`; `--schema-version` accepts `v1`
+or `v2`. The command reads only packaged resources, performs no network or
+filesystem input access, writes one canonical UTF-8 JSON document, and retains
+the stderr-only exit-2 usage contract. Console and module output are
+byte-identical.
+
+The runtime deliberately does not provide a partial validator. Use a conforming
+Draft 2020-12 implementation in the consuming service. A valid document has the
+required structure; this alone does not authenticate its producer or verify its
+statistical claims.
+
 ## Shared options
 
 | Option | Required | Default | Contract |

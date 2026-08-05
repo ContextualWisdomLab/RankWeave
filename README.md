@@ -370,6 +370,43 @@ proof, or SLSA-level claim.
 See [RankWeave command-line interface](docs/cli.md) for v1/v2 field order,
 verification examples, and operator boundaries.
 
+## Discover machine-readable report contracts
+
+RankWeave 0.13.0 ships strict JSON Schema Draft 2020-12 resources for every
+pairwise and candidate-family v1/v2 transport. Shell and container consumers
+can retrieve the exact installed contract without locating package files:
+
+```bash
+rankweave schema --report-type pairwise --schema-version v2
+```
+
+The equivalent module entrypoint is:
+
+```bash
+python -m rankweave schema --report-type family --schema-version v1
+```
+
+Python and MSA consumers can use the dependency-free resource API:
+
+```python
+from rankweave import available_report_schemas, load_report_schema
+
+for descriptor in available_report_schemas():
+    schema = load_report_schema(
+        descriptor.report_type,
+        descriptor.schema_version,
+    )
+    assert schema["properties"]["schema_version"]["const"] == (
+        descriptor.transport_schema_id
+    )
+```
+
+The runtime does not embed a validator. Consumers select a conforming Draft
+2020-12 implementation appropriate to their platform. Structural validation
+does not authenticate a report, verify external artifact bytes, or establish
+that a statistical conclusion is scientifically valid. See
+[Report JSON Schemas](docs/report-schemas.md).
+
 ## Input and determinism guarantees
 
 - numeric fusion, evaluation, and comparison inputs are finite;

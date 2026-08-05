@@ -4,6 +4,22 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-08-05
+
+### Added
+- Four strict JSON Schema Draft 2020-12 resources for pairwise and candidate-family v1/v2 report transports.
+- Public `ReportSchemaDescriptor`, `available_report_schemas`, `load_report_schema_text`, and `load_report_schema` APIs for standalone and MSA consumers.
+- The `rankweave schema` console and module command for deterministic UTF-8 schema discovery in shell, CI, and container workflows.
+- Installed-wheel verification for all schema resources and console/module schema-output parity.
+
+### Changed
+- RankWeave 0.13.0 publishes existing report contracts without changing pairwise or candidate-family v1/v2 report semantics.
+- Development validation uses the reference `jsonschema` implementation while the runtime remains standard-library-only.
+
+### Security
+- Every schema is strict about required fields and rejects additional object properties, malformed digest evidence, unsupported metrics, and invalid value domains.
+- Successful structural validation is documented as neither report authenticity, artifact-digest verification, trusted execution, nor scientific validity.
+
 ## [0.12.0] — 2026-08-05
 
 ### Added
