@@ -71,18 +71,18 @@ jobs:
           uv run --frozen --extra dev --python 3.13 \
             python -m coverage report
           uv build --wheel --sdist --out-dir dist
-      - name: Commit verified release updates
+      - name: Commit verified non-workflow release updates
         if: steps.gate.outputs.apply == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           rm -rf dist .coverage
+          git restore --source=HEAD -- .github/workflows/ci.yml
           git config user.name "github-actions[bot]"
           git config user.email \
             "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
-            .github/workflows/ci.yml \
             AGENTS.md ARCHITECTURE.md CHANGELOG.md CLAUDE.md README.md \
             docs/convex-fusion-tuning.md docs/releasing.md \
             docs/research/README.md \
