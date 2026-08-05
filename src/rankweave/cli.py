@@ -24,6 +24,7 @@ from rankweave.comparison import (
     TWO_SIDED_ALTERNATIVE,
     QueryMetricDifference,
 )
+from rankweave.report_schemas import load_report_schema_text
 from rankweave.trec_comparison import (
     TrecRunComparisonReport,
     compare_trec_runs,
@@ -214,6 +215,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--familywise-alpha",
         type=_familywise_alpha,
         default=0.05,
+    )
+
+    schema_parser = subcommands.add_parser(
+        "schema",
+        help="emit one packaged JSON Schema report contract",
+    )
+    schema_parser.add_argument(
+        "--report-type",
+        required=True,
+        choices=("pairwise", "family"),
+    )
+    schema_parser.add_argument(
+        "--schema-version",
+        required=True,
+        choices=("v1", "v2"),
     )
     return parser
 
@@ -558,25 +574,32 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the RankWeave CLI and return its process exit status."""
     try:
         arguments = build_parser().parse_args(argv)
-        if arguments.command == "compare":
-            payload = _run_compare(arguments)
+        if arguments.command == "schema":
+            output_bytes = load_report_schema_text(
+                arguments.report_type,
+                arguments.schema_version,
+            ).encode("utf-8")
         else:
-            payload = _run_compare_family(arguments)
-        if arguments.pretty:
-            rendered_output = json.dumps(
-                payload,
-                ensure_ascii=False,
-                indent=2,
-            )
-        else:
-            rendered_output = json.dumps(
-                payload,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            )
+            if arguments.command == "compare":
+                payload = _run_compare(arguments)
+            else:
+                payload = _run_compare_family(arguments)
+            if arguments.pretty:
+                rendered_output = json.dumps(
+                    payload,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            else:
+                rendered_output = json.dumps(
+                    payload,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+            output_bytes = rendered_output.encode("utf-8") + b"\n"
     except (_UsageError, OSError, ValueError) as exc:
         print(f"rankweave: error: {exc}", file=sys.stderr)
         return 2
 
-    sys.stdout.buffer.write(rendered_output.encode("utf-8") + b"\n")
+    sys.stdout.buffer.write(output_bytes)
     return 0
