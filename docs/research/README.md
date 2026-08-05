@@ -1,9 +1,9 @@
 # Research grounding — RankWeave
 
 RankWeave's defaults, metric conventions, significance comparison, tuning
-workflow, interchange contracts, and autonomous-delivery boundaries are tied
-to published evidence or an authoritative reference implementation. This
-directory preserves that grounding with the code.
+workflow, interchange contracts, artifact-evidence boundary, and autonomous
+delivery controls are tied to published evidence or an authoritative reference
+implementation. This directory preserves that grounding with the code.
 
 ## Papers
 
@@ -29,11 +29,16 @@ redistribution permission is confirmed. Git LFS is intentionally not required.
   `DOCUMENT`, and `RELEVANCY`.
 - **NIST TREC run submission guidance** defines the six fields `topicid`, `Q0`,
   `docid`, `rank`, `score`, and `run-tag`, and documents score-order evaluation.
+- **FIPS 180-4** defines SHA-256, which RankWeave uses for exact bounded-input
+  byte evidence.
 - **RFC 8259** requires interoperable JSON exchanged outside a closed ecosystem
   to use UTF-8 and grounds the CLI's locale-independent byte transport.
-- **SLSA v1.2 Source Track** covers source authoring, review, and source-management
-  threats and grounds the separation between maintainer-owned control policy and
-  bounded autonomous product changes.
+- **SLSA v1.2 Source Track** covers source authoring, review, and
+  source-management threats and grounds the separation between maintainer-owned
+  control policy and bounded autonomous product changes.
+- **SLSA v1.2 provenance and verification guidance** uses artifact subject
+  digests as the verification binding; RankWeave adopts only the narrower
+  digest-binding concept and does not claim to emit a SLSA attestation.
 - **GitHub Actions OIDC reference** defines the `id-token: write` permission and
   the runner request variables used to obtain a short-lived OIDC token.
 
@@ -181,6 +186,31 @@ exact query-set parity gate as the native evaluation API.
 Detailed operational behavior is documented in
 [`docs/trec-interoperability.md`](../trec-interoperability.md).
 
+## Exact input-artifact evidence
+
+Run tags are descriptive and may repeat, so they cannot bind a result to the
+exact bytes that were evaluated. RankWeave's opt-in CLI v2 schemas include
+SHA-256 and raw byte counts for each baseline run, candidate run, and qrels
+artifact.
+
+The bounded reader opens each local file once, requests no more than
+`max_input_bytes + 1`, hashes the exact bytes, records their length, and then
+strictly decodes the same payload as UTF-8. This makes comments, line endings,
+trailing whitespace, and alternate Unicode byte sequences part of artifact
+identity even when they do not affect the parsed ranking.
+
+FIPS 180-4 defines the SHA-256 algorithm. SLSA v1.2 provenance represents
+subjects with artifact digests and verification compares expected and observed
+digests. RankWeave follows that narrow binding pattern, but its JSON report is
+not a signed in-toto statement, does not authenticate the producer or build
+platform, and does not establish any SLSA build level. Local paths are excluded
+because they are mutable, environment-specific, and may reveal sensitive host
+structure.
+
+The established v1 schemas remain the default. Artifact evidence requires the
+explicit flag and v2 schema identifier so strict consumers never receive a
+silent field-set change.
+
 ## Autonomous source and credential boundaries
 
 The hourly product-development workflow treats model-authored source and tests
@@ -227,6 +257,10 @@ https://doi.org/10.2307/4615733
 Järvelin, K., & Kekäläinen, J. (2002). Cumulated gain-based evaluation of IR
 techniques. *ACM Transactions on Information Systems, 20*(4), 422–446.
 https://doi.org/10.1145/582415.582418
+
+National Institute of Standards and Technology. (2015). *Secure Hash Standard
+(SHS)* (FIPS PUB 180-4). U.S. Department of Commerce.
+https://doi.org/10.6028/NIST.FIPS.180-4
 
 Samuel, S., DeGenaro, D., Guallar-Blasco, J., Sanders, K., Eisape, O.,
 Spendlove, T., Reddy, A., Martin, A., Yates, A., Yang, E., Carpenter, C.,
