@@ -4,7 +4,7 @@
 
 **Goal:** Add a tokenless, environment-gated, attested PyPI publication workflow for the already-versioned RankWeave 0.14.0 release.
 
-**Architecture:** A read-only build job validates the exact stable GitHub Release object, released commit, default-branch reachability, package version, full quality gate, wheel, and source distribution. It exports a SHA-256 manifest digest and uploads the two distributions plus manifest as one immutable Actions artifact. Separate provenance and protected `pypi` jobs verify the manifest and both distribution hashes before attesting or publishing with OIDC.
+**Architecture:** A read-only build job validates the exact stable GitHub Release object, released commit, default-branch reachability, package version, full quality gate, wheel, and source distribution. It writes `release-handoff/SHA256SUMS`, exports the manifest digest as `manifest_sha256`, and uploads `dist/` plus the manifest as one immutable Actions artifact. Separate provenance and protected `pypi` jobs download into `handoff/`, verify the manifest and both distributions, and then attest or publish only `handoff/dist/`.
 
 **Tech Stack:** GitHub Actions, uv 0.11.29, Python 3.13 `tomllib`, GNU `sha256sum`, PyPI Trusted Publishing, PEP 740 attestations, GitHub Artifact Attestations, pytest, Ruff, coverage.py.
 
@@ -18,7 +18,9 @@
 - PyPI authentication uses OIDC Trusted Publishing; no username, password, API token, or package-registry secret is permitted.
 - The publishing job uses the protected GitHub environment `pypi`.
 - Build, provenance, and publication are separate jobs with least privilege.
-- Downstream jobs verify the manifest digest from a build-job output and then verify the wheel and sdist checksums.
+- The provenance job includes `artifact-metadata: write`, as required by the pinned `actions/attest` release.
+- Downstream jobs verify `needs.build.outputs.manifest_sha256` and then verify the wheel and sdist checksums.
+- The manifest remains outside the directory passed to the PyPI action.
 - The workflow does not use the nonexistent `download-artifact` input `digest-mismatch`; GitHub's automatic archive validation is warning-only on mismatch.
 - Existing 100% production statement/branch coverage and production docstring gates remain intact.
 - Existing CI, hourly automation, NVIDIA/OpenCode secrets, and central reusable-workflow SHAs are unchanged.
@@ -45,11 +47,13 @@ assert "workflow_dispatch:" not in trigger_block
 assert "RELEASE_PRERELEASE" in build_block
 assert '"merge-base",' in build_block
 assert '"--is-ancestor",' in build_block
-assert "manifest-sha256" in build_block
-assert "sha256sum *.whl *.tar.gz > SHA256SUMS" in build_block
+assert "manifest_sha256" in build_block
+assert "release-handoff/SHA256SUMS" in build_block
 assert "digest-mismatch:" not in workflow_text
 assert "EXPECTED_MANIFEST_SHA256" in provenance_block
 assert "EXPECTED_MANIFEST_SHA256" in publish_block
+assert "packages-dir: handoff/dist/" in publish_block
+assert "artifact-metadata: write" in provenance_block
 assert "environment:\n      name: pypi\n" in publish_block
 assert "PYPI_API_TOKEN" not in publish_block
 ```
@@ -92,7 +96,7 @@ git commit -m "test(red): specify tokenless attested PyPI releases"
 
 **Interfaces:**
 - Consumes GitHub Release event fields, default-branch Git history, `pyproject.toml`, `rankweave.__version__`, `uv.lock`, and repository tests.
-- Produces Actions artifact `rankweave-distributions` containing one wheel, one sdist, and `SHA256SUMS`; build output `manifest-sha256`.
+- Produces Actions artifact `rankweave-distributions` containing `dist/`, `release-handoff/SHA256SUMS`, and build output `manifest_sha256`.
 
 - [ ] **Step 1: Create the release-only workflow skeleton**
 
@@ -130,15 +134,26 @@ Run frozen sync, compileall, Ruff, complete pytest coverage, `uv build --wheel -
 - [ ] **Step 3: Record the distribution manifest and immutable output**
 
 ```bash
+mkdir -p release-handoff
 (
   cd dist
-  sha256sum *.whl *.tar.gz > SHA256SUMS
-)
-manifest_sha256="$(sha256sum dist/SHA256SUMS | cut -d ' ' -f1)"
-printf 'manifest-sha256=%s\n' "$manifest_sha256" >> "$GITHUB_OUTPUT"
+  sha256sum *.whl *.tar.gz
+) > release-handoff/SHA256SUMS
+manifest_sha256="$(
+  sha256sum release-handoff/SHA256SUMS | cut -d ' ' -f1
+)"
+printf 'manifest_sha256=%s\n' "$manifest_sha256" >> "$GITHUB_OUTPUT"
 ```
 
-Expose the step output as the build job output. Upload `dist/` with `if-no-files-found: error`, `include-hidden-files: false`, and seven-day retention.
+Expose `steps.distributions.outputs.manifest_sha256` as the build job output. Upload:
+
+```yaml
+path: |
+  dist/
+  release-handoff/SHA256SUMS
+```
+
+Use `if-no-files-found: error`, `include-hidden-files: false`, and seven-day retention.
 
 - [ ] **Step 4: Run focused tests**
 
@@ -156,7 +171,7 @@ Expected: publication trigger, exact action pins, release identity, build gate, 
 - Modify: `tests/test_publish_workflow.py`
 
 **Interfaces:**
-- Consumes the immutable artifact and `needs.build.outputs.manifest-sha256`.
+- Consumes the immutable artifact and `needs.build.outputs.manifest_sha256`.
 - Produces GitHub provenance attestations for wheel/sdist and PyPI publication through environment `pypi`.
 
 - [ ] **Step 1: Implement the provenance job**
@@ -168,21 +183,23 @@ provenance:
     contents: read
     id-token: write
     attestations: write
+    artifact-metadata: write
 ```
 
-After download, fail closed:
+Download into `handoff/`, then fail closed:
 
 ```bash
 printf '%s  %s\n' \
   "$EXPECTED_MANIFEST_SHA256" \
-  dist/SHA256SUMS | sha256sum --check --strict -
+  handoff/release-handoff/SHA256SUMS | \
+  sha256sum --check --strict -
 (
-  cd dist
-  sha256sum --check --strict SHA256SUMS
+  cd handoff/dist
+  sha256sum --check --strict ../release-handoff/SHA256SUMS
 )
 ```
 
-Attest only `dist/*.whl` and `dist/*.tar.gz` through actions/attest v4.2.2.
+Attest only `handoff/dist/*.whl` and `handoff/dist/*.tar.gz` through actions/attest v4.2.2.
 
 - [ ] **Step 2: Implement the protected PyPI job**
 
@@ -196,7 +213,13 @@ publish:
     id-token: write
 ```
 
-Repeat the same fail-closed manifest and file verification, then invoke `pypa/gh-action-pypi-publish` v1.14.2. Supply only `packages-dir: dist/`; do not add credentials, alternate repository, or skip-existing inputs.
+Repeat the same fail-closed manifest and file verification, then invoke `pypa/gh-action-pypi-publish` v1.14.2 with only:
+
+```yaml
+packages-dir: handoff/dist/
+```
+
+Do not add credentials, alternate repository, skip-existing inputs, or the checksum manifest to the package directory.
 
 - [ ] **Step 3: Run focused and complete tests**
 
@@ -215,8 +238,6 @@ Expected: complete suite passes with production statement and branch coverage at
 - Modify: `tests/test_publish_workflow.py`
 
 - [ ] **Step 1: Build wheel and sdist in the package job**
-
-Replace the wheel-only build with:
 
 ```bash
 uv build --wheel --sdist --out-dir dist
@@ -253,12 +274,12 @@ uv build --wheel --sdist --out-dir dist
 
 **Files:**
 - Create: `docs/releasing.md`
+- Create: `docs/research/trusted-release-provenance.md`
 - Modify: `README.md`
 - Modify: `ARCHITECTURE.md`
 - Modify: `AGENTS.md`
 - Modify: `CLAUDE.md`
 - Modify: `CHANGELOG.md`
-- Modify: `docs/research/README.md`
 - Modify: `tests/test_publish_workflow.py`
 
 - [ ] **Step 1: Document exact external configuration**
@@ -281,9 +302,9 @@ Document:
 exact stable release object
 -> full quality gate
 -> wheel and sdist inspection
--> SHA256SUMS plus manifest job output
+-> release-handoff/SHA256SUMS plus manifest_sha256 output
 -> immutable workflow artifact
--> verified downstream handoff
+-> verified handoff/dist distributions
 -> GitHub provenance
 -> protected PyPI OIDC publication
 ```
@@ -314,9 +335,9 @@ uv run --frozen --extra dev --python 3.13 python -m coverage report
 
 ## Plan self-review
 
-- **Spec coverage:** stable release identity, default-branch reachability, tag/version gate, complete build gate, wheel/sdist inspection, explicit manifest verification, GitHub provenance, PyPI OIDC, environment protection, PR archive testing, documentation, and trust boundaries map to tasks.
+- **Spec coverage:** stable release identity, default-branch reachability, tag/version gate, complete build gate, wheel/sdist inspection, explicit manifest verification, current attest permissions, PyPI OIDC, environment protection, PR archive testing, documentation, and trust boundaries map to tasks.
 - **Placeholder scan:** no TBD, TODO, deferred implementation, or unspecified validation remains.
-- **Type and name consistency:** artifact name is always `rankweave-distributions`; manifest is always `dist/SHA256SUMS`; environment is always `pypi`; workflow is always `publish.yml`; action SHAs match the design.
+- **Type and name consistency:** artifact name is always `rankweave-distributions`; manifest is always `release-handoff/SHA256SUMS`; job output is always `manifest_sha256`; package directory is always `handoff/dist/`; environment is always `pypi`; workflow is always `publish.yml`; action SHAs match the design.
 - **Scope:** one supply-chain/distribution subsystem; no runtime API, statistical model, database, or UI changes.
 
 ## Execution mode
