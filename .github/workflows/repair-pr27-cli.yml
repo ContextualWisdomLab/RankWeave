@@ -32,7 +32,7 @@ jobs:
       - name: Verify and execute the pinned deterministic patch
         run: |
           set -euo pipefail
-          expected_blob=20a5076b5ee8d93fc2bf41dae371caa5a21c4fc
+          expected_blob=20a5076b5ee8d93fc2bf8cd7a3760013a33ead1c
           actual_blob="$(git hash-object .github/scripts/apply_pr27_cli.py)"
           test "$actual_blob" = "$expected_blob"
           python .github/scripts/apply_pr27_cli.py
