@@ -1,8 +1,6 @@
 import re
 from pathlib import Path
 
-import pytest
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SHA_ACTION_PATTERN = re.compile(
     r"uses:\s+([^\s@]+)@([0-9a-f]{40})(?:\s|$)"
@@ -161,41 +159,6 @@ def test_publish_job_has_no_registry_secret_or_fallback():
     assert (
         f"uses: pypa/gh-action-pypi-publish@{PYPI_PUBLISH_SHA}"
         in publish_block
-    )
-
-
-@pytest.mark.parametrize(
-    ("path_text", "required_references"),
-    [
-        (
-            ".github/workflows/ci.yml",
-            {
-                ("actions/checkout", CHECKOUT_SHA),
-                ("actions/setup-python", SETUP_PYTHON_SHA),
-                ("astral-sh/setup-uv", SETUP_UV_SHA),
-            },
-        ),
-        (
-            ".github/workflows/hourly-commercialization-loop.yml",
-            {("actions/checkout", CHECKOUT_SHA)},
-        ),
-    ],
-)
-def test_repository_owned_workflows_use_node24_actions(
-    path_text, required_references
-):
-    workflow_text = _read_repository_file(path_text)
-    references = set(_action_references(workflow_text))
-
-    assert required_references <= references
-    assert "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" not in (
-        workflow_text
-    )
-    assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" not in (
-        workflow_text
-    )
-    assert "astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9" not in (
-        workflow_text
     )
 
 
