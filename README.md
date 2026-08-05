@@ -478,6 +478,32 @@ does not authenticate a report, verify external artifact bytes, or establish
 that a statistical conclusion is scientifically valid. See
 [Report JSON Schemas](docs/report-schemas.md).
 
+## Cross-validate fixed weighted-RRF policies
+
+Rank-only retrieval systems can evaluate their complete fixed-weight selection
+procedure with explicit blocked folds:
+
+```python
+from rankweave import cross_validate_weighted_reciprocal_rank_fusion
+
+report = cross_validate_weighted_reciprocal_rank_fusion(
+    channel_rankings_by_query,
+    relevance_by_query,
+    candidate_channel_weights,
+    fold_id_by_query,
+    cutoff=10,
+    rank_constant_eta=60,
+)
+```
+
+Every fold tunes weights only on complementary training queries, applies the
+selected weights and one fixed eta unchanged to held-out rank lists, and retains
+the complete tuning and evaluation reports. The aggregate out-of-fold result is
+kept separate from all-data final tuning. The caller owns leakage-safe grouping
+for translations, users, tenants, revisions, projects, events, and time blocks.
+
+See [Weighted-RRF explicit-fold cross-validation](docs/rrf-cross-validation.md).
+
 ## Backtest convex policies by availability time
 
 Use `backtest_weighted_convex_fusion` when a policy must be selected only from
@@ -572,7 +598,7 @@ Apache-2.0 — see [LICENSE](LICENSE).
 
 ## Verify persisted artifact evidence
 
-RankWeave 0.17.0 can compare explicit local files with the unsigned SHA-256 and raw byte-count evidence in a persisted v2 report without exposing file paths or payloads:
+RankWeave 0.18.0 can compare explicit local files with the unsigned SHA-256 and raw byte-count evidence in a persisted v2 report without exposing file paths or payloads:
 
 ```bash
 rankweave verify-artifacts \
@@ -591,7 +617,7 @@ RankWeave releases are built from the exact published GitHub Release tag, tested
 After a version has been published and independently verified, install it from PyPI:
 
 ```bash
-python -m pip install rankweave==0.17.0
+python -m pip install rankweave==0.18.0
 ```
 
 Before the first Trusted Publisher is configured or when a version has not been published, use a reviewed source checkout instead of assuming that the PyPI name is owned by this project. See [`docs/releasing.md`](docs/releasing.md) for the exact publisher identity, release procedure, and GitHub/PyPI attestation verification boundaries.

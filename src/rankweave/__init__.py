@@ -61,7 +61,10 @@ from rankweave.comparison import (
 from rankweave.cross_validation import (
     WeightedConvexCrossValidationFold,
     WeightedConvexCrossValidationReport,
+    WeightedRRFCrossValidationFold,
+    WeightedRRFCrossValidationReport,
     cross_validate_weighted_convex_fusion,
+    cross_validate_weighted_reciprocal_rank_fusion,
 )
 from rankweave.evaluation import (
     AggregateRankingMetrics,
@@ -144,7 +147,7 @@ from rankweave.tuning import (
     tune_weighted_reciprocal_rank_fusion,
 )
 
-__version__ = "0.17.0"
+__version__ = "0.18.0"
 
 __all__ = [
     "AggregateRankingMetrics",
@@ -202,6 +205,8 @@ __all__ = [
     "WeightedConvexCrossValidationReport",
     "WeightedConvexTuningReport",
     "WeightedConvexTuningTrial",
+    "WeightedRRFCrossValidationFold",
+    "WeightedRRFCrossValidationReport",
     "WeightedRRFTuningReport",
     "WeightedRRFTuningTrial",
     "WeightedRankContribution",
@@ -213,6 +218,7 @@ __all__ = [
     "compare_trec_runs",
     "convex_combination_score",
     "cross_validate_weighted_convex_fusion",
+    "cross_validate_weighted_reciprocal_rank_fusion",
     "evaluate_ranking",
     "evaluate_rankings",
     "evaluate_trec_run",

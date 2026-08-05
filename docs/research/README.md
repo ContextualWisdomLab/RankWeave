@@ -181,6 +181,21 @@ users, tenants, events, projects, or time windows together when the deployment
 question requires it. Symmetric blocked folds are not automatically
 rolling-origin forecasting evidence.
 
+### Weighted-RRF blocked folds
+
+`cross_validate_weighted_reciprocal_rank_fusion` extends the explicit-fold
+selection boundary to rank-only channels. Every fold tunes fixed convex channel
+weights through the native weighted-RRF tuner, applies those weights with one
+unchanged eta to held-out queries, and preserves the full training and held-out
+evidence. Cormack et al. (2009) ground RRF, Samuel et al. (2025) ground unequal
+channel reliability, and Stone (1974), Cawley and Talbot (2010), and Roberts et
+al. (2017) ground the separation of selection, assessment, and dependent-data
+blocking.
+
+The library does not generate folds or claim that a supplied grouping is
+leakage-safe. The all-data winner remains a future recommendation rather than an
+out-of-fold quality estimate.
+
 ## Availability-time backtesting
 
 `backtest_weighted_convex_fusion` evaluates an ordered sequence of explicit
