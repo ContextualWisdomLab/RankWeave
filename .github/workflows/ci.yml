@@ -247,7 +247,18 @@ jobs:
       - run: python -m ruff check .
       - run: python -m coverage run -m pytest -q
       - run: python -m coverage report
-      - name: Commit and push verified hardening
+      - name: Export verified workflow without privileged workflow mutation
+        run: |
+          set -euo pipefail
+          mkdir -p docs/operations
+          cp .github/workflows/hourly-commercialization-loop.yml \
+            docs/operations/pr24-hourly-patched.yml.txt
+          git checkout HEAD -- \
+            .github/workflows/hourly-commercialization-loop.yml \
+            .github/workflows/ci.yml \
+            .github/workflows/patch-post-review-hardening.yml \
+            .github/scripts/apply_pr24_post_review.py
+      - name: Commit and push verified export
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -255,9 +266,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email \
             "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add docs/operations/pr24-hourly-patched.yml.txt
           git -c core.hooksPath=/dev/null commit \
-            -m "security: protect agent controls before token exchange"
+            -m "test: export verified PR 24 workflow hardening"
           git -c core.hooksPath=/dev/null push \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             "HEAD:refs/heads/fix/post-review-hardening-0.11.1"
