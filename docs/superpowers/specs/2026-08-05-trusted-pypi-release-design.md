@@ -22,9 +22,9 @@ This is simpler and follows the minimal PyPI example, but the build/test phase r
 
 ### C. Split build, provenance, and publish jobs with checksum-manifest verification
 
-A read-only build job checks out the released tag, verifies release-event commit identity, default-branch reachability, tag/version identity, all tests and coverage, both archives, and required contents. It writes `dist/SHA256SUMS`, exports the SHA-256 of that manifest as a job output, and uploads the distributions plus manifest as one immutable Actions artifact.
+A read-only build job checks out the released tag, verifies release-event commit identity, default-branch reachability, tag/version identity, all tests and coverage, both archives, and required contents. It writes `release-handoff/SHA256SUMS`, exports the SHA-256 of that manifest as the unambiguous job output `manifest_sha256`, and uploads the distributions plus manifest as one immutable Actions artifact.
 
-The provenance and protected `pypi` jobs download the same artifact, compare the downloaded manifest with the build-job output, verify the wheel and source-distribution hashes recorded by that manifest, and only then attest or publish the distributions. Recommended.
+The provenance and protected `pypi` jobs download the same artifact, compare the downloaded manifest with the build-job output, verify the wheel and source-distribution hashes recorded by that manifest, and only then attest or publish the distributions. The manifest remains outside the package directory passed to PyPI. Recommended.
 
 This explicit verification is required because the official download action has no `digest-mismatch` input. GitHub automatically validates the Actions artifact archive digest but reports a mismatch as a warning. RankWeave does not depend on an unsupported input or a warning-only decision for its distribution files.
 
@@ -56,22 +56,23 @@ The build job:
 10. runs `compileall`, Ruff, the complete pytest suite, and 100% statement/branch coverage;
 11. builds wheel and sdist into `dist/`;
 12. verifies that exactly one wheel and one sdist exist, names match the normalized version, and required wheel/sdist members exist;
-13. writes `SHA256SUMS` for the exact wheel and sdist;
-14. exports the manifest SHA-256 as `manifest-sha256`;
-15. uploads `dist/` as one immutable artifact with hidden files excluded and missing files treated as an error.
+13. writes `release-handoff/SHA256SUMS` for the exact wheel and sdist;
+14. exports the manifest SHA-256 as `manifest_sha256`;
+15. uploads `dist/` plus `release-handoff/SHA256SUMS` as one immutable artifact with hidden files excluded and missing files treated as an error.
 
 The build job has only `contents: read`.
 
 ### Provenance job
 
-The provenance job depends on the build job. It downloads `rankweave-distributions`, verifies `dist/SHA256SUMS` against `needs.build.outputs.manifest-sha256`, verifies both files recorded by the manifest, and invokes the current GitHub `actions/attest` release only for `dist/*.whl` and `dist/*.tar.gz`.
+The provenance job depends on the build job. It downloads `rankweave-distributions` into `handoff/`, verifies `handoff/release-handoff/SHA256SUMS` against `needs.build.outputs.manifest_sha256`, verifies both files in `handoff/dist/`, and invokes the current GitHub `actions/attest` release only for the wheel and source distribution.
 
-Permissions are exactly:
+Permissions match the pinned action's current provenance-mode contract:
 
 ```yaml
 contents: read
 id-token: write
 attestations: write
+artifact-metadata: write
 ```
 
 This attestation establishes GitHub build provenance for the release distributions. It does not claim that PyPI configuration, package behavior, scientific inference, or downstream installation is trusted.
@@ -82,8 +83,9 @@ The publish job depends on both build and provenance. It:
 
 - uses the GitHub environment `pypi` with URL `https://pypi.org/p/rankweave`;
 - has only `id-token: write` at job scope;
-- downloads the same immutable artifact;
+- downloads the same immutable artifact into `handoff/`;
 - verifies the manifest digest and both distribution hashes before publication;
+- passes only `handoff/dist/` to PyPI, excluding the checksum manifest;
 - publishes through `pypa/gh-action-pypi-publish` v1.14.2 pinned by full commit SHA;
 - supplies no username, password, API token, repository password, alternate repository, secret input, or skip-existing option;
 - leaves PyPI's PEP 740 attestation generation enabled.
@@ -111,11 +113,11 @@ The workflow uses current stable, Node.js 24-compatible releases pinned to full 
 - all `uses:` values are full 40-character SHAs from an allowlist;
 - build, provenance, and publish jobs are separate and correctly ordered;
 - the build job checks the stable release object, exact commit, default-branch reachability, package version, complete tests, coverage, wheel, and sdist;
-- artifact upload/download use one expected immutable name;
-- the build exports an independently trusted manifest digest;
+- artifact upload/download use one expected immutable name and preserve the manifest outside the PyPI package directory;
+- the build exports `manifest_sha256` as an independently trusted output;
 - both downstream jobs verify the manifest digest and distribution checksums;
 - the workflow contains no unsupported `digest-mismatch` input;
-- provenance permissions are minimal and `actions/attest` targets only the distributions;
+- provenance permissions include the pinned action's required artifact-metadata permission and `actions/attest` targets only the distributions;
 - publishing uses environment `pypi`, OIDC, and no package-registry secret or fallback;
 - no `COPILOT_GITHUB_TOKEN` appears.
 
