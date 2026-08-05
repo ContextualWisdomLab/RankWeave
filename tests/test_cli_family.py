@@ -1,4 +1,6 @@
+import io
 import json
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -131,6 +133,28 @@ def test_family_cli_emits_ordered_versioned_compact_json(tmp_path, capsys):
     assert first["query_differences"][0]["query_id"] == "질의-가"
     assert "모델-a" in captured.out
     assert "\\ubaa8" not in captured.out
+
+
+def test_family_cli_writes_explicit_utf8_under_ascii_locale(
+    tmp_path, monkeypatch
+):
+    raw_output = io.BytesIO()
+    ascii_stdout = io.TextIOWrapper(
+        raw_output,
+        encoding="ascii",
+        errors="strict",
+        write_through=True,
+    )
+    monkeypatch.setattr(sys, "stdout", ascii_stdout)
+
+    exit_code = main(_successful_family_arguments(tmp_path))
+
+    ascii_stdout.flush()
+    rendered_bytes = raw_output.getvalue()
+    payload = json.loads(rendered_bytes.decode("utf-8"))
+    assert exit_code == 0
+    assert rendered_bytes.endswith(b"\n")
+    assert payload["candidates"][0]["candidate_id"] == "모델-a"
 
 
 def test_family_cli_pretty_output_and_explicit_statistics(tmp_path, capsys):

@@ -89,12 +89,12 @@ python -m rankweave compare-family \
   --cutoff 10
 ```
 
-`--candidate` is repeatable. Its first `=` separates the candidate identifier
-from the local path, so later `=` characters remain part of the path. Candidate
-identifiers must be unique, printable Unicode strings without leading or
-trailing whitespace. Command-line order is preserved as statistical-family and
-tie-breaking evidence; RankWeave never discovers candidates by scanning a
-directory.
+`--candidate` is repeatable. Its first `=` separates a non-empty candidate
+identifier from the local path, so later `=` characters remain part of the
+path. Candidate identifiers must be unique, printable Unicode strings that do
+not contain `=` or leading or trailing whitespace. Command-line order is
+preserved as statistical-family and tie-breaking evidence; RankWeave never
+discovers candidates by scanning a directory.
 
 ### Candidate-family success schema
 
@@ -167,8 +167,9 @@ layer.
 ## Output and failure contract
 
 Compact JSON is the default. `--pretty` changes whitespace only. A successful
-command writes exactly one JSON document plus a newline to stdout and exits
-with status `0`.
+command writes exactly one UTF-8 encoded JSON document plus a newline to the
+standard-output byte stream and exits with status `0`; the process locale or
+text-stream encoding cannot change the transport encoding.
 
 Expected usage, filesystem, UTF-8, size, TREC, evaluation, and statistical
 validation failures write no stdout, emit one line to stderr, and return status

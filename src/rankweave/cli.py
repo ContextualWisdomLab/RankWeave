@@ -410,6 +410,5 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"rankweave: error: {exc}", file=sys.stderr)
         return 2
 
-    sys.stdout.write(rendered_output)
-    sys.stdout.write("\n")
+    sys.stdout.buffer.write(rendered_output.encode("utf-8") + b"\n")
     return 0

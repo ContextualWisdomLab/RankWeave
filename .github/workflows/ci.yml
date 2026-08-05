@@ -177,7 +177,7 @@ jobs:
 
           report = json.loads(Path("report.json").read_text(encoding="utf-8"))
           assert report["schema_version"] == "rankweave.trec-comparison.v1"
-          assert report["rankweave_version"] == "0.11.0"
+          assert report["rankweave_version"] == "0.11.1"
           assert report["baseline_run_id"] == "baseline"
           assert report["candidate_run_id"] == "candidate"
           assert report["mean_difference"] == 1.0
@@ -207,7 +207,7 @@ jobs:
           assert report["schema_version"] == (
               "rankweave.trec-family-comparison.v1"
           )
-          assert report["rankweave_version"] == "0.11.0"
+          assert report["rankweave_version"] == "0.11.1"
           assert report["baseline_run_id"] == "baseline"
           assert report["candidate_count"] == 2
           assert [candidate["candidate_id"] for candidate in report["candidates"]] == [

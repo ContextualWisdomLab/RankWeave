@@ -4,6 +4,17 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.11.1] — 2026-08-05
+
+### Fixed
+- Pairwise and candidate-family CLI success documents are encoded explicitly as UTF-8 bytes before being written to stdout, so Unicode query and candidate identifiers remain portable even when the process text-stream encoding is ASCII.
+- Candidate-family documentation now defines the complete `ID=PATH` grammar: the identifier is non-empty, unique, printable, free of `=` and surrounding whitespace, while later `=` characters remain part of the local path.
+
+### Security
+- `AGENTS.md` is treated as a maintainer-owned agent-control file and is denied by both OpenCode implementation permissions and the deterministic autonomous diff gate.
+- The hourly product loop rechecks the open-PR queue and exact `main` SHA before requesting the short-lived OIDC-derived GitHub App token, then repeats both checks immediately before repository mutation.
+- `NVIDIA_NIM_API_KEY` is limited to the eligibility gate and static OpenCode authoring steps; provider, GitHub, and OIDC credentials remain absent from processes that execute model-authored Python.
+
 ## [0.11.0] — 2026-08-05
 
 ### Added
@@ -20,10 +31,10 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ### Security
 - Model-authored red and final tests run as the unprivileged `nobody` user inside network and PID namespaces with all capability sets removed and `no_new_privs` enabled. Trusted validation tooling is root-owned and read-only before untrusted Python executes.
-- NVIDIA credentials are scoped only to static OpenCode steps, while GitHub and OIDC credentials are removed from agent processes. Bash, web access, external directories, LSP, subagents, skills, and protected-path edits are denied during model authoring.
+- NVIDIA credentials are scoped to the eligibility gate and static OpenCode authoring steps, while GitHub and OIDC credentials are removed from agent processes. Bash, web access, external directories, LSP, subagents, skills, and protected-path edits are denied during model authoring.
 - Autonomous text boundaries require strict UTF-8 in addition to regular-file, symlink, NUL, file-count, and byte limits. Workflow, ownership, security, environment, Git-submodule, binary, oversized, excessively broad, and non-production diffs fail closed.
 - Model-authored code is validated without network access, with an empty inherited environment, isolated PID and `/proc` namespaces, offline wheel installation, and pre/post workspace-manifest equality.
-- Ignored PR metadata is preserved across cleanup and parsed with isolated system Python only after validation; a separate OIDC-exchanged GitHub App token is obtained only after validation and TOCTOU checks pass.
+- Ignored PR metadata is preserved across cleanup and parsed with isolated system Python only after validation. The workflow performs a queue/base preflight before requesting an OIDC-exchanged GitHub App token and repeats both checks immediately before mutation.
 
 ## [0.10.0] — 2026-08-04
 
