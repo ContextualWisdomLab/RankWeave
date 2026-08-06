@@ -86,18 +86,23 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 1
-      - name: Commit verified durable repair
+      - name: Commit verified non-workflow repair files
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           rm -rf dist .coverage
+          cp .github/workflows/hourly-commercialization-loop.yml \
+            hourly-commercialization-loop.repaired.yml
+          git restore --source=HEAD -- \
+            .github/workflows/hourly-commercialization-loop.yml \
+            .github/workflows/apply-hourly-loop-repair.yml
           git config user.name "github-actions[bot]"
           git config user.email \
             "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git -c core.hooksPath=/dev/null commit \
-            -m "fix(ci): restore executable hourly governance"
+            -m "fix(ci): stage executable hourly governance"
           git -c core.hooksPath=/dev/null push \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             "HEAD:refs/heads/fix/hourly-loop-reachable-governance"
