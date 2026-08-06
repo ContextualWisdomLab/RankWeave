@@ -35,20 +35,28 @@ jobs:
   repair-review-feedback:
     needs: inspect-pr-queue
     if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
-      actions: write
       contents: read
-      issues: write
       pull-requests: read
-      statuses: read
-    uses: ContextualWisdomLab/.github/.github/workflows/pr-review-fix-scheduler.yml@21397126d708d2d536ccc1d68b0d333653ce9315
-    with:
-      target_repository: ContextualWisdomLab/RankWeave
-      base_branch: main
-      max_prs: "50"
-      max_dispatches: "1"
-      retry_hours: "1"
-    secrets: inherit
+    env:
+      TARGET_REPOSITORY: ContextualWisdomLab/RankWeave
+    steps:
+      - name: Keep review repair fail-closed until protected NVIDIA repair is available
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          open_pr_count="$(
+            gh api "/repos/${TARGET_REPOSITORY}/pulls?state=open&per_page=1" \
+              --jq 'length'
+          )"
+          if [ "$open_pr_count" -eq 0 ]; then
+            echo "No pull request requires review repair."
+            exit 0
+          fi
+          echo "::notice::Review repair remains fail-closed while the protected central NVIDIA NIM scheduler is pending. Existing independent review agents and the central merge scheduler remain unchanged."
 
   revalidate-pr-queue:
     needs: repair-review-feedback
