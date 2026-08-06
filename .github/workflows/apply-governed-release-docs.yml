@@ -29,6 +29,27 @@ jobs:
       - name: Apply reviewed documentation changes
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path(".github/scripts/apply_governed_release_docs.py")
+          content = path.read_text(encoding="utf-8")
+          old = (
+              'insert_before("CHANGELOG.md", "### Validation\\n", '
+              'CHANGELOG_RELEASE)'
+          )
+          new = (
+              'insert_before(\n'
+              '    "CHANGELOG.md",\n'
+              '    "### Validation\\n- Weighted-RRF folds require unique '
+              'hashable item IDs, complete channel weights,\\n",\n'
+              '    CHANGELOG_RELEASE,\n'
+              ')'
+          )
+          if content.count(old) != 1:
+              raise SystemExit("expected one CHANGELOG updater call")
+          path.write_text(content.replace(old, new, 1), encoding="utf-8")
+          PY
           python .github/scripts/apply_governed_release_docs.py
           rm .github/scripts/apply_governed_release_docs.py
           rm .github/workflows/apply-governed-release-docs.yml
