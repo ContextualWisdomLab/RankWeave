@@ -202,7 +202,7 @@ def test_dispatch_job_explicitly_starts_the_publisher():
         "VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}",
         "GH_TOKEN: ${{ github.token }}",
         "gh workflow run publish.yml",
-        "--ref main",
+        "--ref \"$RELEASE_TAG\"",
         "-f release_tag=\"$RELEASE_TAG\"",
         "-f release_sha=\"$VERIFIED_SHA\"",
     ):
