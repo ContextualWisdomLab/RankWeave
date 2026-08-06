@@ -366,6 +366,6 @@ jobs:
           set -euo pipefail
           gh workflow run publish.yml \
             --repo "$GITHUB_REPOSITORY" \
-            --ref main \
+            --ref "$RELEASE_TAG" \
             -f release_tag="$RELEASE_TAG" \
             -f release_sha="$VERIFIED_SHA"
