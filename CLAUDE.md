@@ -50,7 +50,15 @@ Keep the verification core standard-library-only and transport-neutral. Filesyst
 
 ## Release workflow
 
-`.github/workflows/publish.yml` is a security-sensitive distribution boundary. Keep build, provenance, and publication in separate least-privilege jobs. Publication is release-only, environment-gated, tokenless, and fail-closed. Version-bearing files, CHANGELOG, archive contents, action SHAs, and attestation documentation must change together. A provenance attestation is not a claim of package correctness or scientific validity.
+`.github/workflows/create-release.yml` is the release-authorization boundary:
+verify read-only, create the stable GitHub Release with `contents: write`, then
+explicitly dispatch the publisher with an isolated `actions: write` job.
+`.github/workflows/publish.yml` accepts only a stable release event or that
+exact-tag/exact-SHA `workflow_dispatch`, revalidates the GitHub Release, and
+keeps build, provenance, and OIDC publication in separate least-privilege jobs.
+Do not add a stored registry or GitHub credential. Version-bearing files,
+CHANGELOG, archive contents, action SHAs, and attestation documentation change
+together. Provenance does not prove package correctness or scientific validity.
 
 ## Package CI action runtime
 

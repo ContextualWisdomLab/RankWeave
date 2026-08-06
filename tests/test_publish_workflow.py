@@ -51,13 +51,15 @@ def _action_references(workflow_text: str) -> tuple[tuple[str, str], ...]:
     return tuple(references)
 
 
-def test_publish_workflow_is_release_published_only():
+def test_publish_workflow_accepts_stable_release_or_explicit_dispatch():
     workflow_text = _publish_workflow()
-
     trigger_block = workflow_text.split("permissions:", 1)[0]
+
     assert "on:\n  release:\n    types: [published]\n" in trigger_block
-    assert "workflow_dispatch:" not in trigger_block
-    assert "workflow_call:" not in trigger_block
+    assert "  workflow_dispatch:\n" in trigger_block
+    assert "release_tag:\n" in trigger_block
+    assert "release_sha:\n" in trigger_block
+    assert trigger_block.count("required: true") == 2
     assert "pull_request:" not in trigger_block
     assert "push:" not in trigger_block
     assert "schedule:" not in trigger_block
@@ -132,35 +134,39 @@ def test_distribution_handoff_is_checksum_verified_before_use():
     assert "packages-dir: dist/" not in publish_block
 
 
-def test_build_job_checks_exact_release_identity_and_default_branch_reachability():
+def test_build_job_checks_exact_release_identity_and_default_branch():
     build_block = _job_block(_publish_workflow(), "build", "provenance")
 
-    assert "ref: ${{ github.event.release.tag_name }}" in build_block
+    assert "ref: ${{ inputs.release_sha || github.sha }}" in build_block
     assert "fetch-depth: 0" in build_block
     assert "persist-credentials: false" in build_block
-    assert "DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}" in (
-        build_block
-    )
-    assert "RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}" in (
-        build_block
-    )
-    assert "RELEASE_SHA: ${{ github.sha }}" in build_block
-    assert "RELEASE_TAG: ${{ github.event.release.tag_name }}" in build_block
-    assert "release tag is not canonical" in build_block
-    assert "stable package publication rejects prereleases" in build_block
-    assert "checked-out commit" in build_block
-    assert "release event commit" in build_block
-    assert '"merge-base",' in build_block
-    assert '"--is-ancestor",' in build_block
-    assert "released commit must be reachable from the default branch" in (
-        build_block
-    )
+    for expected in (
+        "DEFAULT_BRANCH",
+        "DISPATCH_RELEASE_SHA",
+        "DISPATCH_RELEASE_TAG",
+        "EVENT_NAME",
+        "EVENT_RELEASE_PRERELEASE",
+        "EVENT_RELEASE_TAG",
+        "EVENT_SHA",
+        "release tag is not canonical",
+        "stable package publication rejects prereleases",
+        "checked-out commit",
+        "released commit",
+        "git merge-base --is-ancestor",
+        "released commit must be reachable from the default branch",
+        "git rev-list -n 1",
+        "release tag does not resolve to the released commit",
+        "stable GitHub Release is unavailable",
+        "stable GitHub Release must not be a draft",
+        "stable GitHub Release must not be a prerelease",
+    ):
+        assert expected in build_block
 
 
 def test_build_job_checks_package_version_and_complete_quality_gate():
     build_block = _job_block(_publish_workflow(), "build", "provenance")
 
-    assert 'release_tag != f"v{version}"' in build_block
+    assert '"$release_tag" != "v${version}"' in build_block
     assert "rankweave.__version__" in build_block
     assert "uv sync --frozen --extra dev --python 3.13" in build_block
     assert "python -m compileall -q src" in build_block
