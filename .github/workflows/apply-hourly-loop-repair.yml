@@ -39,7 +39,9 @@ jobs:
         run: |
           set -euo pipefail
           python .github/scripts/apply_hourly_loop_repair.py
+          python .github/scripts/adjust_hourly_loop_tests.py
           rm .github/scripts/apply_hourly_loop_repair.py
+          rm .github/scripts/adjust_hourly_loop_tests.py
           rm .github/workflows/apply-hourly-loop-repair.yml
       - name: Verify focused and full repository contracts
         run: |
