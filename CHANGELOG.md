@@ -4,6 +4,17 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+### Fixed
+- Replaced an unreachable central review-fix reusable-workflow SHA that caused
+  scheduled commercialization runs to fail before job creation with a local
+  read-only, provider-neutral hold job.
+- Kept review repair fail-closed until the protected central NVIDIA NIM/OpenCode
+  scheduler is merged, without falling back to GitHub Models,
+  `COPILOT_GITHUB_TOKEN`, inherited repair secrets, or mutable central code.
+- Preserved hourly PR inspection, exact-policy revalidation, and the existing
+  NVIDIA NIM product-development stage while preventing a single unavailable
+  repair engine from disabling the entire loop.
+
 ## [0.18.0] - 2026-08-05
 
 ### Added
