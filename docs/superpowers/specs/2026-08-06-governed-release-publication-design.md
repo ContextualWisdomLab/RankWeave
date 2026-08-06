@@ -8,7 +8,7 @@
 
 RankWeave's source tree and package metadata are at 0.18.0, while the public PyPI project still exposes only 0.1.0. The naruon backend consequently pins `rankweave==0.1.0` and cannot consume the audited tuning, cross-validation, temporal-backtesting, report-schema, artifact-verification, and package-provenance work already present on RankWeave `main`.
 
-The repository already contains a release-event publishing workflow that builds, tests, attests, and uploads distributions through PyPI Trusted Publishing. The missing product boundary is a governed way to create the exact stable GitHub Release that starts that workflow.
+The repository already contains a publishing workflow that builds, tests, attests, and uploads distributions through PyPI Trusted Publishing. The missing product boundary is a governed way to create the exact stable GitHub Release and explicitly dispatch publication: GitHub does not start an ordinary release-event workflow for a Release created with the repository `GITHUB_TOKEN`.
 
 ## Goals
 
@@ -35,9 +35,9 @@ Add `.github/workflows/create-release.yml` with two triggers:
 - `workflow_dispatch`, taking an exact semantic version such as `0.18.0`;
 - a bounded bootstrap `push` trigger that fires only when this workflow file itself is first merged to `main`.
 
-The workflow has a read-only `verify` job followed by a `release` job. The release job is bound to the existing `pypi` environment and receives only `contents: write`. It creates a stable GitHub Release with tag `v${version}` targeted at the exact verified commit.
+The workflow has a read-only `verify` job followed by a protected `release` job with only `contents: write`. A third job with only `actions: write` invokes the exact-tag/exact-SHA `workflow_dispatch` interface of `publish.yml`. The publisher independently verifies the existing stable GitHub Release before build, provenance, and OIDC upload.
 
-This approach is preferred over a one-off script because it leaves a reusable, reviewable release control plane. It is preferred over extending `publish.yml` because separating release authorization from artifact publication reduces privilege concentration and keeps the publish workflow release-event-only.
+This approach leaves a reusable, reviewable release control plane without a personal access token or GitHub App private key. It separates release mutation, workflow dispatch, build provenance, and package publication so no job receives all authorities.
 
 ## Validation contract
 
@@ -62,7 +62,8 @@ flowchart LR
     V --> Q[Full package quality gate]
     Q --> E[pypi environment approval]
     E --> R[Stable GitHub Release v0.18.0]
-    R --> P[Existing publish.yml]
+    R --> D[Explicit workflow_dispatch]
+    D --> P[Existing publish.yml]
     P --> A[GitHub build provenance]
     A --> Y[PyPI Trusted Publishing]
     Y --> C[naruon dependency upgrade]
@@ -94,7 +95,7 @@ Repository contract tests will assert:
 
 ## Failure handling
 
-A queued environment approval is not treated as success. A missing Trusted Publisher, environment denial, OIDC failure, PyPI conflict, or attestation failure remains visible in the existing publication workflow and must be corrected without weakening the contract. If the GitHub Release succeeds but publication fails, the same version is not recreated; the failed publication is repaired at its configuration or workflow source and rerun only through the governed release-event mechanism where GitHub permits it, otherwise a new patch version is prepared.
+A queued environment approval is not treated as success. A missing Trusted Publisher, environment denial, explicit dispatch failure, OIDC failure, PyPI conflict, or attestation failure remains visible and must be corrected without weakening the contract. If the GitHub Release succeeds but publication fails, the same version is not recreated; publication may be re-dispatched only after the exact stable release and source remain valid, otherwise a new patch version is prepared.
 
 ## Standards and authority
 

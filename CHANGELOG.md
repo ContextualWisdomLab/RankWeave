@@ -26,6 +26,14 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 - Existing convex cross-validation public behavior and record names remain
   unchanged.
 
+### Release operations
+- Added a permanent least-privilege `create-release.yml` authorization workflow
+  for exact stable releases, with bounded bootstrap and manual invocation.
+- Added an explicit exact-tag/exact-SHA `workflow_dispatch` publisher path so a
+  GitHub Release created with `GITHUB_TOKEN` cannot leave PyPI silently stale.
+- Preserved separate immutable build, GitHub provenance, protected `pypi`
+  environment, OIDC Trusted Publishing, and post-publication verification.
+
 ### Validation
 - Weighted-RRF folds require unique hashable item IDs, complete channel weights,
   convex weight domains, a positive integer eta, and at least two explicit

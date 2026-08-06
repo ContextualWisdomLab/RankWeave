@@ -4,7 +4,7 @@
 
 **Goal:** Add and execute a least-privilege, fail-closed GitHub Release workflow that publishes the already prepared RankWeave 0.18.0 source tree through the existing PyPI Trusted Publishing pipeline.
 
-**Architecture:** A read-only verification job validates the exact source commit, version identity, release uniqueness, PyPI absence, and complete package quality gate. A separate `contents: write` job, protected by the existing `pypi` environment, creates one stable GitHub Release; the existing release-event `publish.yml` remains the only artifact builder, attestor, and PyPI publisher.
+**Architecture:** A read-only verification job validates the exact source commit, version identity, release uniqueness, PyPI absence, and complete package quality gate. A protected `contents: write` job creates one stable GitHub Release, and an isolated `actions: write` job explicitly dispatches `publish.yml` with the exact tag and SHA because `GITHUB_TOKEN`-created release events do not start another workflow. `publish.yml` remains the only artifact builder, attestor, and PyPI publisher.
 
 **Tech Stack:** GitHub Actions, Bash, Python 3.13 standard library, `uv==0.11.29`, GitHub CLI, PyPI JSON API, existing RankWeave pytest/Ruff/coverage/build toolchain.
 
@@ -29,7 +29,7 @@
 
 **Interfaces:**
 - Consumes: `pyproject.toml`, `src/rankweave/__init__.py`, `tests/test_version.py`, `CHANGELOG.md`, the existing `pypi` environment, and `.github/workflows/publish.yml`.
-- Produces: a `Create RankWeave Release` workflow with manual and bounded bootstrap triggers.
+- Produces: a `Create RankWeave Release` workflow with manual and bounded bootstrap triggers plus explicit least-privilege publication dispatch.
 
 - [ ] **Step 1: Write contract tests before the workflow exists**
 

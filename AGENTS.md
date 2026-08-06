@@ -21,10 +21,11 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
   search index, or benchmark download service. It fuses scores, evaluates and
   compares rankings, selects offline policies, parses interchange artifacts,
   and normalizes query text. Keep SQL, HTTP, and ORM concerns out.
-- **Behavior parity with naruon.** A behavior change in shared retrieval
-  primitives must be mirrored in naruon's `services/hybrid_retrieval` until
-  naruon consumes this package directly. Prefer additive, backward-compatible
-  changes.
+- **Consumer-version parity with naruon.** Naruon already imports this package
+  through `services.hybrid_retrieval`. A public RankWeave release and the naruon
+  version/hash-lock upgrade remain separate reviewed changes; never claim that
+  a source-only API is available to naruon while its public package pin is old.
+  Prefer additive, backward-compatible changes.
 - **Permissive license only** (Apache-2.0). Any added code or asset must be
   compatible.
 - **Research-grounded defaults, metrics, comparison, and selection.** Numeric
@@ -193,6 +194,8 @@ python -m pip wheel . --no-deps --wheel-dir dist
 - `src/rankweave/schemas/` — strict Draft 2020-12 report contracts shipped in the wheel.
 - `src/rankweave/__main__.py` — module entrypoint only.
 - `src/rankweave/query_normalization.py` — NFC query normalization.
+- `.github/workflows/create-release.yml` — governed stable-release authorization and explicit publisher dispatch.
+- `.github/workflows/publish.yml` — exact-release build, provenance, and PyPI Trusted Publishing.
 - `.github/workflows/hourly-commercialization-loop.yml` — hourly governed
   review/fix/revalidate/develop orchestration.
 - `docs/operations/hourly-commercialization-loop.md` — automation setup and
@@ -224,4 +227,12 @@ Changes to artifact verification must preserve raw-byte hashing, independent dig
 
 ## Trusted release gate
 
-Do not publish from a branch, pull request, manual workflow dispatch, reusable workflow, or stored PyPI credential. A release change must preserve the exact `v${version}` tag gate, frozen full tests and 100% coverage before build, one wheel plus one sdist inspection, immutable artifact handoff, GitHub provenance, protected `pypi` environment, PyPI OIDC, full-SHA action pins, and post-publication verification. Never add `skip-existing` or an alternate registry fallback to make a failed release appear successful.
+`create-release.yml` authorizes one exact stable GitHub Release after source,
+version, ancestry, duplicate-state, tests, 100% coverage, and distribution-name
+checks. It separates `contents: write` release creation from an `actions: write`
+`workflow_dispatch` of `publish.yml`, because ordinary events created with the
+repository `GITHUB_TOKEN` do not start another workflow. `publish.yml` must then
+revalidate the existing stable release and exact tag commit before immutable
+artifact handoff, GitHub provenance, protected `pypi` environment approval, and
+PyPI OIDC publication. Never add a stored package credential, force tag
+movement, `skip-existing`, or an alternate registry fallback.

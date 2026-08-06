@@ -87,7 +87,7 @@ def test_release_creation_separates_verification_release_and_dispatch():
     assert "needs: verify" in release_block
     assert "permissions:\n      contents: write\n" in release_block
     assert "actions: write" not in release_block
-    assert "needs: release" in dispatch_block
+    assert "needs: [verify, release]" in dispatch_block
     assert "permissions:\n      actions: write\n" in dispatch_block
     assert "contents: write" not in dispatch_block
     assert "id-token: write" not in workflow_text
@@ -268,7 +268,7 @@ def test_release_documentation_records_authorization_publication_boundary():
         "GITHUB_TOKEN",
     ):
         assert expected in documentation
-    assert "release authorization" in architecture
+    assert "release authorization" in architecture.lower()
     assert "create-release.yml" in agents
     assert "create-release.yml" in claude
     assert "Release operations" in changelog

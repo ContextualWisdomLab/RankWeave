@@ -2,6 +2,48 @@
 
 RankWeave publishes immutable wheel and source-distribution artifacts through PyPI Trusted Publishing. The repository stores no PyPI username, password, API token, or alternate-registry fallback.
 
+## Current public-version gap
+
+As of 2026-08-06, the reviewed source tree declares RankWeave `0.18.0`, while
+PyPI still exposes only `0.1.0`. Naruon already imports RankWeave through its
+hybrid-retrieval seam and therefore cannot consume the audited post-0.1.0 APIs
+until a governed public release succeeds. This statement records observed
+release state; it is not evidence that `0.18.0` has already been published.
+
+## Release authorization
+
+`.github/workflows/create-release.yml` is the release authorization plane. It
+has a bounded bootstrap `push` trigger for the workflow file reaching `main` and
+a `workflow_dispatch` input requiring the exact source-tree version. Its
+read-only job verifies version identity, exact commit ancestry, absence of the
+version from PyPI, absence of the tag and GitHub Release, the full test and 100%
+coverage gate, both distribution names, and deterministic CHANGELOG notes.
+
+A separate `contents: write` job, protected by the `pypi` environment, creates
+one stable GitHub Release at the exact verified commit. GitHub suppresses most
+new workflow runs created by the repository `GITHUB_TOKEN`; a release authored
+by that token therefore cannot be trusted to trigger a `release` workflow.
+Consequently, a third job with only `actions: write` explicitly invokes the
+`workflow_dispatch` interface of `publish.yml` with the exact tag and commit.
+No job possesses repository-write, workflow-dispatch, and OIDC publication
+permissions together.
+
+`publish.yml` remains the publication plane. It accepts either an externally
+published stable GitHub Release event or the explicit governed dispatch. Both
+paths must resolve to an existing non-draft, non-prerelease GitHub Release whose
+tag points to the exact default-branch commit before the immutable build,
+provenance, protected-environment approval, and PyPI Trusted Publishing stages
+can run.
+
+For a later release, an authorized operator may start the control plane with:
+
+```bash
+gh workflow run create-release.yml   --repo ContextualWisdomLab/RankWeave   --ref main   -f version=${version}
+```
+
+The requested version must already be synchronized across the reviewed source
+tree; this command never edits version metadata.
+
 ## One-time external configuration
 
 The following configuration cannot be completed by repository code alone. A PyPI project owner and a GitHub organization administrator must establish it before the first release.

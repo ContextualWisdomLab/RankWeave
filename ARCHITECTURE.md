@@ -113,8 +113,31 @@ method docstring, remains covered by the repository quality gates.
 
 ## Governed release boundary
 
-A published stable GitHub Release is the only publication trigger. A read-only exact-tag build job verifies release-event commit identity, default-branch reachability, tag and package version identity, the complete quality gate, and both wheel and source-distribution contents. It records a SHA-256 manifest for the two distributions and uploads the files plus that manifest as one immutable Actions artifact.
+Release authorization and package publication are different trust domains.
+`create-release.yml` first verifies the exact default-branch commit, synchronized
+0.18.0 identity, missing public PyPI version, missing tag and release, full tests,
+100% statement/branch coverage, distribution names, and deterministic CHANGELOG
+notes with `contents: read` only.
 
-Separate provenance and publication jobs download the immutable artifact, verify the manifest itself against a build-job output, verify both distribution hashes, and only then use the files. The provenance job creates GitHub build-provenance attestations for the wheel and source distribution. The protected `pypi` environment job exchanges GitHub OIDC for a short-lived PyPI publishing credential.
+The protected `pypi` environment release job receives only `contents: write` and
+creates a stable GitHub Release targeted at that verified SHA. Because GitHub
+suppresses ordinary workflow events generated with the repository
+`GITHUB_TOKEN`, a distinct job with only `actions: write` starts the explicit
+`workflow_dispatch` interface of `publish.yml`. This avoids a personal access
+token or GitHub App private key while keeping release and dispatch authority
+separate.
 
-The official download action's built-in artifact digest validation is useful but reports a mismatch as a warning rather than a failing input contract. RankWeave therefore performs its own checksum-manifest verification and never passes an unsupported `digest-mismatch` input. The repository stores no package-registry credential and provides no token fallback. GitHub and PyPI attestations bind signed statements to exact artifact digests; they do not establish statistical validity, vulnerability absence, or downstream policy compliance.
+`publish.yml` independently accepts an external stable release event or the
+explicit tag/SHA dispatch. Its read-only build job verifies the existing GitHub
+Release, tag-to-commit identity, default-branch reachability, package version,
+complete quality gate, and wheel/source contents. It records a SHA-256 manifest
+and uploads both distributions plus that manifest as one immutable Actions
+artifact.
+
+Separate provenance and publication jobs verify the handoff before use. The
+provenance job creates GitHub build-provenance attestations. The protected
+`pypi` job exchanges GitHub OIDC for a short-lived PyPI Trusted Publishing
+credential. No long-lived registry credential, force-moving tag,
+`skip-existing`, or alternate registry exists. GitHub and PyPI attestations bind
+statements to artifact digests; they do not establish statistical validity,
+vulnerability absence, or downstream policy compliance.
