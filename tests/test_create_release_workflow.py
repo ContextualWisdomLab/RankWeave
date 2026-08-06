@@ -74,22 +74,29 @@ def test_release_creation_pins_exact_current_actions():
     assert len(references) == 5
 
 
-def test_release_creation_separates_verification_from_mutation():
+def test_release_creation_separates_verification_release_and_dispatch():
     workflow_text = _release_workflow()
     verify_block = _job_block(workflow_text, "verify", "release")
-    release_block = _job_block(workflow_text, "release", None)
+    release_block = _job_block(workflow_text, "release", "publish_dispatch")
+    dispatch_block = _job_block(workflow_text, "publish_dispatch", None)
 
     assert "permissions: {}" in workflow_text
     assert "permissions:\n      contents: read\n" in verify_block
     assert "contents: write" not in verify_block
+    assert "actions: write" not in verify_block
     assert "needs: verify" in release_block
     assert "permissions:\n      contents: write\n" in release_block
+    assert "actions: write" not in release_block
+    assert "needs: release" in dispatch_block
+    assert "permissions:\n      actions: write\n" in dispatch_block
+    assert "contents: write" not in dispatch_block
     assert "id-token: write" not in workflow_text
     assert "packages: write" not in workflow_text
     assert "pull-requests: write" not in workflow_text
     assert "environment:\n      name: pypi\n" in release_block
     assert "gh release create" not in verify_block
     assert "gh release create" in release_block
+    assert "gh workflow run publish.yml" in dispatch_block
 
 
 def test_verify_job_checks_exact_version_commit_and_default_branch():
@@ -160,7 +167,9 @@ def test_verify_job_runs_complete_quality_gate_before_build_handoff():
 
 
 def test_release_job_rechecks_state_and_targets_verified_sha():
-    release_block = _job_block(_release_workflow(), "release", None)
+    release_block = _job_block(
+        _release_workflow(), "release", "publish_dispatch"
+    )
 
     for expected in (
         "name: rankweave-release-notes",
@@ -181,6 +190,41 @@ def test_release_job_rechecks_state_and_targets_verified_sha():
     assert "--draft" not in release_block
     assert "--prerelease" not in release_block
     assert "--generate-notes" not in release_block
+
+
+def test_dispatch_job_explicitly_starts_the_publisher():
+    dispatch_block = _job_block(
+        _release_workflow(), "publish_dispatch", None
+    )
+
+    for expected in (
+        "RELEASE_TAG: ${{ needs.verify.outputs.release_tag }}",
+        "VERIFIED_SHA: ${{ needs.verify.outputs.verified_sha }}",
+        "GH_TOKEN: ${{ github.token }}",
+        "gh workflow run publish.yml",
+        "--ref main",
+        "-f release_tag=\"$RELEASE_TAG\"",
+        "-f release_sha=\"$VERIFIED_SHA\"",
+    ):
+        assert expected in dispatch_block
+
+
+def test_publish_workflow_accepts_release_and_explicit_dispatch_only():
+    publish_workflow = _read_repository_file(".github/workflows/publish.yml")
+    trigger_block = publish_workflow.split("permissions:", 1)[0]
+
+    assert "release:\n    types: [published]" in trigger_block
+    assert "workflow_dispatch:" in trigger_block
+    assert "release_tag:" in trigger_block
+    assert "release_sha:" in trigger_block
+    assert "required: true" in trigger_block
+    assert "pull_request:" not in trigger_block
+    assert "push:" not in trigger_block
+    assert "schedule:" not in trigger_block
+    assert "EVENT_NAME" in publish_workflow
+    assert "DISPATCH_RELEASE_TAG" in publish_workflow
+    assert "DISPATCH_RELEASE_SHA" in publish_workflow
+    assert "stable GitHub Release" in publish_workflow
 
 
 def test_release_creation_contains_no_long_lived_credential_or_fallback():
@@ -221,6 +265,7 @@ def test_release_documentation_records_authorization_publication_boundary():
         "workflow_dispatch",
         "pypi",
         "v0.18.0",
+        "GITHUB_TOKEN",
     ):
         assert expected in documentation
     assert "release authorization" in architecture
@@ -230,3 +275,4 @@ def test_release_documentation_records_authorization_publication_boundary():
     assert "Status: Accepted" in adr
     assert "PyPI Trusted Publishing" in adr
     assert "SLSA v1.2" in adr
+    assert "workflow_dispatch" in adr
