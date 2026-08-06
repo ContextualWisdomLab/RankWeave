@@ -5,6 +5,8 @@ on:
     branches: [fix/hourly-loop-reachable-governance]
     paths:
       - .github/workflows/apply-hourly-loop-repair.yml
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
@@ -15,6 +17,9 @@ concurrency:
 
 jobs:
   apply-verify-push:
+    if: >-
+      github.event_name == 'push' ||
+      github.event.pull_request.head.ref == 'fix/hourly-loop-reachable-governance'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
