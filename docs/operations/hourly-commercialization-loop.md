@@ -12,8 +12,11 @@ Each run performs four jobs in order:
 1. **Inspect the PR queue.** Call the central PR review/merge scheduler to
    request missing current-head reviews, update eligible behind branches, and
    merge or enable auto-merge only when repository policy is satisfied.
-2. **Repair review feedback.** Call the central review-fix scheduler with one
-   dispatch of budget and a one-hour same-head retry interval.
+2. **Hold repair fail-closed when the protected repair engine is unavailable.**
+   Inspect the open-PR queue without a mutation credential. Until the protected
+   central NVIDIA NIM repair scheduler is merged, do not call an orphaned or
+   GitHub-Models-backed repair ref; independent review agents and the merge
+   scheduler continue to operate normally.
 3. **Revalidate the PR queue.** Call the merge scheduler again so a repaired or
    newly approved current head is reconsidered under the same checks.
 4. **Develop the next product gap.** Only when every governance job succeeded,
@@ -24,16 +27,35 @@ Each run performs four jobs in order:
 The reusable workflows are referenced at immutable commits:
 
 - merge/revalidation policy:
-  `5983b41ace75040c1d81818171ca7d0f3653254e`;
-- hourly review-repair policy with called-workflow source bound to
-  `job.workflow_repository` and `job.workflow_sha`:
-  `21397126d708d2d536ccc1d68b0d333653ce9315`.
+  `5983b41ace75040c1d81818171ca7d0f3653254e`.
 
-This prevents a privileged scheduled run from silently changing behavior
-because the central `main` branch moved. Updating either central policy
-requires an explicit reviewed SHA change in RankWeave.
+The former review-repair SHA, `21397126d708d2d536ccc1d68b0d333653ce9315`,
+was no longer reachable from the protected central history. GitHub rejected the
+caller before creating any jobs, so every scheduled run failed without doing PR
+maintenance or product development. RankWeave now uses a local read-only hold
+job until the protected central NVIDIA NIM repair scheduler is available. This
+keeps the hourly workflow executable without routing repairs through GitHub
+Models, a mutable branch, or an unmerged central change.
+
+Updating the central merge policy or re-enabling review repair requires an
+explicit reviewed reachable SHA change in RankWeave.
 
 ## Product-development trust zones
+
+## Reusable-workflow reachability incident
+
+GitHub Actions run `31124811165` and its immediate predecessors failed before
+job creation. The caller still pinned the review-fix workflow to commit
+`21397126d708d2d536ccc1d68b0d333653ce9315`, which had diverged from the
+protected central history. The same caller had last succeeded before that
+central ref became unreachable.
+
+The repair is deliberately narrower than copying the central engine into this
+repository. The local bridge is read-only and does not invoke a model or mutate
+a PR. Once the protected central scheduler provides the reviewed NVIDIA NIM
+boundary, RankWeave can replace the bridge with a new immutable reachable SHA.
+This preserves the standalone repository, the central MSA control plane, and
+the existing independent-review credential system.
 
 The local development job is separated into four trust zones.
 

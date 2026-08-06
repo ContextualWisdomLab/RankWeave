@@ -3,7 +3,6 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = PROJECT_ROOT / ".github/workflows/hourly-commercialization-loop.yml"
 MERGE_WORKFLOW_SHA = "5983b41ace75040c1d81818171ca7d0f3653254e"
-FIX_WORKFLOW_SHA = "21397126d708d2d536ccc1d68b0d333653ce9315"
 
 
 def _workflow_text() -> str:
@@ -24,21 +23,44 @@ def test_commercialization_loop_runs_once_each_hour():
     assert "cancel-in-progress: true" in workflow
 
 
-def test_commercialization_loop_uses_pinned_central_pr_governance():
+def test_commercialization_loop_uses_reachable_merge_governance():
     workflow = _workflow_text()
 
     merge_reference = (
         "ContextualWisdomLab/.github/.github/workflows/"
         f"pr-review-merge-scheduler.yml@{MERGE_WORKFLOW_SHA}"
     )
-    fix_reference = (
-        "ContextualWisdomLab/.github/.github/workflows/"
-        f"pr-review-fix-scheduler.yml@{FIX_WORKFLOW_SHA}"
-    )
     assert workflow.count(merge_reference) == 2
-    assert workflow.count(fix_reference) == 1
-    assert 'retry_hours: "1"' in workflow
-    assert "secrets: inherit" in workflow
+    assert "pr-review-fix-scheduler.yml@" not in workflow
+    assert workflow.count("secrets: inherit") == 2
+
+
+def test_review_repair_bridge_is_local_read_only_and_provider_neutral():
+    workflow = _workflow_text()
+    repair = _job_section(
+        workflow,
+        "repair-review-feedback",
+        "revalidate-pr-queue",
+    )
+
+    assert "runs-on: ubuntu-latest" in repair
+    assert "contents: read" in repair
+    assert "pull-requests: read" in repair
+    for forbidden in (
+        "actions: write",
+        "contents: write",
+        "id-token: write",
+        "issues: write",
+        "statuses: read",
+        "secrets: inherit",
+        "github-models/",
+        "STRIX_GITHUB_MODELS_TOKEN",
+        "COPILOT_GITHUB_TOKEN",
+        "NVIDIA_NIM_API_KEY",
+    ):
+        assert forbidden not in repair
+    assert "protected central NVIDIA NIM scheduler is pending" in repair
+    assert "/pulls?state=open&per_page=1" in repair
 
 
 def test_product_development_uses_nvidia_nim_and_fails_closed():
@@ -47,7 +69,7 @@ def test_product_development_uses_nvidia_nim_and_fails_closed():
     assert "NVIDIA_NIM_API_KEY" in workflow
     assert "COPILOT_GITHUB_TOKEN" not in workflow
     assert "/agents/repos" not in workflow
-    assert workflow.count("/pulls?state=open&per_page=1") == 3
+    assert workflow.count("/pulls?state=open&per_page=1") == 4
     assert (
         "NVIDIA_NIM_API_KEY is not configured; product development remains "
         "fail-closed" in workflow
@@ -209,7 +231,7 @@ def test_queue_and_base_are_checked_before_and_after_token_exchange():
 def test_final_queue_and_base_are_rechecked_before_pr_creation():
     workflow = _workflow_text()
 
-    assert workflow.count("/pulls?state=open&per_page=1") == 3
+    assert workflow.count("/pulls?state=open&per_page=1") == 4
     assert workflow.count("/commits/${BASE_BRANCH}") == 2
     assert "The base branch moved during authoring" in workflow
     assert "Another pull request acquired the queue" in workflow
@@ -263,15 +285,18 @@ def test_governance_permissions_are_scoped_per_calling_job():
         assert "statuses: read" not in merge_job
 
     for permission in (
-        "actions: write",
         "contents: read",
-        "issues: write",
         "pull-requests: read",
-        "statuses: read",
     ):
         assert permission in repair
-    assert "contents: write" not in repair
-    assert "id-token: write" not in repair
+    for forbidden_permission in (
+        "actions: write",
+        "contents: write",
+        "id-token: write",
+        "issues: write",
+        "statuses: read",
+    ):
+        assert forbidden_permission not in repair
 
 
 def test_opencode_binary_and_models_are_pinned():
