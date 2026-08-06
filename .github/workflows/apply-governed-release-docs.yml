@@ -32,8 +32,10 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          path = Path(".github/scripts/apply_governed_release_docs.py")
-          content = path.read_text(encoding="utf-8")
+          script_path = Path(
+              ".github/scripts/apply_governed_release_docs.py"
+          )
+          script = script_path.read_text(encoding="utf-8")
           old = (
               'insert_before("CHANGELOG.md", "### Validation\\n", '
               'CHANGELOG_RELEASE)'
@@ -46,9 +48,32 @@ jobs:
               '    CHANGELOG_RELEASE,\n'
               ')'
           )
-          if content.count(old) != 1:
+          if script.count(old) != 1:
               raise SystemExit("expected one CHANGELOG updater call")
-          path.write_text(content.replace(old, new, 1), encoding="utf-8")
+          script_path.write_text(
+              script.replace(old, new, 1),
+              encoding="utf-8",
+          )
+
+          test_path = Path("tests/test_create_release_workflow.py")
+          tests = test_path.read_text(encoding="utf-8")
+          replacements = (
+              (
+                  'assert "needs: release" in dispatch_block',
+                  'assert "needs: [verify, release]" in dispatch_block',
+              ),
+              (
+                  'assert "release authorization" in architecture',
+                  'assert "release authorization" in architecture.lower()',
+              ),
+          )
+          for old_test, new_test in replacements:
+              if tests.count(old_test) != 1:
+                  raise SystemExit(
+                      f"expected one contract assertion: {old_test}"
+                  )
+              tests = tests.replace(old_test, new_test, 1)
+          test_path.write_text(tests, encoding="utf-8")
           PY
           python .github/scripts/apply_governed_release_docs.py
           rm .github/scripts/apply_governed_release_docs.py
