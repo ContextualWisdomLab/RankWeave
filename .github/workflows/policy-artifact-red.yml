@@ -1,0 +1,33 @@
+name: Fusion policy artifact RED proof
+
+on:
+  push:
+    branches: [feat/canonical-fusion-policy-artifacts]
+    paths:
+      - .github/workflows/policy-artifact-red.yml
+      - tests/test_policy_artifacts.py
+
+permissions:
+  contents: read
+
+jobs:
+  red:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: feat/canonical-fusion-policy-artifacts
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.29"
+          enable-cache: false
+      - run: uv sync --frozen --extra dev --python 3.13
+      - name: Prove the new public contract is not implemented yet
+        run: >-
+          uv run --frozen --extra dev --python 3.13
+          python -m pytest tests/test_policy_artifacts.py -q
