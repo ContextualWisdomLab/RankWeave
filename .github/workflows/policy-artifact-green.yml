@@ -1,0 +1,68 @@
+name: Verify fusion policy artifact implementation
+
+on:
+  push:
+    branches: [feat/canonical-fusion-policy-artifacts]
+    paths:
+      - .github/workflows/policy-artifact-green.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: verify-fusion-policy-artifact-implementation
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: feat/canonical-fusion-policy-artifacts
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.29"
+          enable-cache: false
+      - name: Apply package-root exports
+        run: |
+          set -euo pipefail
+          python .github/scripts/apply_policy_artifact_exports.py
+          rm .github/scripts/apply_policy_artifact_exports.py
+      - name: Verify focused behavior and coverage
+        run: |
+          set -euo pipefail
+          uv sync --frozen --extra dev --python 3.13
+          uv run --frozen --extra dev --python 3.13 \
+            python -m compileall -q src
+          uv run --frozen --extra dev --python 3.13 \
+            python -m ruff check \
+            src/rankweave/policy_artifacts.py \
+            src/rankweave/__init__.py \
+            tests/test_policy_artifacts.py
+          uv run --frozen --extra dev --python 3.13 \
+            python -m coverage run -m pytest tests/test_policy_artifacts.py -q
+          uv run --frozen --extra dev --python 3.13 \
+            python -m coverage report
+      - name: Commit verified initial implementation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -f .coverage
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/rankweave/__init__.py \
+            .github/scripts/apply_policy_artifact_exports.py
+          git -c core.hooksPath=/dev/null commit \
+            -m "feat: expose fusion policy artifact APIs"
+          git -c core.hooksPath=/dev/null push \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/feat/canonical-fusion-policy-artifacts"
