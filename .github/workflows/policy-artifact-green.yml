@@ -35,19 +35,21 @@ jobs:
           set -euo pipefail
           python .github/scripts/apply_policy_artifact_exports.py
           rm .github/scripts/apply_policy_artifact_exports.py
-      - name: Verify focused behavior and coverage
+      - name: Format and verify complete repository behavior
         run: |
           set -euo pipefail
           uv sync --frozen --extra dev --python 3.13
           uv run --frozen --extra dev --python 3.13 \
-            python -m compileall -q src
-          uv run --frozen --extra dev --python 3.13 \
-            python -m ruff check \
+            python -m ruff check --fix \
             src/rankweave/policy_artifacts.py \
             src/rankweave/__init__.py \
             tests/test_policy_artifacts.py
           uv run --frozen --extra dev --python 3.13 \
-            python -m coverage run -m pytest tests/test_policy_artifacts.py -q
+            python -m compileall -q src
+          uv run --frozen --extra dev --python 3.13 \
+            python -m ruff check .
+          uv run --frozen --extra dev --python 3.13 \
+            python -m coverage run -m pytest -q
           uv run --frozen --extra dev --python 3.13 \
             python -m coverage report
       - name: Commit verified initial implementation
@@ -59,7 +61,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email \
             "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/rankweave/__init__.py \
+          git add -A \
+            src/rankweave/__init__.py \
+            src/rankweave/policy_artifacts.py \
+            tests/test_policy_artifacts.py \
             .github/scripts/apply_policy_artifact_exports.py
           git -c core.hooksPath=/dev/null commit \
             -m "feat: expose fusion policy artifact APIs"
