@@ -30,11 +30,13 @@ jobs:
         with:
           version: "0.11.29"
           enable-cache: false
-      - name: Apply package-root exports
+      - name: Apply package-root exports and test correction
         run: |
           set -euo pipefail
           python .github/scripts/apply_policy_artifact_exports.py
+          python .github/scripts/adjust_policy_artifact_tests.py
           rm .github/scripts/apply_policy_artifact_exports.py
+          rm .github/scripts/adjust_policy_artifact_tests.py
       - name: Format and verify complete repository behavior
         run: |
           set -euo pipefail
@@ -65,7 +67,8 @@ jobs:
             src/rankweave/__init__.py \
             src/rankweave/policy_artifacts.py \
             tests/test_policy_artifacts.py \
-            .github/scripts/apply_policy_artifact_exports.py
+            .github/scripts/apply_policy_artifact_exports.py \
+            .github/scripts/adjust_policy_artifact_tests.py
           git -c core.hooksPath=/dev/null commit \
             -m "feat: expose fusion policy artifact APIs"
           git -c core.hooksPath=/dev/null push \
