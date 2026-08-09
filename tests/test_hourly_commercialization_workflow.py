@@ -32,7 +32,7 @@ def test_commercialization_loop_uses_reachable_merge_governance():
     )
     assert workflow.count(merge_reference) == 2
     assert "pr-review-fix-scheduler.yml@" not in workflow
-    assert workflow.count("secrets: inherit") == 2
+    assert "secrets: inherit" not in workflow
 
 
 def test_review_repair_bridge_is_local_read_only_and_provider_neutral():
@@ -85,7 +85,7 @@ def test_nvidia_secret_is_step_scoped_and_agent_has_no_github_credential():
     job_environment = develop.split("    steps:\n", maxsplit=1)[0]
 
     assert "NVIDIA_API_KEY" not in job_environment
-    assert workflow.count("NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}") == 3
+    assert workflow.count("NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}") == 2
     assert "persist-credentials: false" in workflow
     assert workflow.count("env -u GH_TOKEN -u GITHUB_TOKEN") == 2
     assert workflow.count("-u ACTIONS_ID_TOKEN_REQUEST_TOKEN") == 2
