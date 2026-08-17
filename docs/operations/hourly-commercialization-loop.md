@@ -1,5 +1,9 @@
 # Hourly commercialization loop
 
+This is maintainer and automation procedure. The customer and operator entry
+point is [README.md](../../README.md). Contributor setup and a short loop
+summary live in [CONTRIBUTING.md](../../CONTRIBUTING.md).
+
 `.github/workflows/hourly-commercialization-loop.yml` runs at minute 17 of
 every hour and can also be started manually. It turns the repository's
 review→repair→revalidation→development policy into a bounded, inspectable

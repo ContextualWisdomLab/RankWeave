@@ -4,6 +4,12 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+### Changed
+- Rewrote the package README for customers and operators: what RankWeave is,
+  how to run it alone, and how a host calls the published Python, CLI, and
+  report-schema contracts. Autonomous development procedure now lives in
+  `CONTRIBUTING.md` and `docs/operations/hourly-commercialization-loop.md`.
+
 ## [0.18.0] - 2026-08-05
 
 ### Added
