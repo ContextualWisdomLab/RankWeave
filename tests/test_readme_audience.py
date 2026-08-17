@@ -18,7 +18,7 @@ def test_readme_is_customer_facing_and_keeps_the_naruon_leaf_contract():
     assert "NVIDIA_NIM_API_KEY" not in readme
     assert "OpenCode" not in readme
     assert "Hourly governed development loop" not in readme
-    assert "pip install -e \".[dev]\"" not in readme
+    assert ".[dev]" not in readme
 
 
 def test_contributor_and_operations_docs_own_automation_procedure():

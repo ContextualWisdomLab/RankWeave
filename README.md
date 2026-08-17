@@ -66,7 +66,7 @@ python -m pip install "rankweave @ git+https://github.com/ContextualWisdomLab/Ra
 ```bash
 git clone https://github.com/ContextualWisdomLab/RankWeave.git
 cd RankWeave
-python -m pip install -e ".[dev]"
+python -m pip install .
 ```
 
 See [`docs/releasing.md`](docs/releasing.md) for publisher identity and
