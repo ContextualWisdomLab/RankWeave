@@ -4,6 +4,12 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+### Documentation
+- Rewrote the README as an operator-first install and library guide. PyPI
+  currently publishes only 0.1.0; unpublished versions, including GitHub
+  Release `v0.18.0`, use the git install fallback. Hourly development-loop
+  detail moved to `docs/operations/hourly-commercialization-loop.md`.
+
 ## [0.18.0] - 2026-08-05
 
 ### Added

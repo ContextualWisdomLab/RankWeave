@@ -1,9 +1,20 @@
 # Hourly commercialization loop
 
+This page is maintainer automation for the RankWeave repository. It is not a
+customer install or library-usage guide. Operators installing or calling
+RankWeave should start from the [README](../../README.md).
+
 `.github/workflows/hourly-commercialization-loop.yml` runs at minute 17 of
 every hour and can also be started manually. It turns the repository's
 review→repair→revalidation→development policy into a bounded, inspectable
 GitHub Actions workflow rather than an unobservable background promise.
+
+The default-branch sequence is PR review/merge scan, review-feedback repair,
+exact-head revalidation, then one bounded product proposal when the governed
+PR queue is empty. Generated work is never self-approved, merged, published,
+or released. `AGENTS.md`, workflow, ownership, security, environment, and
+repository-control files remain maintainer-owned and outside autonomous
+scope.
 
 ## Sequence
 

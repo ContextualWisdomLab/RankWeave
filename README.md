@@ -1,19 +1,17 @@
 # RankWeave
 
-**Dependency-free, store-agnostic retrieval fusion, evaluation, statistical
-comparison, tuning, TREC benchmarking, and auditable CLI workflows for Python
-3.10+.**
+**Dependency-free hybrid-retrieval fusion, evaluation, statistical comparison,
+policy tuning, TREC interchange, and auditable CLI for Python 3.10+.**
 
-RankWeave combines lexical, dense, learned-sparse, graph, and other retrieval
-channels into deterministic rankings. It evaluates rankings, compares paired
-systems, controls family-wise error across candidate experiments, tunes fixed
-weighted-RRF policies, reads standard TREC artifacts, and exposes both pairwise
-and candidate-family comparison contracts to shell and CI users. The runtime
-uses only the Python standard library.
+RankWeave is a standard-library-only library and command-line tool. It fuses
+lexical, dense, learned-sparse, graph, and other retrieval channels into
+deterministic rankings; evaluates those rankings; compares paired systems and
+candidate families; tunes fixed fusion policies; and reads standard TREC
+artifacts. It does not talk to a database, embedding provider, or search index.
 
-RankWeave originated in the Context Search engine of
-[ContextualWisdomLab/naruon](https://github.com/ContextualWisdomLab/naruon) and
-remains suitable both as a standalone package and as a small MSA module.
+Use it alone from `pip` or a source checkout, or import it from a sibling
+product. Naruon already depends on the published `rankweave` package. That is
+intended composition, not a break.
 
 ## Why RankWeave
 
@@ -36,10 +34,28 @@ remains suitable both as a standalone package and as a small MSA module.
 
 ## Installation
 
-Until PyPI Trusted Publishing is configured:
+PyPI currently publishes only `0.1.0`. The reviewed source tree and GitHub
+Release `v0.18.0` are newer; that version is not on PyPI. Check
+[pypi.org/project/rankweave](https://pypi.org/project/rankweave/) for the live
+index.
+
+Install the published package:
 
 ```bash
-pip install "rankweave @ git+https://github.com/ContextualWisdomLab/RankWeave.git"
+pip install rankweave
+```
+
+Pin the published version explicitly:
+
+```bash
+pip install rankweave==0.1.0
+```
+
+For an unpublished version, including the current `v0.18.0` GitHub Release and
+the APIs documented below that were added after 0.1.0, install from git:
+
+```bash
+pip install "rankweave @ git+https://github.com/ContextualWisdomLab/RankWeave.git@v0.18.0"
 ```
 
 For development:
@@ -51,10 +67,12 @@ pip install -e ".[dev]"
 ```
 
 The wheel installs both the Python package and the `rankweave` console command.
+See [`docs/releasing.md`](docs/releasing.md) for the authorization and
+publication boundary. Do not assume a source-tree version is on PyPI.
 
-## Fuse retrieval channels
+## Use from a sibling product
 
-Fuse one lexical+dense candidate:
+RankWeave is a published library. Call the stable fusion API:
 
 ```python
 from rankweave import FusionSettings, fuse_channel_scores
@@ -67,7 +85,15 @@ score = fuse_channel_scores(
 )
 ```
 
-Fuse arbitrary normalized channels:
+Naruon pins `rankweave==0.1.0` today and imports that published contract.
+LineageWeave pins a git commit because it needs APIs added after 0.1.0. Those
+consumer pins live in the sibling repositories; this repository documents the
+published contract and does not path-depend on either product.
+
+## Fuse retrieval channels
+
+Fuse one lexical+dense candidate with the published API above, or fuse
+arbitrary normalized channels:
 
 ```python
 from rankweave import weighted_convex_combination_score
@@ -441,9 +467,29 @@ proof, or SLSA-level claim.
 See [RankWeave command-line interface](docs/cli.md) for v1/v2 field order,
 verification examples, and operator boundaries.
 
+## Verify persisted artifact evidence
+
+The current source tree can compare explicit local files with the unsigned
+SHA-256 and raw byte-count evidence in a persisted v2 report without exposing
+file paths or payloads:
+
+```bash
+rankweave verify-artifacts \
+  --report comparison.json \
+  --baseline-run baseline.run \
+  --candidate-run candidate.run \
+  --qrels qrels.txt
+```
+
+Candidate-family verification uses ordered, repeatable `--candidate ID=PATH`
+arguments. Exit status `0` means all bytes match, `1` means at least one
+artifact differs, and `2` means the command or evidence is invalid. A match is
+an integrity comparison only—not authentication, signature verification,
+provenance verification, or a SLSA claim.
+
 ## Discover machine-readable report contracts
 
-RankWeave 0.13.0 ships strict JSON Schema Draft 2020-12 resources for every
+This source tree ships strict JSON Schema Draft 2020-12 resources for every
 pairwise and candidate-family v1/v2 transport. Shell and container consumers
 can retrieve the exact installed contract without locating package files:
 
@@ -537,34 +583,16 @@ Inputs default to a 64 MiB limit **per artifact**. The same bounded payload is
 hashed, counted, and strictly decoded once, so a file that grows after its
 initial size check cannot trigger an unbounded in-memory read.
 
-## Hourly governed development loop
+## Publication status
 
-The default branch runs an hourly workflow at minute 17:
-
-`PR review/merge scan → review-feedback repair → exact-head revalidation → one
-bounded buyer-visible product proposal when the governed PR queue is empty`.
-
-PR inspection, review repair, and merge decisions use immutable reusable
-workflows from the organization's central `.github` repository. The local
-product stage uses a hash-pinned OpenCode binary with the official NVIDIA
-provider and `NVIDIA_NIM_API_KEY`; it does not use GitHub Copilot Agent Tasks or
-alter the existing review-agent credential path.
-
-The workflow first permits edits only to tests and a design specification, then
-runs pytest without network or inherited credentials and requires a genuine
-failed test. Only then may the agent implement one bounded production change.
-`AGENTS.md`, workflow, ownership, security, environment, and repository-control
-files remain maintainer-owned and outside autonomous scope. Ruff, the complete
-tests, 100% line/branch coverage, wheel build, offline installation, import
-smoke, and `pip check` run in a network-isolated process.
-
-Before requesting the short-lived OIDC-derived GitHub App token, the workflow
-rechecks both the open-PR queue and exact `main` SHA. It repeats both checks
-immediately before opening one PR. Generated work is never self-approved,
-merged, published, or released.
-
-See [Hourly commercialization loop](docs/operations/hourly-commercialization-loop.md)
-for the credential, sandbox, failure, and operating contracts.
+PyPI currently publishes only `0.1.0`. GitHub Release `v0.18.0` exists; the
+`publish.yml` Trusted Publishing path for that release has not completed, so
+`0.18.0` is not installable from the index. RankWeave releases are built from
+the exact published GitHub Release tag, tested at 100% production statement and
+branch coverage, and published through PyPI Trusted Publishing after the
+protected `pypi` environment approves the deployment. See
+[`docs/releasing.md`](docs/releasing.md) and
+[`docs/adr/0004-separate-release-authorization-from-publication.md`](docs/adr/0004-separate-release-authorization-from-publication.md).
 
 ## Research and standards
 
@@ -592,32 +620,9 @@ python -m coverage report    # 100% line + branch coverage required
 python -m pip wheel . --no-deps --wheel-dir dist
 ```
 
+Maintainer automation for the hourly product loop is documented in
+[Hourly commercialization loop](docs/operations/hourly-commercialization-loop.md).
+
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
-
-## Verify persisted artifact evidence
-
-RankWeave 0.18.0 can compare explicit local files with the unsigned SHA-256 and raw byte-count evidence in a persisted v2 report without exposing file paths or payloads:
-
-```bash
-rankweave verify-artifacts \
-  --report comparison.json \
-  --baseline-run baseline.run \
-  --candidate-run candidate.run \
-  --qrels qrels.txt
-```
-
-Candidate-family verification uses ordered, repeatable `--candidate ID=PATH` arguments. Exit status `0` means all bytes match, `1` means at least one artifact differs, and `2` means the command or evidence is invalid. A match is an integrity comparison only—not authentication, signature verification, provenance verification, or a SLSA claim.
-
-## Trusted distribution and provenance
-
-RankWeave releases are built from the exact published GitHub Release tag, tested at 100% production statement and branch coverage, transferred between jobs as one immutable distribution artifact, and published through PyPI Trusted Publishing after the protected `pypi` environment approves the deployment.
-
-After a version has been published and independently verified, install it from PyPI:
-
-```bash
-python -m pip install rankweave==0.18.0
-```
-
-Before the first Trusted Publisher is configured or when a version has not been published, use a reviewed source checkout instead of assuming that the PyPI name is owned by this project. See [`docs/releasing.md`](docs/releasing.md) for the exact publisher identity, release procedure, and GitHub/PyPI attestation verification boundaries.
