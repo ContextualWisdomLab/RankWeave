@@ -110,11 +110,13 @@ must be coordinated across both repositories, not merged unilaterally here.
 Severity: 🔴 blocks a buyer today · 🟡 buyer-visible friction · 🟢 hardening/roadmap.
 
 1. 🔴 **PyPI publication is broken** (issue #35). A buyer who reads the README
-   and runs `pip install rankweave` gets `0.1.0` — six versions of shipped
-   capability (cross-validation, temporal backtesting, artifact verification
-   v2, weighted-RRF cross-validation) behind the reviewed source tree. This is
-   the single highest-leverage gap: it is not a code gap, it is a
-   configuration action blocked outside this repository. **Next action:**
+   and runs `pip install rankweave` gets `0.1.0`, while the reviewed source
+   tree and GitHub Release are `0.18.0` — the published package is missing
+   every capability shipped since 0.1.0 (cross-validation, temporal
+   backtesting, artifact verification v2, weighted-RRF cross-validation) with
+   no version-number relationship between "0.1.0" and "0.18.0" beyond "older
+   and newer." This is the single highest-leverage gap: it is not a code gap,
+   it is a configuration action blocked outside this repository. **Next action:**
    surface this to whoever holds the PyPI org owner role; nothing further is
    automatable from here.
 2. 🟡 **No versioned public-API compatibility policy.** LineageWeave and
