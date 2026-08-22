@@ -55,13 +55,16 @@ python -m pip install rankweave==0.1.0
 ```
 
 The wheel installs the `rankweave` package and the `rankweave` console command.
-`python -m rankweave` is equivalent to the console script.
+`python -m rankweave` is equivalent to the console script. **`0.1.0` does not
+carry every API this README documents below** — if an example import fails,
+install the git reference immediately below instead of the PyPI package.
 
 The reviewed source tree is currently `0.18.0`, and a GitHub Release exists for
 it, but that version is **not yet on PyPI** (see
 [`docs/releasing.md`](docs/releasing.md) for the open publication gap). For the
-post-0.1.0 APIs documented below, install the exact reviewed commit or tag
-instead of assuming the PyPI name already carries them:
+post-0.1.0 APIs documented below (everything from "Fuse, evaluate, and compare
+in Python" onward), install the exact reviewed commit or tag instead of
+assuming the PyPI name already carries them:
 
 ```bash
 python -m pip install "rankweave @ git+https://github.com/ContextualWisdomLab/RankWeave.git@v0.18.0"

@@ -15,10 +15,17 @@ def test_readme_is_customer_facing_and_keeps_the_naruon_leaf_contract():
     assert "published contract" in readme
     assert "rankweave compare" in readme
     assert "available_report_schemas" in readme
-    assert "NVIDIA_NIM_API_KEY" not in readme
-    assert "OpenCode" not in readme
-    assert "Hourly governed development loop" not in readme
-    assert ".[dev]" not in readme
+    contributor_only_markers = (
+        "NVIDIA_NIM_API_KEY",
+        "OpenCode",
+        "Hourly governed development loop",
+        ".[dev]",
+        "AGENTS.md",
+        "OIDC-derived GitHub App token",
+        "sandbox",
+    )
+    for marker in contributor_only_markers:
+        assert marker not in readme
 
 
 def test_contributor_and_operations_docs_own_automation_procedure():
