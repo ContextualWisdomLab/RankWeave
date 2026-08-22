@@ -30,11 +30,28 @@ Snapshot taken during this session's review→fix→checks→merge pass:
 | # | Title | State entering session | Action taken this session |
 |---|---|---|---|
 | PR #39 | docs: make README operator-first and honest about PyPI | BLOCKED, no review decision | **Closed**, superseded by #40 — same PyPI-honest install fix, broader restructuring |
-| PR #40 | Rewrite RankWeave README for customers and operators | BLOCKED, CHANGES_REQUESTED, 2 checks FAILURE (transient GitHub 503 on 2026-08-17 18:17–18:18 UTC) | Fixed the one real defect (install section led with `rankweave==0.18.0`, which is not on PyPI — verified live against `pypi.org/pypi/rankweave/json`, which returns only `0.1.0`), pushed, retriggered required checks |
-| PR #36 | fix(ci): restore executable hourly governance | BLOCKED, CHANGES_REQUESTED (stale, 2026-08-07/09 reviews predating the ruleset's `dismiss_stale_reviews_on_push`) | Verified both defects from issue #37 are already correctly fixed in-branch (deterministic open-PR gate precedes the NVIDIA credential check; no `secrets: inherit` on any reusable governance job); pushed an empty retrigger commit to force a fresh required-review cycle |
+| PR #40 | Rewrite RankWeave README for customers and operators | BLOCKED, CHANGES_REQUESTED, 2 checks FAILURE (transient GitHub 503 on 2026-08-17 18:17–18:18 UTC) | Fixed the install-order defect and a forward-reference gap (post-0.1.0 API examples above the caveat explaining they need the git install); zero unresolved review threads; all checks green; **blocked only on org-wide review-dispatch throughput (see below)** |
+| PR #36 | fix(ci): restore executable hourly governance | BLOCKED, CHANGES_REQUESTED (stale, predating `dismiss_stale_reviews_on_push`) | Verified both issue #37 defects are correctly fixed in-branch; fixed a real doc-structure bug (orphaned heading) found by review; zero unresolved review threads; all checks green; **blocked only on org-wide review-dispatch throughput (see below)** |
+| PR #41 | docs: add product/technical gap baseline (this document) | — (opened this session) | Fixed a wording-precision defect found by review; zero unresolved review threads; all checks green; **blocked only on org-wide review-dispatch throughput (see below)** |
 | Issue #38 | Disable orphaned release/PR-repair/hourly-loop workflow identities | Open | **Closed.** Disabled 24 orphaned workflow identities via the Actions API (`PUT .../workflows/{id}/disable`); verified only `ci.yml`, `create-release.yml`, `hourly-commercialization-loop.yml`, `publish.yml` (plus GitHub's own Dependabot/CodeQL dynamic entries) remain active |
 | Issue #37 | Fleet automation incident: NVIDIA-before-queue-gate ordering + `secrets: inherit` | Open, fix in PR #36 | Left open pending #36 merge — do not close on a claim, close when the fix actually lands on `main` |
 | Issue #35 | PyPI Trusted Publisher misconfigured for v0.18.0 (`invalid-publisher`) | Open | **Blocked-external.** Requires a PyPI project-owner action at `pypi.org/manage/project/rankweave/settings/publishing/` that no repository automation or GitHub API call can perform. Re-verified still blocked; documented here rather than silently dropped, per the standing rule against silently ignoring an external-only blocker. |
+
+### Org-wide review-dispatch throughput bottleneck (discovered this session)
+
+All three RankWeave PRs above reached "zero unresolved threads, all checks
+green" during this session but stayed unmergeable because
+`ContextualWisdomLab/.github`'s `pr-review-merge-scheduler.yml`
+`org-queue-sweep` job enforces **one OpenCode review dispatch per 15-minute
+sweep, shared across the entire organization** — not per repository. Evidence
+(run `32556682284`, job `96991889320`, 2026-08-22T06:36Z): all three of
+RankWeave's ready PRs logged `wait: ... review dispatch limit reached` in the
+same sweep that also processed ThreadWeave and EgressWeave. Filed as
+[ContextualWisdomLab/.github#1219](https://github.com/ContextualWisdomLab/.github/issues/1219)
+with full evidence rather than unilaterally raising a shared, cost-relevant
+throttle without visibility into its intended ceiling. This is an
+organization-scale gap, not RankWeave-specific — expect it to keep affecting
+every repository's merge latency until resolved centrally.
 
 Re-run before trusting this table stale: `gh pr list --state open` and
 `gh issue list --state open` against `ContextualWisdomLab/RankWeave`.
