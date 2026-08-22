@@ -40,8 +40,6 @@ Models, a mutable branch, or an unmerged central change.
 Updating the central merge policy or re-enabling review repair requires an
 explicit reviewed reachable SHA change in RankWeave.
 
-## Product-development trust zones
-
 ## Reusable-workflow reachability incident
 
 GitHub Actions run `31124811165` and its immediate predecessors failed before
@@ -56,6 +54,8 @@ a PR. Once the protected central scheduler provides the reviewed NVIDIA NIM
 boundary, RankWeave can replace the bridge with a new immutable reachable SHA.
 This preserves the standalone repository, the central MSA control plane, and
 the existing independent-review credential system.
+
+## Product-development trust zones
 
 The local development job is separated into four trust zones.
 
