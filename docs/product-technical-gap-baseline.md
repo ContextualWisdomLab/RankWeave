@@ -33,13 +33,14 @@ Snapshot taken during this session's review→fix→checks→merge pass:
 | PR #40 | Rewrite RankWeave README for customers and operators | BLOCKED, CHANGES_REQUESTED, 2 checks FAILURE (transient GitHub 503 on 2026-08-17 18:17–18:18 UTC) | Fixed the install-order defect and a forward-reference gap (post-0.1.0 API examples above the caveat explaining they need the git install); zero unresolved review threads; all checks green; **blocked only on org-wide review-dispatch throughput (see below)** |
 | PR #36 | fix(ci): restore executable hourly governance | BLOCKED, CHANGES_REQUESTED (stale, predating `dismiss_stale_reviews_on_push`) | Verified both issue #37 defects are correctly fixed in-branch; fixed a real doc-structure bug (orphaned heading) found by review; zero unresolved review threads; all checks green; **blocked only on org-wide review-dispatch throughput (see below)** |
 | PR #41 | docs: add product/technical gap baseline (this document) | — (opened this session) | Fixed a wording-precision defect found by review; zero unresolved review threads; all checks green; **blocked only on org-wide review-dispatch throughput (see below)** |
+| PR #42 | docs: add ADR 0005 versioned public-API compatibility policy | — (opened this session) | Freezes `rankweave.__all__` as of 0.18.0 (§6 gap 2, below), enforced by `tests/test_public_api_compatibility.py`; zero unresolved review threads; all checks green; **blocked only on org-wide review-dispatch throughput (see below)** |
 | Issue #38 | Disable orphaned release/PR-repair/hourly-loop workflow identities | Open | **Closed.** Disabled 24 orphaned workflow identities via the Actions API (`PUT .../workflows/{id}/disable`); verified only `ci.yml`, `create-release.yml`, `hourly-commercialization-loop.yml`, `publish.yml` (plus GitHub's own Dependabot/CodeQL dynamic entries) remain active |
 | Issue #37 | Fleet automation incident: NVIDIA-before-queue-gate ordering + `secrets: inherit` | Open, fix in PR #36 | Left open pending #36 merge — do not close on a claim, close when the fix actually lands on `main` |
 | Issue #35 | PyPI Trusted Publisher misconfigured for v0.18.0 (`invalid-publisher`) | Open | **Blocked-external.** Requires a PyPI project-owner action at `pypi.org/manage/project/rankweave/settings/publishing/` that no repository automation or GitHub API call can perform. Re-verified still blocked; documented here rather than silently dropped, per the standing rule against silently ignoring an external-only blocker. |
 
 ### Org-wide review-dispatch throughput bottleneck (discovered this session)
 
-All three RankWeave PRs above reached "zero unresolved threads, all checks
+All four RankWeave PRs above reached "zero unresolved threads, all checks
 green" during this session but stayed unmergeable because
 `ContextualWisdomLab/.github`'s `pr-review-merge-scheduler.yml`
 `org-queue-sweep` job enforces **one OpenCode review dispatch per 15-minute
@@ -52,6 +53,23 @@ with full evidence rather than unilaterally raising a shared, cost-relevant
 throttle without visibility into its intended ceiling. This is an
 organization-scale gap, not RankWeave-specific — expect it to keep affecting
 every repository's merge latency until resolved centrally.
+
+**Mitigation status (updated 2026-08-23):** four independent contributing
+causes have since been identified and three merged in
+`ContextualWisdomLab/.github`: rotation of the queue-sweep's repo walk order
+(#1220, merged) so the shared 1-dispatch/15-minute budget no longer always
+starves the same tail of repositories; an `actionlint`
+`job.workflow_*`-context bug in a related scheduler workflow (#1221, merged);
+a dead GitHub Models fallback chain in `strix.yml` that was blocking checks
+with a hallucinated finding (#1226, merged). A fourth fix — rate-limit-aware
+retry/defer for the shared GitHub App installation token that the sweep job
+itself hits (#1245) — is open but not yet merged pending resolution of an
+adversarial-review finding (a per-repo retry cost that can collide with the
+sweep job's overall timeout under sustained contention). None of these have
+yet flipped RankWeave's own PRs to mergeable as of this update; a separate,
+unrelated cause (GitHub Models retirement affecting the review model pool,
+`ContextualWisdomLab/.github#624`) may also still be contributing and remains
+open.
 
 Re-run before trusting this table stale: `gh pr list --state open` and
 `gh issue list --state open` against `ContextualWisdomLab/RankWeave`.
