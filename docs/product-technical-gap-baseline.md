@@ -1,10 +1,12 @@
 # RankWeave product/technical gap baseline
 
-Status snapshot as of 2026-08-22. This document exists so a reviewer can answer
-one question without re-deriving it from scratch: **what does a buyer of
-RankWeave still not get today, and what is already closed?** It is a living
-document — update it every time a PR merges, an issue closes, or a new gap is
-found. Do not let it drift from `gh pr list` / `gh issue list` reality.
+Initial status snapshot as of 2026-08-22, with a mitigation-status update on
+2026-08-23 (§2). This document exists so a reviewer can answer one question
+without re-deriving it from scratch: **what does a buyer of RankWeave still
+not get today, and what is already closed?** It is a living document — update
+it whenever a §2 row's state changes, a §6 gap closes, or a new gap is found
+(see Maintenance below). Do not let it drift from `gh pr list` / `gh issue
+list` reality.
 
 ## 1. Product identity and responsibility boundary
 
@@ -81,8 +83,11 @@ LineageWeave-related PRs. Verification (not assumption) was required first,
 per the standing instruction to confirm the actual PR location by
 product/responsibility boundary rather than by name:
 
-- RankWeave contains **zero** references to LineageWeave anywhere in the tree,
-  and none of its 3 open PRs or 3 open issues mentioned LineageWeave.
+- Before this document was added, RankWeave contained **zero** references to
+  LineageWeave anywhere in the tree, and none of its 3 open PRs or 3 open
+  issues mentioned LineageWeave. (This document is necessarily an exception —
+  its purpose is the boundary analysis below — so "zero references" describes
+  the rest of the tree, not this file.)
 - The dependency direction is one-way: **LineageWeave depends on RankWeave**,
   not the reverse. LineageWeave's `lineageweave/rankweave_client.py` fail-closes
   (`RankWeaveNotAvailable`) if the `rankweave` package is missing, and pins
@@ -243,9 +248,13 @@ Järvelin, K., & Kekäläinen, J. (2002). Cumulated gain-based evaluation of IR
 techniques. *ACM Transactions on Information Systems*, 20(4), 422–446.
 https://doi.org/10.1145/582415.582418
 
-Samuel, D., MacAvaney, S., Yates, A., Zhang, E., Zhang, S., Macdonald, C., &
-Ounis, I. (2025). *Weighted reciprocal rank fusion for multi-channel
-retrieval* [Preprint].
+Samuel, S., DeGenaro, D., Guallar-Blasco, J., Sanders, K., Eisape, O.,
+Spendlove, T., Reddy, A., Martin, A., Yates, A., Yang, E., Carpenter, C.,
+Etter, D., Kayi, E., Wiesner, M., Murray, K., & Kriz, R. (2025). MMMORRF:
+Multimodal multilingual modularized reciprocal rank fusion. In *Proceedings of
+the 48th International ACM SIGIR Conference on Research and Development in
+Information Retrieval* (pp. 4004–4009). Association for Computing Machinery.
+https://doi.org/10.1145/3726302.3730157
 
 Smucker, M. D., Allan, J., & Carterette, B. (2007). A comparison of
 statistical significance tests for information retrieval evaluation. In
@@ -256,7 +265,7 @@ https://doi.org/10.1145/1321440.1321528
 Complete references, including standards documents (SLSA v1.2, FIPS 180-4,
 RFC 8259, JSON Schema Draft 2020-12), remain in `docs/research/README.md` —
 this section does not duplicate that index, only the sources cited directly
-in §6.
+in §§3 and 4 above.
 
 ## Maintenance
 
