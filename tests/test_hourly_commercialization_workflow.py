@@ -3,7 +3,6 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = PROJECT_ROOT / ".github/workflows/hourly-commercialization-loop.yml"
 MERGE_WORKFLOW_SHA = "5983b41ace75040c1d81818171ca7d0f3653254e"
-FIX_WORKFLOW_SHA = "21397126d708d2d536ccc1d68b0d333653ce9315"
 
 
 def _workflow_text() -> str:
@@ -31,14 +30,14 @@ def test_commercialization_loop_uses_pinned_central_pr_governance():
         "ContextualWisdomLab/.github/.github/workflows/"
         f"pr-review-merge-scheduler.yml@{MERGE_WORKFLOW_SHA}"
     )
-    fix_reference = (
-        "ContextualWisdomLab/.github/.github/workflows/"
-        f"pr-review-fix-scheduler.yml@{FIX_WORKFLOW_SHA}"
-    )
     assert workflow.count(merge_reference) == 2
-    assert workflow.count(fix_reference) == 1
-    assert 'retry_hours: "1"' in workflow
     assert "secrets: inherit" in workflow
+    # Review-feedback repair is dispatched by the central, always-current
+    # rankweave-hourly-review-repair.yml caller in ContextualWisdomLab/.github
+    # instead of a cross-repository pinned-SHA job here; see ADR/doctoring.
+    assert "uses: ContextualWisdomLab/.github" not in workflow.replace(
+        merge_reference, ""
+    )
 
 
 def test_product_development_uses_nvidia_nim_and_fails_closed():
@@ -222,20 +221,15 @@ def test_final_queue_and_base_are_rechecked_before_pr_creation():
 def test_product_development_requires_successful_pr_governance():
     workflow = _workflow_text()
 
-    assert (
-        "needs: [inspect-pr-queue, repair-review-feedback, revalidate-pr-queue]"
-        in workflow
-    )
+    assert "needs: [inspect-pr-queue, revalidate-pr-queue]" in workflow
     assert "needs.inspect-pr-queue.result == 'success'" in workflow
-    assert "needs.repair-review-feedback.result == 'success'" in workflow
     assert "needs.revalidate-pr-queue.result == 'success'" in workflow
 
 
 def test_governance_permissions_are_scoped_per_calling_job():
     workflow = _workflow_text()
     workflow_default = workflow.split("concurrency:", maxsplit=1)[0]
-    inspect = _job_section(workflow, "inspect-pr-queue", "repair-review-feedback")
-    repair = _job_section(workflow, "repair-review-feedback", "revalidate-pr-queue")
+    inspect = _job_section(workflow, "inspect-pr-queue", "revalidate-pr-queue")
     revalidate = _job_section(
         workflow, "revalidate-pr-queue", "develop-next-product-gap"
     )
@@ -261,17 +255,6 @@ def test_governance_permissions_are_scoped_per_calling_job():
             assert permission in merge_job
         assert "issues: write" not in merge_job
         assert "statuses: read" not in merge_job
-
-    for permission in (
-        "actions: write",
-        "contents: read",
-        "issues: write",
-        "pull-requests: read",
-        "statuses: read",
-    ):
-        assert permission in repair
-    assert "contents: write" not in repair
-    assert "id-token: write" not in repair
 
 
 def test_opencode_binary_and_models_are_pinned():

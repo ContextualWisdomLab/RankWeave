@@ -32,26 +32,17 @@ jobs:
       update_branches: true
     secrets: inherit
 
-  repair-review-feedback:
-    needs: inspect-pr-queue
-    if: ${{ always() }}
-    permissions:
-      actions: write
-      contents: read
-      issues: write
-      pull-requests: read
-      statuses: read
-    uses: ContextualWisdomLab/.github/.github/workflows/pr-review-fix-scheduler.yml@21397126d708d2d536ccc1d68b0d333653ce9315
-    with:
-      target_repository: ContextualWisdomLab/RankWeave
-      base_branch: main
-      max_prs: "50"
-      max_dispatches: "1"
-      retry_hours: "1"
-    secrets: inherit
-
+  # Review-feedback repair is dispatched by the central, always-current
+  # rankweave-hourly-review-repair.yml caller in ContextualWisdomLab/.github
+  # (uses: ./.github/workflows/pr-review-fix-scheduler.yml, a same-repository
+  # reference). A local repair-review-feedback job here previously called
+  # that reusable workflow cross-repository at a pinned commit SHA; that
+  # shape can never satisfy pr-review-fix-scheduler.yml's same-repository
+  # trusted-source check (github.repository == ContextualWisdomLab/.github),
+  # so every run failed before any job was scheduled ("workflow file issue",
+  # zero jobs created) for as long as that hardening has been in place.
   revalidate-pr-queue:
-    needs: repair-review-feedback
+    needs: inspect-pr-queue
     if: ${{ always() }}
     permissions:
       actions: write
@@ -72,12 +63,11 @@ jobs:
     secrets: inherit
 
   develop-next-product-gap:
-    needs: [inspect-pr-queue, repair-review-feedback, revalidate-pr-queue]
+    needs: [inspect-pr-queue, revalidate-pr-queue]
     if: >-
       ${{
         always() &&
         needs.inspect-pr-queue.result == 'success' &&
-        needs.repair-review-feedback.result == 'success' &&
         needs.revalidate-pr-queue.result == 'success'
       }}
     runs-on: ubuntu-latest
