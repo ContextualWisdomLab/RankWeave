@@ -4,7 +4,8 @@ Operating guide for automated agents working in this repo.
 
 ## What this is
 
-`rankweave` is a **pure-Python, stdlib-only** library and command-line tool for
+`rankweave` is a Python library and command-line tool backed by one Rust
+calculation core for
 language-agnostic hybrid-retrieval fusion, effectiveness evaluation, paired and
 family-wise statistical comparison, offline policy tuning, strict TREC
 interchange, and direct TREC benchmark comparison. It was extracted from
@@ -14,9 +15,10 @@ Context Search under the lab's ONE SOURCE MULTI USE convention
 
 ## Hard rules
 
-- **No dependencies.** The runtime imports only the Python standard library.
-  Do not add a runtime dependency; if you think you need one, the feature
-  probably belongs in the consumer, not here.
+- **No third-party Python runtime dependencies.** Python adapters import only
+  the standard library and the packaged `rankweave._rankweave_core` extension.
+  Calculation belongs in `rankweave-core`; do not add a Python fallback or a
+  second arithmetic implementation.
 - **Store-agnostic.** RankWeave never talks to a database, embedding provider,
   search index, or benchmark download service. It fuses scores, evaluates and
   compares rankings, selects offline policies, parses interchange artifacts,

@@ -130,10 +130,11 @@ flowchart LR
   reimplement those models.
 - contextual-orchestrator owns LLM and model-routing decisions.
 
-The current released implementation is dependency-free Python. Issue #45
-tracks migration of production fusion/evaluation arithmetic to a Rust core
-behind the existing public contract under ADR 0006. Until that work is released and pinned,
-consumers must not claim a Rust production engine.
+The current release remains dependency-free Python. This development head
+moves theoretical min-max normalization and unweighted RRF into the Rust core;
+issue #45 tracks the remaining fusion and evaluation migration under ADR 0006.
+Until a Rust-backed release is published and pinned, consumers must not claim
+the engine is available to them.
 
 ## 7. Explicit non-goals
 

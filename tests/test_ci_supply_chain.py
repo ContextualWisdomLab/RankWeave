@@ -28,7 +28,7 @@ def _references(workflow: str) -> tuple[tuple[str, str], ...]:
 def test_ci_pins_reviewed_node24_action_commits():
     workflow = _workflow_text()
 
-    assert workflow.count(f"actions/checkout@{CHECKOUT_SHA}") == 2
+    assert workflow.count(f"actions/checkout@{CHECKOUT_SHA}") == 3
     assert workflow.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 2
     assert workflow.count(f"astral-sh/setup-uv@{SETUP_UV_SHA}") == 2
 
