@@ -333,6 +333,23 @@ requirement independently of locale-specific text-stream encodings.
 
 ## References (APA 7th edition)
 
+### Rust calculation and numerical execution boundary
+
+IEEE Computer Society. (2019). *IEEE standard for floating-point arithmetic*
+(IEEE Std 754-2019). IEEE. https://doi.org/10.1109/IEEESTD.2019.8766229
+
+NVIDIA Corporation. (2026). *CUDA C++ best practices guide* (Version 13.3).
+https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/
+
+PyO3 Project. (2026). *Building and distribution*. PyO3 user guide.
+https://pyo3.rs/main/building-and-distribution.html
+
+PyO3 Project. (2026). *Features reference*. PyO3 user guide.
+https://pyo3.rs/main/features
+
+Rayon Developers. (2026). *ParallelIterator*. Rayon 1.12.0 documentation.
+https://docs.rs/rayon/1.12.0/rayon/iter/trait.ParallelIterator.html
+
 Bray, T. (Ed.). (2017). *The JavaScript Object Notation (JSON) Data Interchange
 Format* (RFC 8259). RFC Editor. https://doi.org/10.17487/RFC8259
 

@@ -1,8 +1,12 @@
 # RankWeave Product Requirements
 
-Status: Candidate product contract  
-Product: `ContextualWisdomLab/RankWeave`  
-Normative architecture: repository ADRs and `AGENTS.md`  
+Status: Candidate product contract
+
+Product: `ContextualWisdomLab/RankWeave`
+
+Normative architecture: repository ADRs, including
+[`ADR 0006`](adr/0006-rust-calculation-core.md), and `AGENTS.md`
+
 Supporting evidence: [`docs/research/README.md`](research/README.md)
 
 ## 1. Product purpose
@@ -128,7 +132,7 @@ flowchart LR
 
 The current released implementation is dependency-free Python. Issue #45
 tracks migration of production fusion/evaluation arithmetic to a Rust core
-behind the existing public contract. Until that work is released and pinned,
+behind the existing public contract under ADR 0006. Until that work is released and pinned,
 consumers must not claim a Rust production engine.
 
 ## 7. Explicit non-goals
