@@ -72,6 +72,7 @@ required-version = "==0.11.29"
 manifest-path = "crates/rankweave-python/Cargo.toml"
 module-name = "rankweave._rankweave_core"
 python-source = "src"
+include = ["CHANGELOG.md", "tests/test_version.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
