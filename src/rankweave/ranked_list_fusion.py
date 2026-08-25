@@ -165,8 +165,8 @@ def reciprocal_rank_fuse(
     Each sequence is interpreted as a one-based ranking. An item may occur
     once per channel and across any number of channels. Results are ordered
     by descending RRF score, with first-seen input order as the deterministic
-    tie-breaker. ``channel_ranks`` on each result preserves the evidence used
-    to calculate its score.
+    tie-breaker. ``channel_ranks`` and ``channel_contributions`` preserve the
+    exact owned ranks and Cormack summands used to calculate each score.
     """
     validated_eta = _require_positive_integer(
         rank_constant_eta, "rank_constant_eta"

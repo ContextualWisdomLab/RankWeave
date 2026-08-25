@@ -28,6 +28,10 @@ def test_reciprocal_rank_fuse_combines_complete_ranked_lists():
         ("lexical", 2, 1.0, pytest.approx(1.0 / 62.0)),
         ("dense", 1, 1.0, pytest.approx(1.0 / 61.0)),
     ]
+    assert sum(
+        contribution.contribution
+        for contribution in fused_items[0].channel_contributions
+    ) == pytest.approx(fused_items[0].score)
     assert fused_items[1].score == pytest.approx(1.0 / 61.0)
     assert fused_items[1].channel_ranks == (("lexical", 1),)
     assert fused_items[2].score == pytest.approx(1.0 / 62.0)
