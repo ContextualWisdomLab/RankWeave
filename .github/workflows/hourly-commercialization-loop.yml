@@ -141,9 +141,10 @@ jobs:
           set -euo pipefail
           venv="/tmp/rankweave-automation-venv-${GITHUB_RUN_ID}"
           sudo rm -rf "$venv"
+          rustup toolchain install 1.97.1 --profile minimal
           python -m venv "$venv"
           "$venv/bin/python" -m pip install --upgrade pip
-          "$venv/bin/python" -m pip install -e ".[dev]" hatchling
+          "$venv/bin/python" -m pip install -e ".[dev]"
           sudo chown -R root:root "$venv"
           sudo chmod -R a-w "$venv"
           sandbox_uid="$(id -u nobody)"
@@ -653,7 +654,7 @@ jobs:
               )
 
           metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-          if metadata["build-system"]["build-backend"] != "hatchling.build":
+          if metadata["build-system"]["build-backend"] != "maturin":
               raise SystemExit("build backend may not change")
           if metadata["project"].get("dependencies") != []:
               raise SystemExit("RankWeave runtime dependencies must remain empty")

@@ -14,8 +14,8 @@ list` reality.
 
 ## 1. Product identity and responsibility boundary
 
-RankWeave is a **leaf product**: a dependency-free, pure-Python,
-standard-library-only library and CLI for hybrid-retrieval score fusion,
+RankWeave is a **leaf product**: a Python library and CLI with no third-party
+Python runtime dependencies and one packaged Rust calculation core for hybrid-retrieval score fusion,
 ranking evaluation, paired/family statistical comparison, offline policy
 tuning (including caller-owned blocked-fold cross-validation and
 availability-time backtesting), and strict TREC interchange
@@ -181,10 +181,13 @@ Severity: 🔴 blocks a user today · 🟡 user-visible friction · 🟢 hardeni
    file a follow-up issue tracking the re-pin once the central scheduler's
    current commit is confirmed stable, rather than merging it unreviewed
    inside an unrelated PR.
-5. 🔴 **Production fusion arithmetic is still Python-only** (issue #45).
+5. 🟡 **The first production fusion primitives are Rust-backed; migration is
+   incomplete** (issue #45).
    LineageWeave ADR 0225 names RankWeave as the sole fusion owner, while the
-   current package implements the arithmetic in Python. The required migration
-   keeps the public Python surface as an adapter over one Rust core, preserves
+   development head now routes theoretical normalization and unweighted RRF
+   through `rankweave-core`; convex, weighted, evaluation, comparison, and
+   tuning arithmetic still execute in Python. The remaining migration keeps
+   the public Python surface as an adapter over one Rust core, preserves
    exact documented semantics, and publishes provenance and limitations with
    every calculation envelope. CPU multithreading and an optional GPU path
    require exact-workload parity and benchmark evidence; no throughput claim

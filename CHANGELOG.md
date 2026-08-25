@@ -5,6 +5,9 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 ## [Unreleased]
 
 ### Added
+- Introduced the first `rankweave-core` Rust vertical slice and thin PyO3
+  adapter for theoretical min-max normalization and unweighted Reciprocal Rank
+  Fusion, with exact public-Python parity and complete core coverage.
 - ADR 0005 defines the versioned public-API compatibility policy: names in
   `rankweave.__all__` frozen as of `0.18.0` are not removed or renamed within
   a minor version, enforced by `tests/test_public_api_compatibility.py`.

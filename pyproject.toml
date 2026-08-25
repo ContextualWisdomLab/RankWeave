@@ -1,11 +1,11 @@
 [build-system]
-requires = ["hatchling==1.31.0"]
-build-backend = "hatchling.build"
+requires = ["maturin==1.14.1"]
+build-backend = "maturin"
 
 [project]
 name = "rankweave"
 version = "0.18.0"
-description = "Dependency-free retrieval fusion, evaluation, family-wise statistical comparison, policy tuning, TREC benchmarking, and auditable CLI workflows."
+description = "Rust-backed retrieval fusion, evaluation, family-wise statistical comparison, policy tuning, TREC benchmarking, and auditable CLI workflows."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -41,7 +41,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Rust",
     "Topic :: Text Processing :: Indexing",
     "Topic :: Scientific/Engineering :: Information Analysis",
     "Typing :: Typed",
@@ -68,8 +68,10 @@ dev = [
 [tool.uv]
 required-version = "==0.11.29"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/rankweave"]
+[tool.maturin]
+manifest-path = "crates/rankweave-python/Cargo.toml"
+module-name = "rankweave._rankweave_core"
+python-source = "src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
