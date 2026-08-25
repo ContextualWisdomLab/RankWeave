@@ -142,9 +142,10 @@ jobs:
           venv="/tmp/rankweave-automation-venv-${GITHUB_RUN_ID}"
           sudo rm -rf "$venv"
           rustup toolchain install 1.97.1 --profile minimal
+          rustup default 1.97.1
           python -m venv "$venv"
           "$venv/bin/python" -m pip install --upgrade pip
-          "$venv/bin/python" -m pip install -e ".[dev]"
+          "$venv/bin/python" -m pip install -e ".[dev]" maturin==1.14.1
           sudo chown -R root:root "$venv"
           sudo chmod -R a-w "$venv"
           sandbox_uid="$(id -u nobody)"
