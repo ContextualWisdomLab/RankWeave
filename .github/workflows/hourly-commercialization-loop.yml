@@ -30,28 +30,18 @@ jobs:
       enable_auto_merge: true
       merge_mode: direct_or_auto
       update_branches: true
-    secrets: inherit
 
-  repair-review-feedback:
-    needs: inspect-pr-queue
-    if: ${{ always() }}
-    permissions:
-      actions: write
-      contents: read
-      issues: write
-      pull-requests: read
-      statuses: read
-    uses: ContextualWisdomLab/.github/.github/workflows/pr-review-fix-scheduler.yml@21397126d708d2d536ccc1d68b0d333653ce9315
-    with:
-      target_repository: ContextualWisdomLab/RankWeave
-      base_branch: main
-      max_prs: "50"
-      max_dispatches: "1"
-      retry_hours: "1"
-    secrets: inherit
-
+  # Review-feedback repair is dispatched by the central, always-current
+  # rankweave-hourly-review-repair.yml caller in ContextualWisdomLab/.github
+  # (uses: ./.github/workflows/pr-review-fix-scheduler.yml, a same-repository
+  # reference). A local repair-review-feedback job here previously called
+  # that reusable workflow cross-repository at a pinned commit SHA; that
+  # shape can never satisfy pr-review-fix-scheduler.yml's same-repository
+  # trusted-source check (github.repository == ContextualWisdomLab/.github),
+  # so every run failed before any job was scheduled ("workflow file issue",
+  # zero jobs created) for as long as that hardening has been in place.
   revalidate-pr-queue:
-    needs: repair-review-feedback
+    needs: inspect-pr-queue
     if: ${{ always() }}
     permissions:
       actions: write
@@ -69,15 +59,13 @@ jobs:
       enable_auto_merge: true
       merge_mode: direct_or_auto
       update_branches: true
-    secrets: inherit
 
   develop-next-product-gap:
-    needs: [inspect-pr-queue, repair-review-feedback, revalidate-pr-queue]
+    needs: [inspect-pr-queue, revalidate-pr-queue]
     if: >-
       ${{
         always() &&
         needs.inspect-pr-queue.result == 'success' &&
-        needs.repair-review-feedback.result == 'success' &&
         needs.revalidate-pr-queue.result == 'success'
       }}
     runs-on: ubuntu-latest
@@ -158,7 +146,6 @@ jobs:
           {
             echo "/opencode.json"
             echo "/.agent-red-output.txt"
-            echo "/PR_MESSAGE.md"
           } >>"$GITHUB_WORKSPACE/.git/info/exclude"
       - name: Verify the trusted base and network-isolation primitive
         if: steps.gate.outputs.eligible == 'true'
@@ -208,11 +195,18 @@ jobs:
             "lsp": false,
             "permission": {
               "read": {
-                "*": "allow",
-                ".git/**": "deny",
-                "opencode.json": "deny",
-                ".env": "deny",
-                ".env.*": "deny"
+                "*": "deny",
+                "AGENTS.md": "allow",
+                "ARCHITECTURE.md": "allow",
+                "CHANGELOG.md": "allow",
+                "CLAUDE.md": "allow",
+                "LICENSE": "allow",
+                "README.md": "allow",
+                "pyproject.toml": "allow",
+                "uv.lock": "allow",
+                "docs/**": "allow",
+                "src/**": "allow",
+                "tests/**": "allow"
               },
               "edit": {
                 "*": "deny",
@@ -249,8 +243,7 @@ jobs:
           Write a concise design under docs/superpowers/specs/ and write the failing
           pytest regression tests first. During this phase do not modify production
           code, package metadata, README.md, AGENTS.md, CHANGELOG.md, workflows, or
-          any file outside tests/ and docs/superpowers/specs/. Do not write
-          PR_MESSAGE.md yet.
+          any file outside tests/ and docs/superpowers/specs/.
 
           The tests must express the buyer-visible contract, preserve RankWeave's
           standard-library-only runtime, deterministic and immutable evidence,
@@ -422,11 +415,19 @@ jobs:
             "lsp": false,
             "permission": {
               "read": {
-                "*": "allow",
-                ".git/**": "deny",
-                "opencode.json": "deny",
-                ".env": "deny",
-                ".env.*": "deny"
+                "*": "deny",
+                ".agent-red-output.txt": "allow",
+                "AGENTS.md": "allow",
+                "ARCHITECTURE.md": "allow",
+                "CHANGELOG.md": "allow",
+                "CLAUDE.md": "allow",
+                "LICENSE": "allow",
+                "README.md": "allow",
+                "pyproject.toml": "allow",
+                "uv.lock": "allow",
+                "docs/**": "allow",
+                "src/**": "allow",
+                "tests/**": "allow"
               },
               "edit": {
                 "*": "allow",
@@ -475,11 +476,9 @@ jobs:
           statistical or standards claim without a primary source already recorded in
           the repository. Figma is not applicable because RankWeave has no UI.
 
-          Write PR_MESSAGE.md at the repository root. Put a concise PR title on the
-          first line and a body after it describing buyer impact, evidence,
-          compatibility, and the exact validation commands. Do not commit, push,
-          open, approve, merge, publish, or release anything; the workflow performs
-          deterministic validation and packages one protected pull request.
+          Do not commit, push, open, approve, merge, publish, or release anything;
+          the workflow performs deterministic validation and packages one protected
+          pull request with maintainer-owned metadata.
           PROMPT
           )"
 
@@ -511,15 +510,8 @@ jobs:
         if: steps.gate.outputs.eligible == 'true'
         run: |
           set -euo pipefail
-          pr_message_backup="${RUNNER_TEMP}/agent-pr-message.md"
-          if [ -f PR_MESSAGE.md ]; then
-            cp PR_MESSAGE.md "$pr_message_backup"
-          fi
           rm -f opencode.json .agent-red-output.txt
           git clean -fdX
-          if [ -f "$pr_message_backup" ]; then
-            cp "$pr_message_backup" PR_MESSAGE.md
-          fi
           "$AUTOMATION_VENV/bin/python" - <<'PY'
           from __future__ import annotations
 
@@ -585,7 +577,6 @@ jobs:
               "CHANGELOG.md",
               "README.md",
               "pyproject.toml",
-              "PR_MESSAGE.md",
           }
           allowed_prefixes = ("src/rankweave/", "tests/", "docs/")
           allowed_suffixes = {
@@ -615,7 +606,7 @@ jobs:
                   and not path_text.startswith(allowed_prefixes)
               ):
                   raise SystemExit(f"path is outside autonomous scope: {path_text}")
-              if path_text != "PR_MESSAGE.md" and path.suffix not in allowed_suffixes:
+              if path.suffix not in allowed_suffixes:
                   raise SystemExit(f"non-text or unsupported path changed: {path_text}")
               if path_text.startswith("src/rankweave/") and path.suffix == ".py":
                   production_changed = True
@@ -915,44 +906,8 @@ jobs:
 
           title="RankWeave autonomous commercialization increment"
           body_file="${RUNNER_TEMP}/pr-body.md"
-          if [ -f PR_MESSAGE.md ]; then
-            /usr/bin/python3 -I -S - <<'PY'
-          from __future__ import annotations
-
-          import os
-          from pathlib import Path
-
-          source = Path("PR_MESSAGE.md").read_text(encoding="utf-8")
-          lines = source.splitlines()
-          candidate = lines[0].lstrip("#").strip() if lines else ""
-          if (
-              10 <= len(candidate) <= 120
-              and not candidate.startswith("-")
-              and all(character.isprintable() for character in candidate)
-          ):
-              title = candidate
-          else:
-              title = "RankWeave autonomous commercialization increment"
-          body = "\n".join(lines[1:]).strip()
-          if not body:
-              body = "Autonomous NVIDIA NIM increment; see the diff and CHANGELOG.md."
-          if len(body.encode("utf-8")) > 20_000:
-              raise SystemExit("PR body exceeds 20,000 UTF-8 bytes")
-          Path(os.environ["RUNNER_TEMP"], "pr-title.txt").write_text(
-              title,
-              encoding="utf-8",
-          )
-          Path(os.environ["RUNNER_TEMP"], "pr-body.md").write_text(
-              body + "\n",
-              encoding="utf-8",
-          )
-          PY
-            title="$(cat "${RUNNER_TEMP}/pr-title.txt")"
-            rm -f PR_MESSAGE.md
-          else
-            echo "Autonomous NVIDIA NIM increment; see the diff and CHANGELOG.md." \
-              >"$body_file"
-          fi
+          echo "Autonomous NVIDIA NIM increment; see the diff and CHANGELOG.md." \
+            >"$body_file"
 
           git reset --soft "$AUTOMATION_BASE_SHA"
           branch="nim-agent/product-dev-${GITHUB_RUN_ID}"
