@@ -1,8 +1,12 @@
 # RankWeave product/technical gap baseline
 
+The product scope and release acceptance contract are defined in
+[`docs/product-requirements.md`](product-requirements.md). This file is the
+current evidence ledger; it does not replace the PRD.
+
 Initial status snapshot as of 2026-08-22, with a mitigation-status update on
 2026-08-23 (§2). This document exists so a reviewer can answer one question
-without re-deriving it from scratch: **what does a buyer of RankWeave still
+without re-deriving it from scratch: **what does a RankWeave user still
 not get today, and what is already closed?** It is a living document — update
 it whenever a §2 row's state changes, a §6 gap closes, or a new gap is found
 (see Maintenance below). Do not let it drift from `gh pr list` / `gh issue
@@ -76,42 +80,34 @@ open.
 Re-run before trusting this table stale: `gh pr list --state open` and
 `gh issue list --state open` against `ContextualWisdomLab/RankWeave`.
 
-## 3. LineageWeave reuse-boundary analysis (this session's stated priority)
+## 3. LineageWeave reuse-boundary analysis
 
 The request that opened this session asked to find and prioritize
 LineageWeave-related PRs. Verification (not assumption) was required first,
 per the standing instruction to confirm the actual PR location by
 product/responsibility boundary rather than by name:
 
-- Before this document was added, RankWeave contained **zero** references to
-  LineageWeave anywhere in the tree, and none of its 3 open PRs or 3 open
-  issues mentioned LineageWeave. (This document is necessarily an exception —
-  its purpose is the boundary analysis below — so "zero references" describes
-  the rest of the tree, not this file.)
 - The dependency direction is one-way: **LineageWeave depends on RankWeave**,
   not the reverse. LineageWeave's `lineageweave/rankweave_client.py` fail-closes
-  (`RankWeaveNotAvailable`) if the `rankweave` package is missing, and pins
-  `rankweave @ git+https://github.com/ContextualWisdomLab/RankWeave.git@61c49c5…`
-  — exactly RankWeave's `main` HEAD at session start (commit `61c49c5`, PR #34).
-- LineageWeave's ADR 0024 ("Fail-closed RankWeave ranking port") documents the
-  consumption contract precisely: `GET /api/rankings` fuses a temporal channel
-  and a lexical channel through `weighted_reciprocal_rank_fuse` with
-  **Cormack et al. (2009)** `eta=60` and **Samuel et al. (2025)** unequal
-  channel weights (temporal 0.25, lexical 0.75). It never invents a score when
-  the port is disabled or the package is absent.
-- LineageWeave's own 11 open PRs and 19 open issues (re-checked live) contain
-  **no** item tagged `rankweave` or `fusion` right now. There was nothing to
-  pull into this RankWeave session from that side today.
+  (`RankWeaveNotAvailable`) if the package is missing.
+- LineageWeave ADR 0225 now assigns fusion arithmetic and contribution evidence
+  to RankWeave and forbids a second LineageWeave engine. LineageWeave issue
+  #338 and PR #663 record the cross-repository consumer boundary.
+- RankWeave issue #45 is the active owner work item for a Rust calculation core
+  behind the public Python contract. It requires provenance-bearing policies
+  and prohibits invented weights, thresholds, candidate windows, folds, and
+  missing-channel zeros.
+- Existing documented numeric semantics remain research-traceable: Cormack et
+  al. (2009) ground RRF and Bruch et al. (2024) ground convex fusion. A paper's
+  support for unequal channel reliability does not establish a particular
+  consumer weight vector; exact weights require estimator provenance.
 
-**Conclusion:** the integration boundary is healthy. There is no orphaned
-cross-repo work item. The correct action was to strengthen RankWeave's own
-queue and public-contract honesty (§2), not to invent LineageWeave work that
-does not exist. **Re-check every loop iteration** — a future RankWeave change
-that touches `weighted_reciprocal_rank_fuse`'s signature, `eta` default, or
-channel-weight semantics is a breaking change for LineageWeave ADR 0024 and
-must be coordinated across both repositories, not merged unilaterally here.
+**Conclusion:** the product boundary is explicit but not shipped end to end.
+RankWeave must publish the Rust-backed owner contract, and each consumer must
+upgrade its immutable pin before deleting duplicate arithmetic or claiming the
+new engine.
 
-## 4. PRD-lite — buyer-facing capability inventory
+## 4. Capability inventory
 
 | Capability | Status | Evidence |
 |---|---|---|
@@ -145,11 +141,11 @@ must be coordinated across both repositories, not merged unilaterally here.
   `publish.yml` → OIDC PyPI Trusted Publishing. No stored registry credential
   (`docs/releasing.md`, ADR 0004).
 
-## 6. Gap analysis, prioritized by buyer-felt leverage
+## 6. Gap analysis, prioritized by user-visible leverage
 
-Severity: 🔴 blocks a buyer today · 🟡 buyer-visible friction · 🟢 hardening/roadmap.
+Severity: 🔴 blocks a user today · 🟡 user-visible friction · 🟢 hardening/roadmap.
 
-1. 🔴 **PyPI publication is broken** (issue #35). A buyer who reads the README
+1. 🔴 **PyPI publication is broken** (issue #35). A user who reads the README
    and runs `pip install rankweave` gets `0.1.0`, while the reviewed source
    tree and GitHub Release are `0.18.0` — the published package is missing
    every capability shipped since 0.1.0 (cross-validation, temporal
@@ -162,7 +158,7 @@ Severity: 🔴 blocks a buyer today · 🟡 buyer-visible friction · 🟢 harde
 2. 🟡 **No versioned public-API compatibility policy.** LineageWeave and
    Naruon each pin RankWeave differently (a git commit vs. a PyPI version)
    specifically because there is no documented SemVer/deprecation contract a
-   consumer can trust. A buyer integrating a third product would have to read
+   consumer can trust. An integrator adopting RankWeave would have to read
    source history to know what's safe to upgrade across. **Recommendation:**
    add an ADR stating the public-API surface (§5) is covered by SemVer as of
    a named version, with a minimum deprecation window before removal.
@@ -185,25 +181,15 @@ Severity: 🔴 blocks a buyer today · 🟡 buyer-visible friction · 🟢 harde
    file a follow-up issue tracking the re-pin once the central scheduler's
    current commit is confirmed stable, rather than merging it unreviewed
    inside an unrelated PR.
-5. 🟢 **Rust/GPU computation-layer mandate — deliberately not applied here,
-   documented rather than silently skipped.** The org-wide standing
-   instruction requires Rust with GPU+CPU multithreading for the computation
-   layer of mathematical/psychometrics software. RankWeave's own CLAUDE.md and
-   AGENTS.md explicitly and repeatedly require the statistical core to stay
-   pure-Python, stdlib-only, with no runtime dependency — a project-level
-   instruction that was deliberately authored, reviewed, and merged (it is the
-   product's stated identity in §1, not an oversight). RankWeave's workloads
-   (paired randomization over ≤16 non-zero differences done exactly; beyond
-   that, deterministic local Monte Carlo) are evaluation-time statistics over
-   query-count-bounded TREC-style runs, not GPU-scale training or IRT
-   estimation — fast-mlsirm (a listed sibling repository) is the
-   Rust/GPU-appropriate home for that class of workload. Silently rewriting
-   RankWeave's core in Rust would contradict this repository's own governing
-   ADRs without a change-controlled decision. **Recommendation, not action
-   taken:** if a future profiling run shows the exact/Monte-Carlo comparison
-   path is a genuine bottleneck for a real buyer workload, open an ADR
-   proposing a narrowly-scoped optional-extension (not a core rewrite) before
-   touching this boundary.
+5. 🔴 **Production fusion arithmetic is still Python-only** (issue #45).
+   LineageWeave ADR 0225 names RankWeave as the sole fusion owner, while the
+   current package implements the arithmetic in Python. The required migration
+   keeps the public Python surface as an adapter over one Rust core, preserves
+   exact documented semantics, and publishes provenance and limitations with
+   every calculation envelope. CPU multithreading and an optional GPU path
+   require exact-workload parity and benchmark evidence; no throughput claim
+   is available yet. The migration must not add an inferred policy, threshold,
+   candidate window, fold, or channel weight.
 6. 🟢 **Multilevel/temporal modeling mandate — partially inapplicable, partially
    already shipped.** RankWeave fuses and evaluates rankings; it does not fit
    respondents to latent traits, so the atomistic-fallacy multilevel/
