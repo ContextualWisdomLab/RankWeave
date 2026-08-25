@@ -142,6 +142,7 @@ class FusedRankedItem(Generic[ItemIdentifier]):
     item_id: ItemIdentifier
     score: float
     channel_ranks: tuple[tuple[str, int], ...]
+    channel_contributions: tuple[WeightedRankContribution, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -184,6 +185,15 @@ def reciprocal_rank_fuse(
                 dict(channel_ranks), validated_eta
             ),
             channel_ranks=tuple(channel_ranks),
+            channel_contributions=tuple(
+                _build_weighted_rank_contribution(
+                    channel_name,
+                    one_based_rank,
+                    1.0,
+                    validated_eta,
+                )
+                for channel_name, one_based_rank in channel_ranks
+            ),
         )
         for item_id, channel_ranks in channel_ranks_by_item.items()
     ]

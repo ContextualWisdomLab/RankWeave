@@ -16,6 +16,18 @@ def test_reciprocal_rank_fuse_combines_complete_ranked_lists():
     assert [item.item_id for item in fused_items] == ["doc-b", "doc-a", "doc-c"]
     assert fused_items[0].score == pytest.approx(1.0 / 62.0 + 1.0 / 61.0)
     assert fused_items[0].channel_ranks == (("lexical", 2), ("dense", 1))
+    assert [
+        (
+            contribution.channel_name,
+            contribution.rank,
+            contribution.weight,
+            contribution.contribution,
+        )
+        for contribution in fused_items[0].channel_contributions
+    ] == [
+        ("lexical", 2, 1.0, pytest.approx(1.0 / 62.0)),
+        ("dense", 1, 1.0, pytest.approx(1.0 / 61.0)),
+    ]
     assert fused_items[1].score == pytest.approx(1.0 / 61.0)
     assert fused_items[1].channel_ranks == (("lexical", 1),)
     assert fused_items[2].score == pytest.approx(1.0 / 62.0)
