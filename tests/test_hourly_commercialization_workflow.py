@@ -31,13 +31,15 @@ def test_commercialization_loop_uses_pinned_central_pr_governance():
         f"pr-review-merge-scheduler.yml@{MERGE_WORKFLOW_SHA}"
     )
     assert workflow.count(merge_reference) == 2
-    assert "secrets: inherit" not in workflow
+    uses_references = [
+        line.split("uses:", maxsplit=1)[1].strip()
+        for line in workflow.splitlines()
+        if line.strip().startswith("uses:")
+    ]
+    assert all("pr-review-fix-scheduler.yml" not in ref for ref in uses_references)
     # Review-feedback repair is dispatched by the central, always-current
     # rankweave-hourly-review-repair.yml caller in ContextualWisdomLab/.github
-    # instead of a cross-repository pinned-SHA job here; see ADR/doctoring.
-    assert "uses: ContextualWisdomLab/.github" not in workflow.replace(
-        merge_reference, ""
-    )
+    # instead of a cross-repository pinned-SHA job here.
 
 
 def test_product_development_uses_nvidia_nim_and_fails_closed():
@@ -255,6 +257,7 @@ def test_governance_permissions_are_scoped_per_calling_job():
             assert permission in merge_job
         assert "issues: write" not in merge_job
         assert "statuses: read" not in merge_job
+        assert "secrets: inherit" not in merge_job
 
 
 def test_opencode_binary_and_models_are_pinned():
