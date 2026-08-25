@@ -31,7 +31,7 @@ def test_commercialization_loop_uses_pinned_central_pr_governance():
         f"pr-review-merge-scheduler.yml@{MERGE_WORKFLOW_SHA}"
     )
     assert workflow.count(merge_reference) == 2
-    assert "secrets: inherit" in workflow
+    assert "secrets: inherit" not in workflow
     # Review-feedback repair is dispatched by the central, always-current
     # rankweave-hourly-review-repair.yml caller in ContextualWisdomLab/.github
     # instead of a cross-repository pinned-SHA job here; see ADR/doctoring.

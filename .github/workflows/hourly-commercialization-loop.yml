@@ -30,7 +30,6 @@ jobs:
       enable_auto_merge: true
       merge_mode: direct_or_auto
       update_branches: true
-    secrets: inherit
 
   # Review-feedback repair is dispatched by the central, always-current
   # rankweave-hourly-review-repair.yml caller in ContextualWisdomLab/.github
@@ -60,7 +59,6 @@ jobs:
       enable_auto_merge: true
       merge_mode: direct_or_auto
       update_branches: true
-    secrets: inherit
 
   develop-next-product-gap:
     needs: [inspect-pr-queue, revalidate-pr-queue]
