@@ -3,7 +3,6 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = PROJECT_ROOT / ".github/workflows/hourly-commercialization-loop.yml"
 MERGE_WORKFLOW_SHA = "5983b41ace75040c1d81818171ca7d0f3653254e"
-FIX_WORKFLOW_SHA = "21397126d708d2d536ccc1d68b0d333653ce9315"
 
 
 def _workflow_text() -> str:
@@ -31,14 +30,16 @@ def test_commercialization_loop_uses_pinned_central_pr_governance():
         "ContextualWisdomLab/.github/.github/workflows/"
         f"pr-review-merge-scheduler.yml@{MERGE_WORKFLOW_SHA}"
     )
-    fix_reference = (
-        "ContextualWisdomLab/.github/.github/workflows/"
-        f"pr-review-fix-scheduler.yml@{FIX_WORKFLOW_SHA}"
-    )
     assert workflow.count(merge_reference) == 2
-    assert workflow.count(fix_reference) == 1
-    assert 'retry_hours: "1"' in workflow
-    assert "secrets: inherit" in workflow
+    uses_references = [
+        line.split("uses:", maxsplit=1)[1].strip()
+        for line in workflow.splitlines()
+        if line.strip().startswith("uses:")
+    ]
+    assert all("pr-review-fix-scheduler.yml" not in ref for ref in uses_references)
+    # Review-feedback repair is dispatched by the central, always-current
+    # rankweave-hourly-review-repair.yml caller in ContextualWisdomLab/.github
+    # instead of a cross-repository pinned-SHA job here.
 
 
 def test_product_development_uses_nvidia_nim_and_fails_closed():
@@ -89,9 +90,21 @@ def test_opencode_permissions_block_execution_network_and_protected_edits():
         assert workflow.count(denied_permission) == 2
     assert '"tests/**": "allow"' in workflow
     assert '"docs/superpowers/specs/**": "allow"' in workflow
+    assert workflow.count('"read": {\n                "*": "deny"') == 2
     assert '".github/**": "deny"' in workflow
     assert '".git/**": "deny"' in workflow
     assert "Do not read GitHub issues, pull requests, external web pages" in workflow
+
+
+def test_agent_output_never_controls_pull_request_metadata():
+    workflow = _workflow_text()
+
+    assert "PR_MESSAGE.md" not in workflow
+    assert 'title="RankWeave autonomous commercialization increment"' in workflow
+    assert (
+        "packages one protected\n          pull request with maintainer-owned metadata"
+        in workflow
+    )
 
 
 def test_agent_control_file_is_immutable_to_autonomous_authoring():
@@ -222,20 +235,15 @@ def test_final_queue_and_base_are_rechecked_before_pr_creation():
 def test_product_development_requires_successful_pr_governance():
     workflow = _workflow_text()
 
-    assert (
-        "needs: [inspect-pr-queue, repair-review-feedback, revalidate-pr-queue]"
-        in workflow
-    )
+    assert "needs: [inspect-pr-queue, revalidate-pr-queue]" in workflow
     assert "needs.inspect-pr-queue.result == 'success'" in workflow
-    assert "needs.repair-review-feedback.result == 'success'" in workflow
     assert "needs.revalidate-pr-queue.result == 'success'" in workflow
 
 
 def test_governance_permissions_are_scoped_per_calling_job():
     workflow = _workflow_text()
     workflow_default = workflow.split("concurrency:", maxsplit=1)[0]
-    inspect = _job_section(workflow, "inspect-pr-queue", "repair-review-feedback")
-    repair = _job_section(workflow, "repair-review-feedback", "revalidate-pr-queue")
+    inspect = _job_section(workflow, "inspect-pr-queue", "revalidate-pr-queue")
     revalidate = _job_section(
         workflow, "revalidate-pr-queue", "develop-next-product-gap"
     )
@@ -261,17 +269,7 @@ def test_governance_permissions_are_scoped_per_calling_job():
             assert permission in merge_job
         assert "issues: write" not in merge_job
         assert "statuses: read" not in merge_job
-
-    for permission in (
-        "actions: write",
-        "contents: read",
-        "issues: write",
-        "pull-requests: read",
-        "statuses: read",
-    ):
-        assert permission in repair
-    assert "contents: write" not in repair
-    assert "id-token: write" not in repair
+        assert "secrets: inherit" not in merge_job
 
 
 def test_opencode_binary_and_models_are_pinned():
@@ -300,6 +298,4 @@ def test_untrusted_execution_drops_privileges():
     assert workflow.count("--no-new-privs") == 3
     assert workflow.count("--bounding-set=-all") == 3
     assert workflow.count("PYTHONPATH=$GITHUB_WORKSPACE/src") == 2
-    assert 'pr_message_backup="${RUNNER_TEMP}/agent-pr-message.md"' in workflow
-    assert "/usr/bin/python3 -I -S - <<'PY'" in workflow
     assert "strict UTF-8" in workflow

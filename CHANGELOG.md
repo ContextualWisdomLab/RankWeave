@@ -4,6 +4,21 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+### Fixed
+- Restricted both autonomous OpenCode phases to explicit repository read paths
+  and removed agent-authored pull-request metadata, preventing workspace-external
+  reads or generated text from becoming a pull-request title or body.
+- Removed the `repair-review-feedback` job from
+  `hourly-commercialization-loop.yml`: it called
+  `ContextualWisdomLab/.github`'s `pr-review-fix-scheduler.yml`
+  cross-repository at a pinned commit SHA, a shape that reusable workflow's
+  same-repository trusted-source hardening can never satisfy
+  (`github.repository == ContextualWisdomLab/.github`), so every hourly run
+  failed before any job was scheduled for as long as that hardening has been
+  in place. Review-feedback repair is now dispatched by a central,
+  always-current `rankweave-hourly-review-repair.yml` caller added to
+  `ContextualWisdomLab/.github`, matching the pattern already used by every
+  other product repository in the organization.
 ### Changed
 - Bumped the pinned `uv` version from `0.11.29` to `0.12.1` in `pyproject.toml`
   and every `astral-sh/setup-uv` workflow step (`ci.yml`, `create-release.yml`,
