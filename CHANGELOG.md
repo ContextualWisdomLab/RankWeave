@@ -5,6 +5,9 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 ## [Unreleased]
 
 ### Fixed
+- Restricted both autonomous OpenCode phases to explicit repository read paths
+  and removed agent-authored pull-request metadata, preventing workspace-external
+  reads or generated text from becoming a pull-request title or body.
 - Removed the `repair-review-feedback` job from
   `hourly-commercialization-loop.yml`: it called
   `ContextualWisdomLab/.github`'s `pr-review-fix-scheduler.yml`

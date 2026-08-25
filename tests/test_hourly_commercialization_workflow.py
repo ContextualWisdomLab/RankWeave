@@ -90,9 +90,21 @@ def test_opencode_permissions_block_execution_network_and_protected_edits():
         assert workflow.count(denied_permission) == 2
     assert '"tests/**": "allow"' in workflow
     assert '"docs/superpowers/specs/**": "allow"' in workflow
+    assert workflow.count('"read": {\n                "*": "deny"') == 2
     assert '".github/**": "deny"' in workflow
     assert '".git/**": "deny"' in workflow
     assert "Do not read GitHub issues, pull requests, external web pages" in workflow
+
+
+def test_agent_output_never_controls_pull_request_metadata():
+    workflow = _workflow_text()
+
+    assert "PR_MESSAGE.md" not in workflow
+    assert 'title="RankWeave autonomous commercialization increment"' in workflow
+    assert (
+        "packages one protected\n          pull request with maintainer-owned metadata"
+        in workflow
+    )
 
 
 def test_agent_control_file_is_immutable_to_autonomous_authoring():
@@ -286,6 +298,4 @@ def test_untrusted_execution_drops_privileges():
     assert workflow.count("--no-new-privs") == 3
     assert workflow.count("--bounding-set=-all") == 3
     assert workflow.count("PYTHONPATH=$GITHUB_WORKSPACE/src") == 2
-    assert 'pr_message_backup="${RUNNER_TEMP}/agent-pr-message.md"' in workflow
-    assert "/usr/bin/python3 -I -S - <<'PY'" in workflow
     assert "strict UTF-8" in workflow
