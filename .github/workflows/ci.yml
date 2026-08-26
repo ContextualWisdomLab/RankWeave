@@ -115,6 +115,7 @@ jobs:
               "rankweave/ranked_list_fusion.py",
               "rankweave/report_schemas.py",
               "rankweave/score_fusion.py",
+              "rankweave/semantic_vector_ranking.py",
               "rankweave/schemas/__init__.py",
               "rankweave/schemas/artifact-verification-v1.schema.json",
               "rankweave/schemas/trec-comparison-v1.schema.json",
@@ -131,6 +132,12 @@ jobs:
           missing_members = required_members - wheel_members
           if missing_members:
               raise SystemExit(f"wheel is missing: {sorted(missing_members)!r}")
+          if not any(
+              member.startswith("rankweave/_rankweave_core.")
+              and member.endswith((".so", ".pyd"))
+              for member in wheel_members
+          ):
+              raise SystemExit("wheel is missing the compiled RankWeave core")
           PY
       - name: Verify source distribution contents
         run: |
@@ -155,6 +162,9 @@ jobs:
               source_root + "CHANGELOG.md",
               source_root + "LICENSE",
               source_root + "src/rankweave/__init__.py",
+              source_root + "src/rankweave/semantic_vector_ranking.py",
+              source_root + "crates/rankweave-core/src/lib.rs",
+              source_root + "crates/rankweave-python/src/lib.rs",
               source_root + "tests/test_version.py",
           }
           missing_source_members = required_source_members - source_members

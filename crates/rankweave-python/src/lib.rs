@@ -1,5 +1,6 @@
 //! Python bindings for the RankWeave calculation core.
 
+use num_bigint::BigUint;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -9,8 +10,8 @@ fn theoretical_min_max_normalize(score: f64, lower: f64, upper: f64) -> f64 {
 }
 
 #[pyfunction]
-fn reciprocal_rank_fusion_score(ranks: Vec<u64>, rank_constant_eta: u64) -> f64 {
-    rankweave_core::reciprocal_rank_fusion_score(&ranks, rank_constant_eta)
+fn reciprocal_rank_fusion_score(ranks: Vec<BigUint>, rank_constant_eta: BigUint) -> f64 {
+    rankweave_core::reciprocal_rank_fusion_score(&ranks, &rank_constant_eta)
 }
 
 type SemanticUnitReportTuple = (String, String, String, usize, Vec<(String, String, f64)>);

@@ -125,12 +125,14 @@ new engine.
 
 ## 5. TRD-lite — technical contract summary
 
-- **Runtime:** Python 3.10+, standard-library-only, Apache-2.0.
+- **Runtime:** Python 3.10+, no third-party Python runtime dependency, one
+  packaged Rust calculation core, Apache-2.0.
 - **Public surface:** `FusionSettings`, `fuse_channel_scores`,
   `weighted_convex_combination_score`, `weighted_convex_fuse`,
   `weighted_reciprocal_rank_fuse`, `evaluate_rankings`, `compare_rankings`,
   `compare_ranking_reports`, `cross_validate_weighted_convex_fusion`,
   `cross_validate_weighted_reciprocal_rank_fusion`,
+  `rank_semantic_units`,
   `tune_weighted_convex_fusion`, TREC parse/format/compare/compare-family, CLI
   transports, and packaged JSON Schema (v1/v2) report contracts.
 - **CLI transport:** `rankweave compare`, `rankweave compare-family`,

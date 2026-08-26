@@ -3,6 +3,8 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+use num_bigint::BigUint;
+use num_traits::ToPrimitive;
 use sha2::{Digest, Sha256};
 
 /// Version of the semantic-unit ranking result envelope.
@@ -251,9 +253,10 @@ pub fn theoretical_min_max_normalize(score: f64, lower: f64, upper: f64) -> f64 
 
 /// Sum Reciprocal Rank Fusion contributions in caller-provided channel order.
 #[must_use]
-pub fn reciprocal_rank_fusion_score(ranks: &[u64], rank_constant_eta: u64) -> f64 {
+pub fn reciprocal_rank_fusion_score(ranks: &[BigUint], rank_constant_eta: &BigUint) -> f64 {
     ranks.iter().fold(0.0, |score, rank| {
-        score + 1.0 / (rank_constant_eta + rank) as f64
+        let denominator = (rank_constant_eta + rank).to_f64().unwrap_or(f64::INFINITY);
+        score + 1.0 / denominator
     })
 }
 
@@ -263,6 +266,7 @@ mod tests {
         SemanticUnitCandidate, SemanticUnitRankingError, rank_semantic_units,
         reciprocal_rank_fusion_score, theoretical_min_max_normalize,
     };
+    use num_bigint::BigUint;
 
     #[test]
     fn normalization_uses_theoretical_bounds_and_clamps() {
@@ -272,8 +276,9 @@ mod tests {
 
     #[test]
     fn rrf_preserves_input_order_for_the_reduction() {
+        let ranks = [BigUint::from(1_u8), BigUint::from(3_u8)];
         assert_eq!(
-            reciprocal_rank_fusion_score(&[1, 3], 60),
+            reciprocal_rank_fusion_score(&ranks, &BigUint::from(60_u8)),
             1.0 / 61.0 + 1.0 / 63.0
         );
     }
