@@ -232,6 +232,12 @@ jobs:
               raise SystemExit(
                   f"wheel is missing: {sorted(missing_wheel_members)!r}"
               )
+          if not any(
+              member.startswith("rankweave/_rankweave_core.")
+              and member.endswith((".so", ".pyd"))
+              for member in wheel_members
+          ):
+              raise SystemExit("wheel is missing the compiled RankWeave core")
 
           with open_tarfile(source_distributions[0], "r:gz") as archive:
               source_members = set(archive.getnames())

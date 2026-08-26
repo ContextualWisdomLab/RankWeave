@@ -178,6 +178,7 @@ def test_build_job_checks_package_version_and_complete_quality_gate():
     assert '"source distribution"' in build_block
     assert 'startswith(f"{expected_prefix}-cp310-abi3-")' in build_block
     assert "unexpected stable-ABI wheel name" in build_block
+    assert "wheel is missing the compiled RankWeave core" in build_block
     assert "rankweave/schemas/artifact-verification-v1.schema.json" in build_block
     assert "CHANGELOG.md" in build_block
 
