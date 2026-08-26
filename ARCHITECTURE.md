@@ -46,6 +46,8 @@ scientific validity.
 ## Module map
 
 - `score_fusion.py` — scalar fusion primitives.
+- `semantic_vector_ranking.py` — typed adapter to Rust-owned semantic-unit
+  cosine ranking; authorization and embedding generation remain upstream.
 - `ranked_list_fusion.py` — complete-list fusion and contribution evidence.
 - `evaluation.py` — precision, recall, reciprocal rank, and graded nDCG.
 - `comparison.py` — exact and deterministic Monte Carlo paired randomization.

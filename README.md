@@ -114,6 +114,32 @@ results = weighted_reciprocal_rank_fuse(
 Complete-list results expose immutable per-channel contribution evidence,
 including explicit missing channels.
 
+## Rank provider-produced semantic units
+
+RankWeave compares vectors that your authorized retrieval boundary already
+obtained. It does not select or call an embedding model.
+
+```python
+from rankweave import SemanticUnitCandidate, rank_semantic_units
+
+report = rank_semantic_units(
+    [1.0, 0.0],
+    [
+        SemanticUnitCandidate("post-a", "paragraph-1", [1.0, 0.0]),
+        SemanticUnitCandidate("post-a", "paragraph-2", [0.0, 1.0]),
+        SemanticUnitCandidate("post-b", "paragraph-1", [0.8, 0.2]),
+    ],
+)
+
+assert report.results[0].item_id == "post-a"
+assert report.results[0].winning_unit_id == "paragraph-1"
+```
+
+The report binds the ordered input with SHA-256, identifies the schema and
+algorithm versions, and retains the winning semantic unit for each item. Invalid
+dimensions, non-finite values, zero vectors, and duplicate item/unit pairs fail
+with stable error codes. See [ADR 0007](docs/adr/0007-semantic-unit-cosine-ranking.md).
+
 ## Evaluate ranking quality
 
 ```python

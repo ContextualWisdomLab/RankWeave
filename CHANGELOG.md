@@ -5,6 +5,10 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 ## [Unreleased]
 
 ### Added
+- Added a Rust-owned, versioned semantic-unit cosine ranking API with strict
+  vector validation, deterministic item/unit ties, winning-unit evidence, and
+  an ordered-input SHA-256 digest. Provider selection, authorization, weights,
+  and relevance thresholds remain caller-owned.
 - Introduced the first `rankweave-core` Rust vertical slice and thin PyO3
   adapter for theoretical min-max normalization and unweighted Reciprocal Rank
   Fusion, with exact public-Python parity and complete core coverage.

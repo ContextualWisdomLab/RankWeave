@@ -107,6 +107,12 @@ from rankweave.score_fusion import (
     weighted_convex_combination_score,
     weighted_reciprocal_rank_fusion_score,
 )
+from rankweave.semantic_vector_ranking import (
+    SemanticUnitCandidate,
+    SemanticUnitRank,
+    SemanticUnitRankingReport,
+    rank_semantic_units,
+)
 from rankweave.temporal_backtesting import (
     WeightedConvexBacktestReport,
     WeightedConvexBacktestWindow,
@@ -184,6 +190,9 @@ __all__ = [
     "RankingComparisonReport",
     "RankingEvaluationReport",
     "RankingMetrics",
+    "SemanticUnitCandidate",
+    "SemanticUnitRank",
+    "SemanticUnitRankingReport",
     "ReportSchemaDescriptor",
     "SUPPORTED_COMPARISON_ALTERNATIVES",
     "SUPPORTED_COMPARISON_METRICS",
@@ -232,6 +241,7 @@ __all__ = [
     "parse_trec_run",
     "reciprocal_rank_fuse",
     "reciprocal_rank_fusion_score",
+    "rank_semantic_units",
     "theoretical_min_max_normalize",
     "tune_weighted_convex_fusion",
     "tune_weighted_reciprocal_rank_fusion",
