@@ -68,7 +68,16 @@ reader, select a model, call a provider, or infer business facts.
 - Introduce no LineageWeave-specific threshold, candidate window, database
   query, or authorization rule.
 
-### 4.2 Evaluation and comparison
+### 4.2 Semantic-unit vector ranking
+
+- Accept one caller-authorized query vector and ordered semantic-unit vectors.
+- Reject invalid vector-space evidence rather than padding or inventing a
+  fallback score.
+- Return deterministic per-item winning-unit evidence and versioned ordered
+  input integrity evidence.
+- Do not select an embedding model, apply authorization, or infer a threshold.
+
+### 4.3 Evaluation and comparison
 
 - Require complete ranking/judgment query-set parity.
 - Produce per-query and aggregate precision, recall, reciprocal-rank, and
@@ -79,7 +88,7 @@ reader, select a model, call a provider, or infer business facts.
 - Compare an explicit ordered candidate family against one baseline and retain
   raw plus Holm-adjusted evidence in the original candidate order.
 
-### 4.3 Policy assessment
+### 4.4 Policy assessment
 
 - Evaluate only caller-declared, ordered policy families.
 - Keep validation selection, explicit-fold out-of-fold assessment, temporal
@@ -87,7 +96,7 @@ reader, select a model, call a provider, or infer business facts.
 - Accept caller-owned fold and availability-time boundaries; never generate a
   hidden random split or claim that a supplied grouping is leakage-safe.
 
-### 4.4 TREC and CLI interoperability
+### 4.5 TREC and CLI interoperability
 
 - Parse and format the documented TREC run and qrels profiles with bounded
   memory and stable physical-line diagnostics.
@@ -139,7 +148,8 @@ the engine is available to them.
 ## 7. Explicit non-goals
 
 - Database, search-index, HTTP, ORM, identity, or authorization integration.
-- Provider/model discovery, embeddings, OCR, VISION, or LLM orchestration.
+- Provider/model discovery, embedding generation, OCR, VISION, or LLM
+  orchestration.
 - Hidden score normalization, generated weights, inferred folds, generated
   candidate families, or automatic production deployment.
 - Psychometric estimation, causal interpretation, or business-value scoring.
