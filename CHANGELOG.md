@@ -4,6 +4,12 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+### Added
+
+- Classic reciprocal-rank fusion results now expose the exact per-channel
+  Cormack contribution beside each owned input rank, so consumers do not need
+  to duplicate the fusion arithmetic.
+
 ### Fixed
 - Restricted both autonomous OpenCode phases to explicit repository read paths
   and removed agent-authored pull-request metadata, preventing workspace-external
