@@ -4,6 +4,12 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+### Added
+
+- Classic reciprocal-rank fusion results now expose the exact per-channel
+  Cormack contribution beside each owned input rank, so consumers do not need
+  to duplicate the fusion arithmetic.
+
 ### Changed
 - Rewrote the package README for customers and operators: what RankWeave is,
   how to run it alone, and how a host calls the published Python, CLI, and
