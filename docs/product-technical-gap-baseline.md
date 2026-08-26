@@ -186,9 +186,10 @@ Severity: 🔴 blocks a user today · 🟡 user-visible friction · 🟢 hardeni
 5. 🟡 **The first production fusion primitives are Rust-backed; migration is
    incomplete** (issue #45).
    LineageWeave ADR 0225 names RankWeave as the sole fusion owner, while the
-   development head now routes theoretical normalization and unweighted RRF
-   through `rankweave-core`; convex, weighted, evaluation, comparison, and
-   tuning arithmetic still execute in Python. The remaining migration keeps
+   development head now routes theoretical normalization, two-channel convex
+   fusion, and unweighted RRF through `rankweave-core`; N-channel weighted,
+   evaluation, comparison, and tuning arithmetic still execute in Python. The
+   remaining migration keeps
    the public Python surface as an adapter over one Rust core, preserves
    exact documented semantics, and publishes provenance and limitations with
    every calculation envelope. CPU multithreading and an optional GPU path
