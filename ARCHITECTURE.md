@@ -2,7 +2,8 @@
 
 ## Purpose
 
-RankWeave is a dependency-free Python library and command-line component for
+RankWeave is a Python library and command-line component backed by one Rust
+calculation core and no third-party Python runtime dependency. It provides
 retrieval-score fusion, ranking evaluation, paired and candidate-family
 comparison, policy tuning, strict TREC interchange, and auditable report
 transport. It operates as a standalone package and as a bounded module inside

@@ -29,6 +29,10 @@ All notable changes to rankweave are documented here. The format follows [Keep a
   to duplicate the fusion arithmetic.
 
 ### Fixed
+- Supplied the network-isolated autonomous validation sandbox with a pinned,
+  pre-fetched Rust 1.97.1 toolchain and Cargo registry, so Maturin can build the
+  proposed wheel offline without exposing runner credentials or enabling a
+  second calculation path.
 - Restricted both autonomous OpenCode phases to explicit repository read paths
   and removed agent-authored pull-request metadata, preventing workspace-external
   reads or generated text from becoming a pull-request title or body.

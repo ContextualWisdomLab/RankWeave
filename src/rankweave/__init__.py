@@ -1,11 +1,11 @@
 """rankweave — retrieval fusion, evaluation, comparison, and tuning.
 
-Pure-Python (stdlib-only) fusion of lexical, semantic, learned-sparse,
-and other retrieval channels, complete-list fusion, ranked-effectiveness
-evaluation, paired and family-wise statistical comparison, offline weight
-policy tuning, strict TREC interchange, and Unicode NFC query normalization.
-Store-agnostic: bring your own channels; rankweave combines and evaluates their
-evidence.
+Python adapters over one Rust calculation core for lexical, semantic,
+learned-sparse, and other retrieval channels, complete-list fusion,
+ranked-effectiveness evaluation, paired and family-wise statistical comparison,
+offline weight policy tuning, strict TREC interchange, and Unicode NFC query
+normalization. Store-agnostic: bring your own channels; rankweave combines and
+evaluates their evidence.
 
 Two fusion strategies, research-grounded (see ``docs/research/``):
 

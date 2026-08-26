@@ -131,6 +131,7 @@ jobs:
           sudo rm -rf "$venv"
           rustup toolchain install 1.97.1 --profile minimal
           rustup default 1.97.1
+          cargo +1.97.1 fetch --locked
           python -m venv "$venv"
           "$venv/bin/python" -m pip install --upgrade pip
           "$venv/bin/python" -m pip install -e ".[dev]" maturin==1.14.1
@@ -138,11 +139,23 @@ jobs:
           sudo chmod -R a-w "$venv"
           sandbox_uid="$(id -u nobody)"
           sandbox_gid="$(id -g nobody)"
+          sandbox_rust="/tmp/rankweave-rust-${GITHUB_RUN_ID}"
+          cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+          rust_sysroot="$(rustc +1.97.1 --print sysroot)"
+          sudo rm -rf "$sandbox_rust"
+          sudo mkdir -p "$sandbox_rust/cargo" "$sandbox_rust/toolchain"
+          sudo cp -a "$cargo_home/registry" "$sandbox_rust/cargo/registry"
+          sudo cp -a "$rust_sysroot/." "$sandbox_rust/toolchain/"
+          sudo chown -R "$sandbox_uid:$sandbox_gid" "$sandbox_rust/cargo"
+          sudo chown -R root:root "$sandbox_rust/toolchain"
+          sudo chmod -R a+rX,go-w "$sandbox_rust/toolchain"
           command -v setpriv >/dev/null
           echo "AUTOMATION_VENV=$venv" >>"$GITHUB_ENV"
           echo "AUTOMATION_BASE_SHA=$(git rev-parse HEAD)" >>"$GITHUB_ENV"
           echo "SANDBOX_UID=$sandbox_uid" >>"$GITHUB_ENV"
           echo "SANDBOX_GID=$sandbox_gid" >>"$GITHUB_ENV"
+          echo "SANDBOX_CARGO_HOME=$sandbox_rust/cargo" >>"$GITHUB_ENV"
+          echo "SANDBOX_RUST_TOOLCHAIN=$sandbox_rust/toolchain" >>"$GITHUB_ENV"
           {
             echo "/opencode.json"
             echo "/.agent-red-output.txt"
@@ -246,7 +259,8 @@ jobs:
           any file outside tests/ and docs/superpowers/specs/.
 
           The tests must express the buyer-visible contract, preserve RankWeave's
-          standard-library-only runtime, deterministic and immutable evidence,
+          no-third-party Python runtime dependency, one Rust calculation core,
+          deterministic and immutable evidence,
           fail-closed validation, Python 3.10+ compatibility, and modular standalone
           plus naruon-import use. The workflow will execute the test suite after this
           phase and requires a genuine test failure before implementation begins.
@@ -464,7 +478,8 @@ jobs:
           environment variables, or paths outside the repository.
 
           Make the smallest coherent production change that turns the red tests
-          green. Preserve the standard-library-only runtime, store-agnostic modular
+          green. Preserve the no-third-party Python runtime dependency, one Rust
+          calculation core, store-agnostic modular
           architecture, deterministic behavior, immutable audit records, fail-closed
           input contracts, Python 3.10+ compatibility, full production docstrings,
           and standalone plus naruon-import use. Do not edit anything under .github/
@@ -747,7 +762,7 @@ jobs:
           )
           validation_environment=(
             env -i
-            "PATH=${AUTOMATION_VENV}/bin:/usr/bin:/bin"
+            "PATH=${AUTOMATION_VENV}/bin:${SANDBOX_RUST_TOOLCHAIN}/bin:/usr/bin:/bin"
             "HOME=$validation_home"
             "WORKSPACE=$GITHUB_WORKSPACE"
             "PYTHONPATH=$GITHUB_WORKSPACE/src"
@@ -755,6 +770,11 @@ jobs:
             "SMOKE=$validation_smoke"
             "COVERAGE_FILE=$validation_coverage"
             "RUFF_CACHE_DIR=$ruff_cache"
+            "CARGO_HOME=$SANDBOX_CARGO_HOME"
+            "CARGO_TARGET_DIR=$validation_home/cargo-target"
+            "CARGO_NET_OFFLINE=true"
+            "RUSTC=$SANDBOX_RUST_TOOLCHAIN/bin/rustc"
+            "RUSTDOC=$SANDBOX_RUST_TOOLCHAIN/bin/rustdoc"
             PYTHONDONTWRITEBYTECODE=1
             PIP_DISABLE_PIP_VERSION_CHECK=1
             PIP_NO_INDEX=1

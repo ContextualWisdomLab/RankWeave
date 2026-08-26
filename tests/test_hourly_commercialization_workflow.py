@@ -148,7 +148,8 @@ def test_product_prompt_enforces_bounded_commercial_quality():
         "exactly one highest-impact buyer-visible product gap",
         "write the failing",
         "full production docstrings",
-        "standard-library-only runtime",
+        "no-third-party Python runtime dependency",
+        "one Rust calculation core",
         "Update CHANGELOG.md",
         "Do not commit, push",
         "Figma is not applicable because RankWeave has no UI",
@@ -198,6 +199,11 @@ def test_untrusted_validation_has_no_network_or_inherited_environment():
     assert "python -m coverage report" in workflow
     assert "python -m pip wheel" in workflow
     assert "-m pip check" in workflow
+    assert "cargo +1.97.1 fetch --locked" in workflow
+    assert '"CARGO_NET_OFFLINE=true"' in workflow
+    assert '"CARGO_HOME=$SANDBOX_CARGO_HOME"' in workflow
+    assert '"CARGO_TARGET_DIR=$validation_home/cargo-target"' in workflow
+    assert '"RUSTC=$SANDBOX_RUST_TOOLCHAIN/bin/rustc"' in workflow
 
 
 def test_queue_and_base_are_checked_before_and_after_token_exchange():

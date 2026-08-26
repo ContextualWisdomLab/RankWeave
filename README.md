@@ -1,6 +1,6 @@
 # RankWeave
 
-**Dependency-free, store-agnostic retrieval fusion, evaluation, statistical
+**Python-runtime-dependency-free, store-agnostic retrieval fusion, evaluation, statistical
 comparison, tuning, TREC benchmarking, and auditable CLI workflows for Python
 3.10+.**
 
@@ -8,8 +8,8 @@ RankWeave combines lexical, dense, learned-sparse, graph, and other retrieval
 channels into deterministic rankings. It evaluates rankings, compares paired
 systems, controls family-wise error across candidate experiments, tunes fixed
 weighted-RRF policies, reads standard TREC artifacts, and exposes both pairwise
-and candidate-family comparison contracts to shell and CI users. The runtime
-uses only the Python standard library.
+and candidate-family comparison contracts to shell and CI users. Python
+adapters use only the standard library and the packaged Rust calculation core.
 
 RankWeave originated in the Context Search engine of
 [ContextualWisdomLab/naruon](https://github.com/ContextualWisdomLab/naruon) and
@@ -32,7 +32,8 @@ remains suitable both as a standalone package and as a small MSA module.
   for every run and qrels input without exposing local paths.
 - **Fail-closed contracts:** malformed values, duplicate identifiers, missing
   queries, and invalid artifacts raise stable validation errors.
-- **Portable core:** Apache-2.0, typed, Python 3.10+, and stdlib-only runtime.
+- **Portable core:** Apache-2.0, typed, Python 3.10+, and one packaged Rust
+  calculation core with no third-party Python runtime dependency.
 
 ## Installation
 
