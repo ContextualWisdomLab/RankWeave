@@ -142,6 +142,7 @@ class FusedRankedItem(Generic[ItemIdentifier]):
     item_id: ItemIdentifier
     score: float
     channel_ranks: tuple[tuple[str, int], ...]
+    channel_contributions: tuple[WeightedRankContribution, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -164,8 +165,8 @@ def reciprocal_rank_fuse(
     Each sequence is interpreted as a one-based ranking. An item may occur
     once per channel and across any number of channels. Results are ordered
     by descending RRF score, with first-seen input order as the deterministic
-    tie-breaker. ``channel_ranks`` on each result preserves the evidence used
-    to calculate its score.
+    tie-breaker. ``channel_ranks`` and ``channel_contributions`` preserve the
+    exact owned ranks and Cormack summands used to calculate each score.
     """
     validated_eta = _require_positive_integer(
         rank_constant_eta, "rank_constant_eta"
@@ -184,6 +185,15 @@ def reciprocal_rank_fuse(
                 dict(channel_ranks), validated_eta
             ),
             channel_ranks=tuple(channel_ranks),
+            channel_contributions=tuple(
+                _build_weighted_rank_contribution(
+                    channel_name,
+                    one_based_rank,
+                    1.0,
+                    validated_eta,
+                )
+                for channel_name, one_based_rank in channel_ranks
+            ),
         )
         for item_id, channel_ranks in channel_ranks_by_item.items()
     ]

@@ -33,6 +33,17 @@ def test_commercialization_loop_uses_reachable_merge_governance():
     assert workflow.count(merge_reference) == 2
     assert "pr-review-fix-scheduler.yml@" not in workflow
     assert "secrets: inherit" not in workflow
+    uses_references = [
+        line.split("uses:", maxsplit=1)[1].strip()
+        for line in workflow.splitlines()
+        if line.strip().startswith("uses:")
+    ]
+    assert all("pr-review-fix-scheduler.yml" not in ref for ref in uses_references)
+    # Review-feedback repair is dispatched by the central, always-current
+    # rankweave-hourly-review-repair.yml caller in ContextualWisdomLab/.github
+    # instead of a cross-repository pinned-SHA job here; a local read-only
+    # fail-closed hold job below keeps the repair lane visible until the
+    # protected central NVIDIA NIM scheduler is reachable.
 
 
 def test_review_repair_bridge_is_local_read_only_and_provider_neutral():
@@ -111,9 +122,21 @@ def test_opencode_permissions_block_execution_network_and_protected_edits():
         assert workflow.count(denied_permission) == 2
     assert '"tests/**": "allow"' in workflow
     assert '"docs/superpowers/specs/**": "allow"' in workflow
+    assert workflow.count('"read": {\n                "*": "deny"') == 2
     assert '".github/**": "deny"' in workflow
     assert '".git/**": "deny"' in workflow
     assert "Do not read GitHub issues, pull requests, external web pages" in workflow
+
+
+def test_agent_output_never_controls_pull_request_metadata():
+    workflow = _workflow_text()
+
+    assert "PR_MESSAGE.md" not in workflow
+    assert 'title="RankWeave autonomous commercialization increment"' in workflow
+    assert (
+        "packages one protected\n          pull request with maintainer-owned metadata"
+        in workflow
+    )
 
 
 def test_agent_control_file_is_immutable_to_autonomous_authoring():
@@ -244,12 +267,8 @@ def test_final_queue_and_base_are_rechecked_before_pr_creation():
 def test_product_development_requires_successful_pr_governance():
     workflow = _workflow_text()
 
-    assert (
-        "needs: [inspect-pr-queue, repair-review-feedback, revalidate-pr-queue]"
-        in workflow
-    )
+    assert "needs: [inspect-pr-queue, revalidate-pr-queue]" in workflow
     assert "needs.inspect-pr-queue.result == 'success'" in workflow
-    assert "needs.repair-review-feedback.result == 'success'" in workflow
     assert "needs.revalidate-pr-queue.result == 'success'" in workflow
 
 
@@ -283,6 +302,9 @@ def test_governance_permissions_are_scoped_per_calling_job():
             assert permission in merge_job
         assert "issues: write" not in merge_job
         assert "statuses: read" not in merge_job
+        assert "issues: write" not in merge_job
+        assert "statuses: read" not in merge_job
+        assert "secrets: inherit" not in merge_job
 
     for permission in (
         "contents: read",
@@ -325,6 +347,4 @@ def test_untrusted_execution_drops_privileges():
     assert workflow.count("--no-new-privs") == 3
     assert workflow.count("--bounding-set=-all") == 3
     assert workflow.count("PYTHONPATH=$GITHUB_WORKSPACE/src") == 2
-    assert 'pr_message_backup="${RUNNER_TEMP}/agent-pr-message.md"' in workflow
-    assert "/usr/bin/python3 -I -S - <<'PY'" in workflow
     assert "strict UTF-8" in workflow
