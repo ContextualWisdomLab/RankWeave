@@ -196,11 +196,13 @@ jobs:
               )
 
           expected_prefix = f"rankweave-{version}"
-          expected_wheel = f"{expected_prefix}-py3-none-any.whl"
           expected_sdist = f"{expected_prefix}.tar.gz"
-          if wheels[0].name != expected_wheel:
+          if not (
+              wheels[0].name.startswith(f"{expected_prefix}-cp310-abi3-")
+              and wheels[0].suffix == ".whl"
+          ):
               raise SystemExit(
-                  f"unexpected wheel name: {wheels[0].name!r}"
+                  f"unexpected stable-ABI wheel name: {wheels[0].name!r}"
               )
           if source_distributions[0].name != expected_sdist:
               raise SystemExit(

@@ -232,12 +232,14 @@ jobs:
             echo "release requires exactly one wheel and one source distribution" >&2
             exit 1
           fi
-          expected_wheel="rankweave-${version}-py3-none-any.whl"
           expected_source="rankweave-${version}.tar.gz"
-          if [[ "${wheel_paths[0]##*/}" != "$expected_wheel" ]]; then
-            echo "unexpected wheel name: ${wheel_paths[0]##*/}" >&2
-            exit 1
-          fi
+          case "${wheel_paths[0]##*/}" in
+            "rankweave-${version}-cp310-abi3-"*.whl) ;;
+            *)
+              echo "unexpected stable-ABI wheel name: ${wheel_paths[0]##*/}" >&2
+              exit 1
+              ;;
+          esac
           if [[ "${source_paths[0]##*/}" != "$expected_source" ]]; then
             echo "unexpected source distribution: ${source_paths[0]##*/}" >&2
             exit 1

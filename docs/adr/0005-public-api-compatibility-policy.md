@@ -23,12 +23,16 @@ package two other repositories in this organization already import through
 
 ## Decision
 
-1. **The public surface is exactly `rankweave.__all__`.** Anything reachable
+1. **The Python package-root surface is exactly `rankweave.__all__`.** Anything reachable
    only through `rankweave.<module>.<name>` and not re-exported at the
    package root is internal and may change without notice. The root
    `__init__.py` docstring and `README.md`'s documented functions are the
    two authoritative, human-readable views of this same set; keep them
-   synchronized when `__all__` changes.
+   synchronized when `__all__` changes. The installed `rankweave` console
+   entry point and its independently versioned pairwise/family JSON schemas
+   are additional public transport contracts; they are not Python symbols and
+   therefore are frozen by their entry-point and schema-version tests rather
+   than by `__all__`.
 2. **Effective immediately as of this ADR (source-tree `0.18.0`), names in
    `__all__` are not removed or renamed within a minor version.** A symbol
    present in `__all__` at one published minor version (`0.N.0`) stays

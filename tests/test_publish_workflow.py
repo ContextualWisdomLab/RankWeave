@@ -176,6 +176,8 @@ def test_build_job_checks_package_version_and_complete_quality_gate():
     assert "uv build --wheel --sdist --out-dir dist" in build_block
     assert "release must contain exactly one wheel and one " in build_block
     assert '"source distribution"' in build_block
+    assert 'startswith(f"{expected_prefix}-cp310-abi3-")' in build_block
+    assert "unexpected stable-ABI wheel name" in build_block
     assert "rankweave/schemas/artifact-verification-v1.schema.json" in build_block
     assert "CHANGELOG.md" in build_block
 
@@ -252,6 +254,7 @@ def test_normal_package_ci_builds_and_exercises_release_archives():
 
     assert "uv build --wheel --sdist --out-dir dist" in ci_workflow
     assert "Verify source distribution contents" in ci_workflow
+    assert '"-cp310-abi3-" not in wheel_path.name' in ci_workflow
     assert "package job requires exactly one source distribution" in ci_workflow
     assert 'source_root + "CHANGELOG.md"' in ci_workflow
     assert 'source_root + "tests/test_version.py"' in ci_workflow

@@ -7,6 +7,13 @@ the same reviewed change. Adding new public names does not require touching
 this file — the assertion is a lower bound, not an exact match.
 """
 
+from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10 compatibility
+    import tomli as tomllib
+
 import rankweave
 
 FROZEN_PUBLIC_API_AT_0_18_0 = {
@@ -112,3 +119,24 @@ def test_frozen_0_18_0_public_api_remains_resolvable():
     """No name frozen at 0.18.0 becomes unimportable within this minor version."""
     for symbol_name in FROZEN_PUBLIC_API_AT_0_18_0:
         assert hasattr(rankweave, symbol_name), symbol_name
+
+
+def test_frozen_cli_entrypoint_remains_installed():
+    """ADR 0005 keeps the documented console command mapped to its adapter."""
+
+    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    assert project["project"]["scripts"]["rankweave"] == "rankweave.cli:main"
+
+
+def test_frozen_cli_transport_versions_remain_available():
+    """ADR 0005 keeps both established JSON transport versions discoverable."""
+
+    descriptors = rankweave.available_report_schemas()
+    versions = {descriptor.transport_schema_id for descriptor in descriptors}
+    assert {
+        "rankweave.artifact-verification.v1",
+        "rankweave.trec-comparison.v1",
+        "rankweave.trec-comparison.v2",
+        "rankweave.trec-family-comparison.v1",
+        "rankweave.trec-family-comparison.v2",
+    } <= versions

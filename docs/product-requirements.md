@@ -109,8 +109,9 @@ reader, select a model, call a provider, or infer business facts.
 ## 5. Quality requirements
 
 - Production behavior is deterministic for identical ordered inputs.
-- Public modules, records, errors, and CLI transports remain backward
-  compatible under ADR 0005.
+- Package-root records, errors, and functions exported through
+  `rankweave.__all__`, plus the installed CLI entry point and its versioned
+  transport schemas, remain backward compatible under ADR 0005.
 - Statement, branch, public-docstring, wheel-install, CLI, schema, and edge-case
   checks remain complete for every release candidate.
 - Inputs are bounded and fail closed at trust boundaries. Integrity digests are

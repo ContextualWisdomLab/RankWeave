@@ -100,6 +100,10 @@ jobs:
           from zipfile import ZipFile
 
           wheel_path = next(Path("dist").glob("rankweave-*.whl"))
+          if "-cp310-abi3-" not in wheel_path.name:
+              raise SystemExit(
+                  f"wheel does not target the Python 3.10 stable ABI: {wheel_path.name}"
+              )
           with ZipFile(wheel_path) as wheel_file:
               wheel_members = set(wheel_file.namelist())
           required_members = {
