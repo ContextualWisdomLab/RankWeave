@@ -57,15 +57,6 @@ jobs:
           fi
           echo "::notice::Review repair remains fail-closed while the protected central NVIDIA NIM scheduler is pending. Existing independent review agents and the central merge scheduler remain unchanged."
 
-  # Review-feedback repair is dispatched by the central, always-current
-  # rankweave-hourly-review-repair.yml caller in ContextualWisdomLab/.github
-  # (uses: ./.github/workflows/pr-review-fix-scheduler.yml, a same-repository
-  # reference). A local repair-review-feedback job here previously called
-  # that reusable workflow cross-repository at a pinned commit SHA; that
-  # shape can never satisfy pr-review-fix-scheduler.yml's same-repository
-  # trusted-source check (github.repository == ContextualWisdomLab/.github),
-  # so every run failed before any job was scheduled ("workflow file issue",
-  # zero jobs created) for as long as that hardening has been in place.
   revalidate-pr-queue:
     needs: inspect-pr-queue
     if: ${{ always() }}
