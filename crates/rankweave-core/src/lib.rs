@@ -251,6 +251,22 @@ pub fn theoretical_min_max_normalize(score: f64, lower: f64, upper: f64) -> f64 
     ((score - lower) / (upper - lower)).clamp(0.0, 1.0)
 }
 
+/// Combine two normalized scores using the caller-supplied semantic weight.
+///
+/// Missing candidate evidence is represented by `None` and contributes the
+/// documented theoretical minimum, zero. Validation remains at the public
+/// Python boundary; this function owns only the deterministic arithmetic.
+#[must_use]
+pub fn convex_combination_score(
+    semantic_score: Option<f64>,
+    lexical_score: Option<f64>,
+    semantic_weight_alpha: f64,
+) -> f64 {
+    let semantic_component = semantic_score.unwrap_or(0.0);
+    let lexical_component = lexical_score.unwrap_or(0.0);
+    semantic_weight_alpha * semantic_component + (1.0 - semantic_weight_alpha) * lexical_component
+}
+
 /// Sum Reciprocal Rank Fusion contributions in caller-provided channel order.
 #[must_use]
 pub fn reciprocal_rank_fusion_score(ranks: &[BigUint], rank_constant_eta: &BigUint) -> f64 {
@@ -263,8 +279,8 @@ pub fn reciprocal_rank_fusion_score(ranks: &[BigUint], rank_constant_eta: &BigUi
 #[cfg(test)]
 mod tests {
     use super::{
-        SemanticUnitCandidate, SemanticUnitRankingError, rank_semantic_units,
-        reciprocal_rank_fusion_score, theoretical_min_max_normalize,
+        SemanticUnitCandidate, SemanticUnitRankingError, convex_combination_score,
+        rank_semantic_units, reciprocal_rank_fusion_score, theoretical_min_max_normalize,
     };
     use num_bigint::BigUint;
 
@@ -272,6 +288,20 @@ mod tests {
     fn normalization_uses_theoretical_bounds_and_clamps() {
         assert_eq!(theoretical_min_max_normalize(0.5, 0.0, 2.0), 0.25);
         assert_eq!(theoretical_min_max_normalize(3.0, 0.0, 2.0), 1.0);
+    }
+
+    #[test]
+    fn convex_fusion_preserves_formula_and_missing_evidence_semantics() {
+        assert_eq!(
+            convex_combination_score(Some(0.8), Some(0.5), 0.7),
+            0.7 * 0.8 + (1.0 - 0.7) * 0.5
+        );
+        assert_eq!(
+            convex_combination_score(None, Some(0.5), 0.7),
+            (1.0 - 0.7) * 0.5
+        );
+        assert_eq!(convex_combination_score(Some(0.8), None, 0.7), 0.7 * 0.8);
+        assert_eq!(convex_combination_score(None, None, 0.7), 0.0);
     }
 
     #[test]

@@ -17,6 +17,9 @@ All notable changes to rankweave are documented here. The format follows [Keep a
   a minor version, enforced by `tests/test_public_api_compatibility.py`.
 
 ### Changed
+- Two-channel convex fusion now delegates its deterministic scalar arithmetic
+  to the Rust calculation core while retaining the public Python validation,
+  missing-evidence, and exception contracts.
 - Bumped the pinned `uv` version from `0.11.29` to `0.12.1` in `pyproject.toml`
   and every `astral-sh/setup-uv` workflow step (`ci.yml`, `create-release.yml`,
   `publish.yml`) to match the version the central org coverage-evidence

@@ -136,11 +136,8 @@ def convex_combination_score(
     if lexical_score is not None:
         _require_unit_interval(lexical_score, "lexical_score")
     _require_unit_interval(semantic_weight_alpha, "semantic_weight_alpha")
-    semantic_component = semantic_score if semantic_score is not None else 0.0
-    lexical_component = lexical_score if lexical_score is not None else 0.0
-    return (
-        semantic_weight_alpha * semantic_component
-        + (1.0 - semantic_weight_alpha) * lexical_component
+    return _rankweave_core.convex_combination_score(
+        semantic_score, lexical_score, semantic_weight_alpha
     )
 
 

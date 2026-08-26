@@ -10,6 +10,15 @@ fn theoretical_min_max_normalize(score: f64, lower: f64, upper: f64) -> f64 {
 }
 
 #[pyfunction]
+fn convex_combination_score(
+    semantic_score: Option<f64>,
+    lexical_score: Option<f64>,
+    semantic_weight_alpha: f64,
+) -> f64 {
+    rankweave_core::convex_combination_score(semantic_score, lexical_score, semantic_weight_alpha)
+}
+
+#[pyfunction]
 fn reciprocal_rank_fusion_score(ranks: Vec<BigUint>, rank_constant_eta: BigUint) -> f64 {
     rankweave_core::reciprocal_rank_fusion_score(&ranks, &rank_constant_eta)
 }
@@ -49,6 +58,7 @@ fn rank_semantic_units(
 #[pymodule]
 fn _rankweave_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(theoretical_min_max_normalize, module)?)?;
+    module.add_function(wrap_pyfunction!(convex_combination_score, module)?)?;
     module.add_function(wrap_pyfunction!(reciprocal_rank_fusion_score, module)?)?;
     module.add_function(wrap_pyfunction!(rank_semantic_units, module)?)?;
     Ok(())
