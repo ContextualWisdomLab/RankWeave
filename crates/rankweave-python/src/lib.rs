@@ -161,6 +161,22 @@ impl SemanticUnitIndex {
         })
     }
 
+    fn preflight_authorized_packed(
+        &self,
+        py: Python<'_>,
+        model_identity: String,
+        packed_authorization: &Bound<'_, PyBytes>,
+    ) -> PyResult<SemanticIndexReportTuple> {
+        let snapshot = self.handle.snapshot().map_err(index_error)?;
+        let packed_authorization = packed_authorization.as_bytes().to_vec();
+        py.detach(move || {
+            snapshot
+                .preflight_authorized_packed(&model_identity, &packed_authorization)
+                .map(index_report_tuple)
+                .map_err(index_error)
+        })
+    }
+
     fn rank_authorized_batch_packed(
         &self,
         py: Python<'_>,

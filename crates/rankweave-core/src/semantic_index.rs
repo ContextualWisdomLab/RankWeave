@@ -612,6 +612,37 @@ impl SemanticUnitIndex {
     ) -> Result<SemanticIndexRankingReport, SemanticIndexError> {
         self.rank_authorized_packed_inner(model_identity, query_vector, packed_authorization)
     }
+
+    /// Exercise exact scoring for one real packed authorization scope.
+    ///
+    /// The query is the first authorized candidate vector already owned by
+    /// this immutable snapshot. This keeps vector arithmetic in Rust while
+    /// forcing authorization parsing, the complete exact matrix traversal,
+    /// stable per-item reduction, and report digest construction before a
+    /// caller advertises readiness. Readiness callers discard the report.
+    pub fn preflight_authorized_packed(
+        &self,
+        model_identity: &str,
+        packed_authorization: &[u8],
+    ) -> Result<SemanticIndexRankingReport, SemanticIndexError> {
+        let authorized = parse_packed_authorization(packed_authorization)?;
+        let Some((item_id, unit_id)) = authorized.first() else {
+            return Err(SemanticIndexError::EmptyAuthorization);
+        };
+        let Some(index) = self
+            .candidate_lookup
+            .get(*item_id)
+            .and_then(|units| units.get(*unit_id))
+        else {
+            return Err(SemanticIndexError::UnknownAuthorizedCandidate {
+                item_id: (*item_id).to_owned(),
+                unit_id: (*unit_id).to_owned(),
+            });
+        };
+        let start = index * self.evidence.vector_dimension;
+        let query = self.normalized_vectors[start..start + self.evidence.vector_dimension].to_vec();
+        self.rank_authorized_refs(model_identity, &query, &authorized)
+    }
 }
 
 struct PreparedQuery {
@@ -857,6 +888,50 @@ mod tests {
         assert_eq!(packed.results, rows.results);
         assert_eq!(packed.ordered_input_digest, rows.ordered_input_digest);
         assert_eq!(packed.output_digest, rows.output_digest);
+    }
+
+    #[test]
+    fn packed_preflight_exercises_one_real_authorization_scope() {
+        let authorization = vec![
+            ("item-b".to_owned(), "unit-z".to_owned()),
+            ("item-a".to_owned(), "unit-z".to_owned()),
+            ("item-a".to_owned(), "unit-a".to_owned()),
+        ];
+        let index = index("snapshot-v1");
+
+        let report = index
+            .preflight_authorized_packed("model-v1", &packed_authorization(&authorization))
+            .unwrap();
+
+        assert_eq!(report.snapshot, *index.evidence());
+        assert_eq!(report.results.len(), 2);
+        assert_eq!(report.results[0].item_id, "item-a");
+        assert_eq!(report.results[1].item_id, "item-b");
+        assert!(report.ordered_input_digest.starts_with("sha256:"));
+        assert!(report.output_digest.starts_with("sha256:"));
+    }
+
+    #[test]
+    fn packed_preflight_rejects_empty_and_unknown_scopes() {
+        let index = index("snapshot-v1");
+        let cases = [
+            index.preflight_authorized_packed("model-v1", b"short"),
+            index.preflight_authorized_packed("model-v1", &packed_authorization(&[])),
+            index.preflight_authorized_packed(
+                "model-v1",
+                &packed_authorization(&[("missing".to_owned(), "unit".to_owned())]),
+            ),
+        ];
+
+        assert_eq!(
+            cases[0].as_ref().unwrap_err().code(),
+            "malformed_packed_authorization"
+        );
+        assert_eq!(cases[1].as_ref().unwrap_err().code(), "empty_authorization");
+        assert_eq!(
+            cases[2].as_ref().unwrap_err().code(),
+            "unknown_authorized_candidate"
+        );
     }
 
     #[test]

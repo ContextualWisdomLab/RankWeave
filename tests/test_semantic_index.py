@@ -66,6 +66,20 @@ def test_exact_index_packed_authorization_matches_row_transport() -> None:
     assert packed_rows == rows
 
 
+def test_exact_index_preflights_one_real_packed_authorization_scope() -> None:
+    index = exact_index()
+    authorization = packed_authorization(
+        ("item-b", "unit-z"), ("item-a", "unit-z"), ("item-a", "unit-a")
+    )
+
+    report = index.preflight_authorized_packed("model-v1", authorization)
+
+    assert report.snapshot == index.snapshot_evidence
+    assert {result.item_id for result in report.results} == {"item-a", "item-b"}
+    assert report.ordered_input_digest.startswith("sha256:")
+    assert report.output_digest.startswith("sha256:")
+
+
 def test_exact_index_packed_batch_matches_independent_reports() -> None:
     index = exact_index()
     authorization = packed_authorization(
