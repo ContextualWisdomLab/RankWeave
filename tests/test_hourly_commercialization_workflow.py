@@ -190,7 +190,9 @@ def test_autonomous_diff_is_text_only_bounded_and_policy_safe():
 def test_ignored_native_core_is_restored_from_trusted_copy_after_each_cleanup():
     workflow = _workflow_text()
 
-    assert "trusted editable install did not produce exactly one native core" in workflow
+    assert (
+        "trusted editable install did not produce exactly one native core" in workflow
+    )
     assert workflow.count('git clean -fdX') == 2
     assert workflow.count('cp "$AUTOMATION_TRUSTED_NATIVE_CORE"') == 2
     assert workflow.count('sha256sum "$AUTOMATION_TRUSTED_NATIVE_CORE"') == 2
