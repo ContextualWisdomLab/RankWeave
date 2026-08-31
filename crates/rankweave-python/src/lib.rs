@@ -3,6 +3,7 @@
 use num_bigint::BigUint;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 
 #[pyfunction]
 fn theoretical_min_max_normalize(score: f64, lower: f64, upper: f64) -> f64 {
@@ -55,11 +56,37 @@ fn rank_semantic_units(
     ))
 }
 
+#[pyfunction]
+fn rank_semantic_units_packed(
+    query_vector: Vec<f64>,
+    candidate_ids: Vec<(String, String)>,
+    packed_vectors: &Bound<'_, PyBytes>,
+) -> PyResult<SemanticUnitReportTuple> {
+    let report = rankweave_core::rank_semantic_units_packed(
+        &query_vector,
+        &candidate_ids,
+        packed_vectors.as_bytes(),
+    )
+    .map_err(|error| PyValueError::new_err(format!("{}: {error}", error.code())))?;
+    Ok((
+        report.schema_version.to_owned(),
+        report.algorithm_version.to_owned(),
+        report.ordered_input_digest,
+        report.vector_dimension,
+        report
+            .results
+            .into_iter()
+            .map(|result| (result.item_id, result.winning_unit_id, result.score))
+            .collect(),
+    ))
+}
+
 #[pymodule]
 fn _rankweave_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(theoretical_min_max_normalize, module)?)?;
     module.add_function(wrap_pyfunction!(convex_combination_score, module)?)?;
     module.add_function(wrap_pyfunction!(reciprocal_rank_fusion_score, module)?)?;
     module.add_function(wrap_pyfunction!(rank_semantic_units, module)?)?;
+    module.add_function(wrap_pyfunction!(rank_semantic_units_packed, module)?)?;
     Ok(())
 }

@@ -41,6 +41,19 @@ integrity evidence only, not authentication, provenance, or scientific
 validity. The Python module is a typed record/transport adapter and contains no
 second cosine implementation.
 
+An additive packed adapter accepts the same ordered candidate identities plus
+one concatenation of their IEEE 754 binary64 coordinates in network byte order
+(most-significant byte first). It rejects every byte length other than
+
+
+`candidate count × query dimension × 8`
+
+
+and decodes in the Rust core. For equivalent inputs it must return the exact
+same v1 schema, algorithm, ordered-input digest, scores, winning units, and
+ordering as `rank_semantic_units`. This representation removes Python scalar
+expansion only; it is not a persistent retrieval index or a latency claim.
+
 ## Responsibility boundary
 
 - The caller filters and authorizes candidates before the call and
@@ -60,6 +73,10 @@ second cosine implementation.
   order must supply it as a separate downstream presentation policy.
 - SHA-256 adds one small, lockfile-pinned Rust dependency; no Python runtime
   dependency is added.
+- Consumers with canonical binary64 storage can avoid constructing one Python
+  float object per stored coordinate. Exact ranking still examines every
+  supplied coordinate, so a separate accepted owner-index contract is required
+  before treating this transport as a bounded-latency retrieval path.
 
 ## Rejected alternatives
 
@@ -71,6 +88,8 @@ second cosine implementation.
   and creates a positive score for orthogonal or opposing evidence.
 - **Select the model or authorization policy here:** crosses the provider and
   consumer trust boundaries.
+- **Use native-endian packed values:** makes the same request decode differently
+  across hosts and cannot preserve the canonical v1 digest.
 
 ## References — APA 7th edition
 

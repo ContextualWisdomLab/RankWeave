@@ -112,6 +112,7 @@ from rankweave.semantic_vector_ranking import (
     SemanticUnitRank,
     SemanticUnitRankingReport,
     rank_semantic_units,
+    rank_semantic_units_packed,
 )
 from rankweave.temporal_backtesting import (
     WeightedConvexBacktestReport,
@@ -242,6 +243,7 @@ __all__ = [
     "reciprocal_rank_fuse",
     "reciprocal_rank_fusion_score",
     "rank_semantic_units",
+    "rank_semantic_units_packed",
     "theoretical_min_max_normalize",
     "tune_weighted_convex_fusion",
     "tune_weighted_reciprocal_rank_fusion",

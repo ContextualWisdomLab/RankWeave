@@ -1,8 +1,13 @@
 import math
+import struct
 
 import pytest
 
-from rankweave import SemanticUnitCandidate, rank_semantic_units
+from rankweave import (
+    SemanticUnitCandidate,
+    rank_semantic_units,
+    rank_semantic_units_packed,
+)
 
 
 def test_semantic_units_return_versioned_winning_unit_evidence() -> None:
@@ -27,6 +32,36 @@ def test_semantic_units_return_versioned_winning_unit_evidence() -> None:
         ("item-b", "unit-z", 1.0),
         ("item-c", "unit-a", 0.0),
     ]
+
+
+def test_packed_semantic_units_preserve_exact_report_and_digest() -> None:
+    """Packed binary64 transport is identical to the scalar public contract."""
+
+    query = [1.0, 0.0]
+    candidate_ids = [("item-b", "unit-z"), ("item-a", "unit-z")]
+    vectors = [[1.0, 0.0], [0.0, 1.0]]
+    scalar_report = rank_semantic_units(
+        query,
+        [
+            SemanticUnitCandidate(item_id, unit_id, vector)
+            for (item_id, unit_id), vector in zip(candidate_ids, vectors, strict=True)
+        ],
+    )
+
+    packed_report = rank_semantic_units_packed(
+        query,
+        candidate_ids,
+        b"".join(struct.pack(">2d", *vector) for vector in vectors),
+    )
+
+    assert packed_report == scalar_report
+
+
+def test_packed_semantic_units_reject_wrong_byte_length() -> None:
+    """Packed transport never pads or truncates a malformed vector payload."""
+
+    with pytest.raises(ValueError, match="^packed_vector_byte_length:"):
+        rank_semantic_units_packed([1.0, 0.0], [("item", "unit")], b"short")
 
 
 @pytest.mark.parametrize(

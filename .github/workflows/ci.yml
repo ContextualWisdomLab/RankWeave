@@ -132,6 +132,7 @@ jobs:
               "rankweave/trec_family_comparison.py",
               "rankweave/tuning.py",
               "rankweave/py.typed",
+              "rankweave/_rankweave_core.pyi",
           }
           missing_members = required_members - wheel_members
           if missing_members:

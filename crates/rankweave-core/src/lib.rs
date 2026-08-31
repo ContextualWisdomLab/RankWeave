@@ -69,6 +69,8 @@ pub enum SemanticUnitRankingError {
     ZeroNormVector { vector_label: String },
     /// An item/unit identity pair occurs more than once.
     DuplicateCandidate { item_id: String, unit_id: String },
+    /// Packed vectors do not contain exactly one binary64 value per coordinate.
+    PackedVectorByteLength { expected: usize, actual: usize },
 }
 
 impl SemanticUnitRankingError {
@@ -82,6 +84,7 @@ impl SemanticUnitRankingError {
             Self::DimensionMismatch { .. } => "dimension_mismatch",
             Self::ZeroNormVector { .. } => "zero_norm_vector",
             Self::DuplicateCandidate { .. } => "duplicate_candidate",
+            Self::PackedVectorByteLength { .. } => "packed_vector_byte_length",
         }
     }
 }
@@ -108,6 +111,10 @@ impl fmt::Display for SemanticUnitRankingError {
             Self::DuplicateCandidate { item_id, unit_id } => write!(
                 formatter,
                 "candidate ({item_id:?}, {unit_id:?}) must be unique"
+            ),
+            Self::PackedVectorByteLength { expected, actual } => write!(
+                formatter,
+                "packed candidate vectors must contain {expected} bytes, got {actual}"
             ),
         }
     }
@@ -178,6 +185,85 @@ fn ordered_input_digest(query_vector: &[f64], candidates: &[SemanticUnitCandidat
     format!("sha256:{:x}", hasher.finalize())
 }
 
+fn ordered_packed_input_digest(
+    query_vector: &[f64],
+    candidate_ids: &[(String, String)],
+    packed_vectors: &[u8],
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"rankweave.semantic-unit-ranking.request.v1\0");
+    hasher.update((query_vector.len() as u64).to_be_bytes());
+    for value in query_vector {
+        hasher.update(value.to_bits().to_be_bytes());
+    }
+    hasher.update((candidate_ids.len() as u64).to_be_bytes());
+    let vector_byte_count = size_of_val(query_vector);
+    for (index, (item_id, unit_id)) in candidate_ids.iter().enumerate() {
+        update_length_prefixed(&mut hasher, item_id.as_bytes());
+        update_length_prefixed(&mut hasher, unit_id.as_bytes());
+        hasher.update((query_vector.len() as u64).to_be_bytes());
+        let start = index * vector_byte_count;
+        hasher.update(&packed_vectors[start..start + vector_byte_count]);
+    }
+    format!("sha256:{:x}", hasher.finalize())
+}
+
+fn consider_semantic_unit(
+    query_vector: &[f64],
+    identities: &mut HashSet<(String, String)>,
+    best_by_item: &mut HashMap<String, SemanticUnitRank>,
+    item_id: &str,
+    unit_id: &str,
+    vector: &[f64],
+) -> Result<(), SemanticUnitRankingError> {
+    if !identities.insert((item_id.to_owned(), unit_id.to_owned())) {
+        return Err(SemanticUnitRankingError::DuplicateCandidate {
+            item_id: item_id.to_owned(),
+            unit_id: unit_id.to_owned(),
+        });
+    }
+    let vector_label = format!("candidate vector for item {item_id:?}, unit {unit_id:?}");
+    validate_vector(vector, query_vector.len(), vector_label)?;
+    let proposed = SemanticUnitRank {
+        item_id: item_id.to_owned(),
+        winning_unit_id: unit_id.to_owned(),
+        score: cosine_similarity(query_vector, vector),
+    };
+    best_by_item
+        .entry(item_id.to_owned())
+        .and_modify(|current| {
+            if proposed.score > current.score
+                || (proposed.score == current.score
+                    && proposed.winning_unit_id < current.winning_unit_id)
+            {
+                *current = proposed.clone();
+            }
+        })
+        .or_insert(proposed);
+    Ok(())
+}
+
+fn finish_semantic_unit_ranking(
+    query_vector: &[f64],
+    best_by_item: HashMap<String, SemanticUnitRank>,
+    ordered_input_digest: String,
+) -> SemanticUnitRankingReport {
+    let mut results: Vec<_> = best_by_item.into_values().collect();
+    results.sort_by(|left, right| {
+        right
+            .score
+            .total_cmp(&left.score)
+            .then_with(|| left.item_id.cmp(&right.item_id))
+    });
+    SemanticUnitRankingReport {
+        schema_version: SEMANTIC_UNIT_RANKING_SCHEMA_VERSION,
+        algorithm_version: SEMANTIC_UNIT_COSINE_ALGORITHM_VERSION,
+        ordered_input_digest,
+        vector_dimension: query_vector.len(),
+        results,
+    }
+}
+
 /// Rank items by their best caller-supplied semantic-unit cosine evidence.
 ///
 /// Candidate order is part of the digest, while result order is descending
@@ -199,50 +285,77 @@ pub fn rank_semantic_units(
     let mut identities = HashSet::new();
     let mut best_by_item: HashMap<String, SemanticUnitRank> = HashMap::new();
     for candidate in candidates {
-        if !identities.insert((candidate.item_id.as_str(), candidate.unit_id.as_str())) {
-            return Err(SemanticUnitRankingError::DuplicateCandidate {
-                item_id: candidate.item_id.clone(),
-                unit_id: candidate.unit_id.clone(),
-            });
-        }
-        let vector_label = format!(
-            "candidate vector for item {:?}, unit {:?}",
-            candidate.item_id, candidate.unit_id
-        );
-        validate_vector(&candidate.vector, query_vector.len(), vector_label)?;
-        let score = cosine_similarity(query_vector, &candidate.vector);
-        let proposed = SemanticUnitRank {
-            item_id: candidate.item_id.clone(),
-            winning_unit_id: candidate.unit_id.clone(),
-            score,
-        };
-        best_by_item
-            .entry(candidate.item_id.clone())
-            .and_modify(|current| {
-                if proposed.score > current.score
-                    || (proposed.score == current.score
-                        && proposed.winning_unit_id < current.winning_unit_id)
-                {
-                    *current = proposed.clone();
-                }
-            })
-            .or_insert(proposed);
+        consider_semantic_unit(
+            query_vector,
+            &mut identities,
+            &mut best_by_item,
+            &candidate.item_id,
+            &candidate.unit_id,
+            &candidate.vector,
+        )?;
+    }
+    Ok(finish_semantic_unit_ranking(
+        query_vector,
+        best_by_item,
+        ordered_input_digest(query_vector, candidates),
+    ))
+}
+
+/// Rank canonical big-endian binary64 vectors without Python scalar expansion.
+///
+/// Candidate vectors are concatenated in candidate identifier order. This
+/// transport produces the same schema, algorithm, digest, and results as the
+/// ordinary semantic-unit API for the equivalent decoded vectors.
+pub fn rank_semantic_units_packed(
+    query_vector: &[f64],
+    candidate_ids: &[(String, String)],
+    packed_vectors: &[u8],
+) -> Result<SemanticUnitRankingReport, SemanticUnitRankingError> {
+    if query_vector.is_empty() {
+        return Err(SemanticUnitRankingError::EmptyQueryVector);
+    }
+    if candidate_ids.is_empty() {
+        return Err(SemanticUnitRankingError::EmptyCandidates);
+    }
+    validate_vector(query_vector, query_vector.len(), "query vector".to_owned())?;
+    let expected = candidate_ids
+        .len()
+        .checked_mul(query_vector.len())
+        .and_then(|count| count.checked_mul(size_of::<f64>()))
+        .unwrap_or(usize::MAX);
+    if packed_vectors.len() != expected {
+        return Err(SemanticUnitRankingError::PackedVectorByteLength {
+            expected,
+            actual: packed_vectors.len(),
+        });
     }
 
-    let mut results: Vec<_> = best_by_item.into_values().collect();
-    results.sort_by(|left, right| {
-        right
-            .score
-            .total_cmp(&left.score)
-            .then_with(|| left.item_id.cmp(&right.item_id))
-    });
-    Ok(SemanticUnitRankingReport {
-        schema_version: SEMANTIC_UNIT_RANKING_SCHEMA_VERSION,
-        algorithm_version: SEMANTIC_UNIT_COSINE_ALGORITHM_VERSION,
-        ordered_input_digest: ordered_input_digest(query_vector, candidates),
-        vector_dimension: query_vector.len(),
-        results,
-    })
+    let vector_byte_count = size_of_val(query_vector);
+    let mut identities = HashSet::new();
+    let mut best_by_item = HashMap::new();
+    let mut vector = Vec::with_capacity(query_vector.len());
+    for (index, (item_id, unit_id)) in candidate_ids.iter().enumerate() {
+        vector.clear();
+        let start = index * vector_byte_count;
+        for bytes in packed_vectors[start..start + vector_byte_count].chunks_exact(8) {
+            vector.push(f64::from_be_bytes(
+                bytes.try_into().expect("eight-byte chunk"),
+            ));
+        }
+        consider_semantic_unit(
+            query_vector,
+            &mut identities,
+            &mut best_by_item,
+            item_id,
+            unit_id,
+            &vector,
+        )?;
+    }
+    Ok(finish_semantic_unit_ranking(
+        query_vector,
+        best_by_item,
+        ordered_packed_input_digest(query_vector, candidate_ids, packed_vectors),
+    ))
 }
 
 /// Scale a finite score with finite theoretical bounds and clamp it to `[0, 1]`.
@@ -280,7 +393,8 @@ pub fn reciprocal_rank_fusion_score(ranks: &[BigUint], rank_constant_eta: &BigUi
 mod tests {
     use super::{
         SemanticUnitCandidate, SemanticUnitRankingError, convex_combination_score,
-        rank_semantic_units, reciprocal_rank_fusion_score, theoretical_min_max_normalize,
+        rank_semantic_units, rank_semantic_units_packed, reciprocal_rank_fusion_score,
+        theoretical_min_max_normalize,
     };
     use num_bigint::BigUint;
 
@@ -375,6 +489,69 @@ mod tests {
         .unwrap();
         assert!(report.results[0].score.is_finite());
         assert!(report.results[0].score > 0.999_999_999_999);
+    }
+
+    #[test]
+    fn packed_semantic_units_preserve_exact_report_and_digest() {
+        let candidates = vec![
+            candidate("item-b", "unit-z", &[1.0, 0.0]),
+            candidate("item-a", "unit-z", &[0.0, 1.0]),
+        ];
+        let candidate_ids = candidates
+            .iter()
+            .map(|candidate| (candidate.item_id.clone(), candidate.unit_id.clone()))
+            .collect::<Vec<_>>();
+        let packed_vectors = candidates
+            .iter()
+            .flat_map(|candidate| candidate.vector.iter())
+            .flat_map(|value| value.to_be_bytes())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            rank_semantic_units_packed(&[1.0, 0.0], &candidate_ids, &packed_vectors).unwrap(),
+            rank_semantic_units(&[1.0, 0.0], &candidates).unwrap()
+        );
+    }
+
+    #[test]
+    fn packed_semantic_unit_validation_failures_are_explicit() {
+        let one_candidate = vec![("item".to_owned(), "unit".to_owned())];
+        let cases = [
+            (
+                rank_semantic_units_packed(&[], &one_candidate, &[]),
+                "empty_query_vector",
+            ),
+            (
+                rank_semantic_units_packed(&[1.0], &[], &[]),
+                "empty_candidates",
+            ),
+            (
+                rank_semantic_units_packed(&[1.0], &one_candidate, b"short"),
+                "packed_vector_byte_length",
+            ),
+            (
+                rank_semantic_units_packed(&[1.0], &one_candidate, &f64::NAN.to_be_bytes()),
+                "non_finite_vector",
+            ),
+            (
+                rank_semantic_units_packed(&[1.0], &one_candidate, &0.0_f64.to_be_bytes()),
+                "zero_norm_vector",
+            ),
+            (
+                rank_semantic_units_packed(
+                    &[1.0],
+                    &[
+                        ("item".to_owned(), "unit".to_owned()),
+                        ("item".to_owned(), "unit".to_owned()),
+                    ],
+                    &[1.0_f64.to_be_bytes(), 1.0_f64.to_be_bytes()].concat(),
+                ),
+                "duplicate_candidate",
+            ),
+        ];
+        for (result, expected_code) in cases {
+            assert_eq!(result.unwrap_err().code(), expected_code);
+        }
     }
 
     #[test]

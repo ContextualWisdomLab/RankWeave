@@ -121,7 +121,7 @@ new engine.
 | Exact-byte artifact verification (opt-in v2 reports) | Shipped | `report_schemas.py`, `docs/artifact-verification.md` |
 | Governed, provenance-attested PyPI release | **Broken today** | Issue #35 — Trusted Publisher misconfigured, `0.18.0` unpublished |
 | Honest, PyPI-accurate customer README | **In flight** | PR #40 (this session) |
-| Public API stability guarantee for external consumers (LineageWeave, Naruon) | Partially shipped | ADR-level documentation exists (LineageWeave ADR 0024) but RankWeave itself has no versioned public-API-compatibility policy doc (no SemVer contract statement, no deprecation window) |
+| Public API stability guarantee for external consumers (LineageWeave, Naruon) | Implemented, unreleased | ADR 0005 defines the versioned package-root and CLI transport contracts; `tests/test_public_api_compatibility.py` enforces them. Issue #35 still prevents publishing this source contract for consumers. |
 
 ## 5. TRD-lite — technical contract summary
 
@@ -157,13 +157,14 @@ Severity: 🔴 blocks a user today · 🟡 user-visible friction · 🟢 hardeni
    it is a configuration action blocked outside this repository. **Next action:**
    surface this to whoever holds the PyPI org owner role; nothing further is
    automatable from here.
-2. 🟡 **No versioned public-API compatibility policy.** LineageWeave and
-   Naruon each pin RankWeave differently (a git commit vs. a PyPI version)
-   specifically because there is no documented SemVer/deprecation contract a
-   consumer can trust. An integrator adopting RankWeave would have to read
-   source history to know what's safe to upgrade across. **Recommendation:**
-   add an ADR stating the public-API surface (§5) is covered by SemVer as of
-   a named version, with a minimum deprecation window before removal.
+2. 🟡 **The versioned public-API policy is not released.** ADR 0005 and
+   `tests/test_public_api_compatibility.py` now define and enforce the
+   package-root and CLI transport compatibility contracts in source. Naruon
+   and LineageWeave still cannot consume that work as a published contract
+   while issue #35 blocks the next PyPI release. **Recommendation:** publish
+   the exact verified release after the external Trusted Publisher
+   configuration is repaired; do not represent a source-only commit as an
+   available consumer version.
 3. 🟡 **Workflow-identity lifecycle has no self-cleaning step** (root cause
    behind issue #38, now remediated once). Every future one-shot
    PR-repair/finalizer workflow will re-accumulate orphaned identities unless

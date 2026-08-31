@@ -55,3 +55,26 @@ def rank_semantic_units(
         vector_dimension=dimension,
         results=tuple(SemanticUnitRank(*row) for row in rows),
     )
+
+
+def rank_semantic_units_packed(
+    query_vector: Sequence[float],
+    candidate_ids: Sequence[tuple[str, str]],
+    packed_vectors: bytes,
+) -> SemanticUnitRankingReport:
+    """Rank canonical big-endian binary64 vectors without scalar expansion."""
+
+    schema, algorithm, digest, dimension, rows = (
+        _rankweave_core.rank_semantic_units_packed(
+            list(query_vector),
+            list(candidate_ids),
+            packed_vectors,
+        )
+    )
+    return SemanticUnitRankingReport(
+        schema_version=schema,
+        algorithm_version=algorithm,
+        ordered_input_digest=digest,
+        vector_dimension=dimension,
+        results=tuple(SemanticUnitRank(*row) for row in rows),
+    )
