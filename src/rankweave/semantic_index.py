@@ -109,3 +109,33 @@ class SemanticUnitExactIndex:
             output_digest=output_digest,
             results=tuple(SemanticUnitRank(*row) for row in rows),
         )
+
+    def rank_authorized_packed(
+        self,
+        model_identity: str,
+        query_vector: Sequence[float],
+        packed_authorization: bytes,
+    ) -> SemanticIndexRankingReport:
+        """Rank a canonical length-prefixed authorization byte buffer."""
+        (
+            snapshot,
+            algorithm,
+            execution_profile,
+            worker_count,
+            input_digest,
+            output_digest,
+            rows,
+        ) = self._native.rank_authorized_packed(
+            model_identity,
+            list(query_vector),
+            packed_authorization,
+        )
+        return SemanticIndexRankingReport(
+            snapshot=SemanticIndexSnapshotEvidence(*snapshot),
+            algorithm_version=algorithm,
+            execution_profile=execution_profile,
+            worker_count=worker_count,
+            ordered_input_digest=input_digest,
+            output_digest=output_digest,
+            results=tuple(SemanticUnitRank(*row) for row in rows),
+        )

@@ -140,6 +140,23 @@ impl SemanticUnitIndex {
                 .map_err(index_error)
         })
     }
+
+    fn rank_authorized_packed(
+        &self,
+        py: Python<'_>,
+        model_identity: String,
+        query_vector: Vec<f64>,
+        packed_authorization: &Bound<'_, PyBytes>,
+    ) -> PyResult<SemanticIndexReportTuple> {
+        let snapshot = self.handle.snapshot().map_err(index_error)?;
+        let packed_authorization = packed_authorization.as_bytes().to_vec();
+        py.detach(move || {
+            snapshot
+                .rank_authorized_packed(&model_identity, &query_vector, &packed_authorization)
+                .map(index_report_tuple)
+                .map_err(index_error)
+        })
+    }
 }
 
 #[pyfunction]

@@ -71,3 +71,18 @@ class SemanticUnitIndex:
         str,
         list[tuple[str, str, float]],
     ]: ...
+
+    def rank_authorized_packed(
+        self,
+        model_identity: str,
+        query_vector: list[float],
+        packed_authorization: bytes,
+    ) -> tuple[
+        tuple[str, str, str, str, str, str, int, int],
+        str,
+        str,
+        int,
+        str,
+        str,
+        list[tuple[str, str, float]],
+    ]: ...

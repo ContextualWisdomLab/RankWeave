@@ -85,6 +85,10 @@ pub enum SemanticIndexError {
     DuplicateAuthorization { item_id: String, unit_id: String },
     /// An authorized candidate does not exist in the immutable snapshot.
     UnknownAuthorizedCandidate { item_id: String, unit_id: String },
+    /// Packed authorization identities are truncated or have trailing bytes.
+    MalformedPackedAuthorization,
+    /// A packed authorization identity is not valid UTF-8.
+    NonUtf8PackedAuthorization,
     /// The immutable snapshot lock was poisoned.
     SnapshotLockPoisoned,
 }
@@ -107,6 +111,8 @@ impl SemanticIndexError {
             Self::EmptyAuthorization => "empty_authorization",
             Self::DuplicateAuthorization { .. } => "duplicate_authorization",
             Self::UnknownAuthorizedCandidate { .. } => "unknown_authorized_candidate",
+            Self::MalformedPackedAuthorization => "malformed_packed_authorization",
+            Self::NonUtf8PackedAuthorization => "non_utf8_packed_authorization",
             Self::SnapshotLockPoisoned => "snapshot_lock_poisoned",
         }
     }
@@ -412,6 +418,54 @@ impl SemanticUnitIndex {
             results,
         })
     }
+
+    /// Rank a canonical packed ordered authorization set without Python rows.
+    pub fn rank_authorized_packed(
+        &self,
+        model_identity: &str,
+        query_vector: &[f64],
+        packed_authorization: &[u8],
+    ) -> Result<SemanticIndexRankingReport, SemanticIndexError> {
+        let mut cursor = 0_usize;
+        let count = read_packed_u64(packed_authorization, &mut cursor)?;
+        if count > ((packed_authorization.len() - cursor) / 16) as u64 {
+            return Err(SemanticIndexError::MalformedPackedAuthorization);
+        }
+        let count = count as usize;
+        let mut authorized = Vec::with_capacity(count);
+        for _ in 0..count {
+            let item = read_packed_text(packed_authorization, &mut cursor)?;
+            let unit = read_packed_text(packed_authorization, &mut cursor)?;
+            authorized.push((item, unit));
+        }
+        if cursor != packed_authorization.len() {
+            return Err(SemanticIndexError::MalformedPackedAuthorization);
+        }
+        self.rank_authorized(model_identity, query_vector, &authorized)
+    }
+}
+
+fn read_packed_u64(bytes: &[u8], cursor: &mut usize) -> Result<u64, SemanticIndexError> {
+    let end = *cursor + 8;
+    let value = bytes
+        .get(*cursor..end)
+        .ok_or(SemanticIndexError::MalformedPackedAuthorization)?;
+    *cursor = end;
+    Ok(u64::from_be_bytes(
+        value.try_into().expect("eight-byte packed integer"),
+    ))
+}
+
+fn read_packed_text(bytes: &[u8], cursor: &mut usize) -> Result<String, SemanticIndexError> {
+    let length = read_packed_u64(bytes, cursor)?;
+    if length > (bytes.len() - *cursor) as u64 {
+        return Err(SemanticIndexError::MalformedPackedAuthorization);
+    }
+    let length = length as usize;
+    let end = *cursor + length;
+    let value = &bytes[*cursor..end];
+    *cursor = end;
+    String::from_utf8(value.to_vec()).map_err(|_| SemanticIndexError::NonUtf8PackedAuthorization)
 }
 
 /// Atomically replace an immutable exact index only after successful validation.
@@ -462,6 +516,18 @@ mod tests {
             .flat_map(|vector| vector.iter())
             .flat_map(|value| value.to_be_bytes())
             .collect()
+    }
+
+    fn packed_authorization(identities: &[(String, String)]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&(identities.len() as u64).to_be_bytes());
+        for (item_id, unit_id) in identities {
+            bytes.extend_from_slice(&(item_id.len() as u64).to_be_bytes());
+            bytes.extend_from_slice(item_id.as_bytes());
+            bytes.extend_from_slice(&(unit_id.len() as u64).to_be_bytes());
+            bytes.extend_from_slice(unit_id.as_bytes());
+        }
+        bytes
     }
 
     fn index(version: &str) -> SemanticUnitIndex {
@@ -533,6 +599,79 @@ mod tests {
         assert_eq!(one_worker.output_digest, four_workers.output_digest);
         assert_eq!(one_worker.worker_count, 1);
         assert_eq!(four_workers.worker_count, 4);
+    }
+
+    #[test]
+    fn packed_authorization_preserves_exact_results_and_digests() {
+        let authorization = vec![
+            ("item-b".to_owned(), "unit-z".to_owned()),
+            ("item-a".to_owned(), "unit-z".to_owned()),
+            ("item-a".to_owned(), "unit-a".to_owned()),
+        ];
+        let index = index("snapshot-v1");
+        let rows = index
+            .rank_authorized("model-v1", &[1.0, 0.0], &authorization)
+            .unwrap();
+        let packed = index
+            .rank_authorized_packed(
+                "model-v1",
+                &[1.0, 0.0],
+                &packed_authorization(&authorization),
+            )
+            .unwrap();
+
+        assert_eq!(packed.results, rows.results);
+        assert_eq!(packed.ordered_input_digest, rows.ordered_input_digest);
+        assert_eq!(packed.output_digest, rows.output_digest);
+    }
+
+    #[test]
+    fn malformed_packed_authorization_fails_closed() {
+        let index = index("snapshot-v1");
+        let cases = [
+            (&b"short"[..], "malformed_packed_authorization"),
+            (
+                &[0, 0, 0, 0, 0, 0, 0, 1][..],
+                "malformed_packed_authorization",
+            ),
+            (
+                &[
+                    0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 9, b'a', b'a', b'a', b'a', b'a',
+                    b'a', b'a', b'a',
+                ][..],
+                "malformed_packed_authorization",
+            ),
+            (
+                &[
+                    0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, b'a', b'a', 0, 0, 0, 0, 0, 0, 0,
+                ][..],
+                "malformed_packed_authorization",
+            ),
+            (
+                &[
+                    0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0xff, 0, 0, 0, 0, 0, 0, 0, 0,
+                ][..],
+                "non_utf8_packed_authorization",
+            ),
+        ];
+        for (bytes, code) in cases {
+            assert_eq!(
+                index
+                    .rank_authorized_packed("model-v1", &[1.0, 0.0], bytes)
+                    .unwrap_err()
+                    .code(),
+                code
+            );
+        }
+        let mut trailing = packed_authorization(&[("item-a".to_owned(), "unit-a".to_owned())]);
+        trailing.push(0);
+        assert_eq!(
+            index
+                .rank_authorized_packed("model-v1", &[1.0, 0.0], &trailing)
+                .unwrap_err()
+                .code(),
+            "malformed_packed_authorization"
+        );
     }
 
     #[test]

@@ -11,6 +11,15 @@ def packed(*vectors: tuple[float, ...]) -> bytes:
     )
 
 
+def packed_authorization(*identities: tuple[str, str]) -> bytes:
+    payload = [len(identities).to_bytes(8, "big")]
+    for identity in identities:
+        for value in identity:
+            encoded = value.encode("utf-8")
+            payload.extend((len(encoded).to_bytes(8, "big"), encoded))
+    return b"".join(payload)
+
+
 def exact_index(version: str = "snapshot-v1") -> SemanticUnitExactIndex:
     return SemanticUnitExactIndex(
         version,
@@ -41,6 +50,20 @@ def test_exact_index_returns_only_authorized_candidates() -> None:
         (row.item_id, row.winning_unit_id, row.score) for row in report.results
     ]
     assert actual == [("item-a", "unit-a", 0.0)]
+
+
+def test_exact_index_packed_authorization_matches_row_transport() -> None:
+    index = exact_index()
+    identities = (("item-a", "unit-a"),)
+
+    rows = index.rank_authorized("model-v1", [1.0, 0.0], identities)
+    packed_rows = index.rank_authorized_packed(
+        "model-v1",
+        [1.0, 0.0],
+        packed_authorization(*identities),
+    )
+
+    assert packed_rows == rows
 
 
 def test_exact_index_replacement_is_atomic_after_validation() -> None:

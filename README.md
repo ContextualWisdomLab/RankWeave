@@ -147,6 +147,8 @@ the deterministic multithreaded Rust CPU path. Snapshot replacement is atomic;
 v1 exposes no partial mutation or approximate retrieval. The caller still owns
 persistence, model selection, ABAC, and result post-authorization. See
 [ADR 0008](docs/adr/0008-persistent-exact-semantic-index.md).
+Large authorization sets may use the canonical length-prefixed packed identity
+transport; it is exact and digest-equivalent to the ordinary identity rows.
 
 ## Evaluate ranking quality
 

@@ -45,6 +45,13 @@ cache. A query:
 6. returns snapshot evidence, CPU execution profile and observed worker count,
    ordered input digest, output digest, and exact result rows.
 
+The equivalent packed-authorization transport starts with an unsigned
+big-endian 64-bit identity count, followed by one unsigned big-endian 64-bit
+byte length and UTF-8 byte string for each item id and unit id in order. It
+produces the same input digest, scores, output digest, and failure semantics as
+the row transport. It removes per-identity Python/FFI rows but does not alter
+the caller-supplied authorization set.
+
 'replace_snapshot' first builds and validates a complete replacement outside
 the active lock, then swaps one immutable reference atomically. A concurrent
 query retains the old snapshot for its whole execution or acquires the new one;
