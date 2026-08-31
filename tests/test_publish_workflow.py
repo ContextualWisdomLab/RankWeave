@@ -285,10 +285,12 @@ def test_release_archive_verifier_has_one_complete_member_contract():
 
     for required_member in (
         "rankweave/_rankweave_core.pyi",
+        "rankweave/semantic_index.py",
         "rankweave/semantic_vector_ranking.py",
         "Cargo.lock",
         "Cargo.toml",
         "crates/rankweave-core/Cargo.toml",
+        "crates/rankweave-core/src/semantic_index.rs",
         "crates/rankweave-python/Cargo.toml",
     ):
         assert required_member in verifier

@@ -7,6 +7,8 @@ use num_bigint::BigUint;
 use num_traits::ToPrimitive;
 use sha2::{Digest, Sha256};
 
+pub mod semantic_index;
+
 /// Version of the semantic-unit ranking result envelope.
 pub const SEMANTIC_UNIT_RANKING_SCHEMA_VERSION: &str = "rankweave.semantic-unit-ranking.v1";
 

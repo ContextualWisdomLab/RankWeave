@@ -140,6 +140,14 @@ algorithm versions, and retains the winning semantic unit for each item. Invalid
 dimensions, non-finite values, zero vectors, and duplicate item/unit pairs fail
 with stable error codes. See [ADR 0007](docs/adr/0007-semantic-unit-cosine-ranking.md).
 
+For repeated queries over one governed snapshot, `SemanticUnitExactIndex`
+validates canonical packed vectors once, records model/dimension/vector and
+snapshot digests, and scores only caller-supplied authorized candidate IDs on
+the deterministic multithreaded Rust CPU path. Snapshot replacement is atomic;
+v1 exposes no partial mutation or approximate retrieval. The caller still owns
+persistence, model selection, ABAC, and result post-authorization. See
+[ADR 0008](docs/adr/0008-persistent-exact-semantic-index.md).
+
 ## Evaluate ranking quality
 
 ```python

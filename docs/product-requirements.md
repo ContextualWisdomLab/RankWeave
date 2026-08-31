@@ -76,6 +76,12 @@ reader, select a model, call a provider, or infer business facts.
 - Return deterministic per-item winning-unit evidence and versioned ordered
   input integrity evidence.
 - Do not select an embedding model, apply authorization, or infer a threshold.
+- Build immutable exact snapshots with digest-bound model, dimension, identity,
+  vector, and precomputed scale/norm evidence; replace a snapshot only after
+  complete validation.
+- Score every caller-authorized candidate on a deterministic multithreaded Rust
+  CPU path. Never use approximate pruning or return an identity absent from the
+  supplied authorization set.
 
 ### 4.3 Evaluation and comparison
 
@@ -148,7 +154,9 @@ the engine is available to them.
 
 ## 7. Explicit non-goals
 
-- Database, search-index, HTTP, ORM, identity, or authorization integration.
+- Database, external search-service, HTTP, ORM, identity, or authorization
+  integration. RankWeave exact snapshots remain in-memory calculation objects
+  loaded from caller-owned persistence.
 - Provider/model discovery, embedding generation, OCR, VISION, or LLM
   orchestration.
 - Hidden score normalization, generated weights, inferred folds, generated
