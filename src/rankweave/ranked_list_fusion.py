@@ -1,7 +1,8 @@
 """Complete-list fusion for retrieval systems that expose ranked item IDs."""
 
+import heapq
 import math
-from collections.abc import Hashable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 
@@ -178,13 +179,44 @@ def reciprocal_rank_fuse(
         channel_rankings
     )
 
+    scored_items = (
+        (
+            reciprocal_rank_fusion_score(dict(channel_ranks), validated_eta),
+            first_seen_order[item_id],
+            item_id,
+            tuple(channel_ranks),
+        )
+        for item_id, channel_ranks in channel_ranks_by_item.items()
+    )
+    if validated_limit is not None:
+        selected = heapq.nsmallest(
+            validated_limit,
+            scored_items,
+            key=lambda item: (-item[0], item[1]),
+        )
+        return [
+            FusedRankedItem(
+                item_id=item_id,
+                score=score,
+                channel_ranks=channel_ranks,
+                channel_contributions=tuple(
+                    _build_weighted_rank_contribution(
+                        channel_name,
+                        one_based_rank,
+                        1.0,
+                        validated_eta,
+                    )
+                    for channel_name, one_based_rank in channel_ranks
+                ),
+            )
+            for score, _first_seen, item_id, channel_ranks in selected
+        ]
+
     fused_items = [
         FusedRankedItem(
             item_id=item_id,
-            score=reciprocal_rank_fusion_score(
-                dict(channel_ranks), validated_eta
-            ),
-            channel_ranks=tuple(channel_ranks),
+            score=score,
+            channel_ranks=channel_ranks,
             channel_contributions=tuple(
                 _build_weighted_rank_contribution(
                     channel_name,
@@ -195,7 +227,7 @@ def reciprocal_rank_fuse(
                 for channel_name, one_based_rank in channel_ranks
             ),
         )
-        for item_id, channel_ranks in channel_ranks_by_item.items()
+        for score, _first_seen, item_id, channel_ranks in scored_items
     ]
     fused_items.sort(
         key=lambda fused_item: (
@@ -203,7 +235,112 @@ def reciprocal_rank_fuse(
             first_seen_order[fused_item.item_id],
         )
     )
-    return fused_items if validated_limit is None else fused_items[:validated_limit]
+    return fused_items
+
+
+def lazy_reciprocal_rank_fuse(
+    channel_rankings: Mapping[str, Iterable[ItemIdentifier]],
+    resolve_ranks: Callable[
+        [ItemIdentifier], tuple[int, Mapping[str, int]]
+    ],
+    *,
+    limit: int,
+    rank_constant_eta: int = 60,
+) -> list[FusedRankedItem[ItemIdentifier]]:
+    """Return an exact bounded RRF result from lazy ordered channel streams.
+
+    ``resolve_ranks`` returns the complete channel-rank evidence and the
+    complete-list first-seen order for each encountered item. Streams must be
+    unique per channel and ordered by one-based rank. The scan stops only when
+    the kth exact score is strictly above the sum of every next-rank frontier;
+    equality keeps scanning so an unseen tie cannot precede the kth item.
+    """
+    validated_limit = _require_positive_integer(limit, "limit")
+    validated_eta = _require_positive_integer(
+        rank_constant_eta, "rank_constant_eta"
+    )
+    iterators = {name: iter(items) for name, items in channel_rankings.items()}
+    positions = dict.fromkeys(iterators, 0)
+    exhausted: set[str] = set()
+    seen: set[ItemIdentifier] = set()
+    exact: dict[
+        ItemIdentifier, tuple[float, int, tuple[tuple[str, int], ...]]
+    ] = {}
+
+    while len(exhausted) < len(iterators):
+        for channel_name, channel_iterator in iterators.items():
+            if channel_name in exhausted:
+                continue
+            try:
+                item_id = next(channel_iterator)
+            except StopIteration:
+                exhausted.add(channel_name)
+                continue
+            positions[channel_name] += 1
+            try:
+                already_seen = item_id in seen
+                seen.add(item_id)
+            except TypeError as exc:
+                raise ValueError(
+                    "lazy ranking item identifiers must be hashable"
+                ) from exc
+            if already_seen:
+                continue
+            first_seen_order, resolved = resolve_ranks(item_id)
+            if type(first_seen_order) is not int or first_seen_order < 0:
+                raise ValueError(
+                    "resolved first-seen order must be a non-negative integer"
+                )
+            channel_ranks = tuple(
+                (name, resolved[name]) for name in channel_rankings if name in resolved
+            )
+            score = reciprocal_rank_fusion_score(dict(channel_ranks), validated_eta)
+            exact[item_id] = (score, first_seen_order, channel_ranks)
+
+        selected = heapq.nsmallest(
+            validated_limit,
+            exact.items(),
+            key=lambda item: (-item[1][0], item[1][1]),
+        )
+        if len(selected) < validated_limit:
+            continue
+        frontier = math.fsum(
+            1.0 / (validated_eta + positions[name] + 1)
+            for name in iterators
+            if name not in exhausted
+        )
+        if selected[-1][1][0] <= frontier:
+            continue
+        return [
+            FusedRankedItem(
+                item_id=item_id,
+                score=score,
+                channel_ranks=channel_ranks,
+                channel_contributions=tuple(
+                    _build_weighted_rank_contribution(name, rank, 1.0, validated_eta)
+                    for name, rank in channel_ranks
+                ),
+            )
+            for item_id, (score, _first_seen, channel_ranks) in selected
+        ]
+
+    selected = heapq.nsmallest(
+        validated_limit,
+        exact.items(),
+        key=lambda item: (-item[1][0], item[1][1]),
+    )
+    return [
+        FusedRankedItem(
+            item_id=item_id,
+            score=score,
+            channel_ranks=channel_ranks,
+            channel_contributions=tuple(
+                _build_weighted_rank_contribution(name, rank, 1.0, validated_eta)
+                for name, rank in channel_ranks
+            ),
+        )
+        for item_id, (score, _first_seen, channel_ranks) in selected
+    ]
 
 
 def weighted_reciprocal_rank_fuse(
