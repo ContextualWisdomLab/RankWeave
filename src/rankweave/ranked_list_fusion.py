@@ -251,15 +251,22 @@ def lazy_reciprocal_rank_fuse(
 
     ``resolve_ranks`` returns the complete channel-rank evidence and the
     complete-list first-seen order for each encountered item. Streams must be
-    unique per channel and ordered by one-based rank. The scan stops only when
-    the kth exact score is strictly above the sum of every next-rank frontier;
-    equality keeps scanning so an unseen tie cannot precede the kth item.
+    unique per channel and ordered by one-based rank. The caller owns
+    consistency between resolver evidence and the complete lists; this lazy
+    boundary validates value domains but does not reconstruct unconsumed ranks.
+    The scan stops only when the kth exact score is strictly above the maximum
+    next-rank frontier under the same floating-point accumulation semantics as
+    complete RRF; equality keeps scanning so an unseen tie cannot precede the
+    kth item.
     """
     validated_limit = _require_positive_integer(limit, "limit")
     validated_eta = _require_positive_integer(
         rank_constant_eta, "rank_constant_eta"
     )
     iterators = {name: iter(items) for name, items in channel_rankings.items()}
+    channel_items_seen: dict[str, set[ItemIdentifier]] = {
+        name: set() for name in iterators
+    }
     positions = dict.fromkeys(iterators, 0)
     exhausted: set[str] = set()
     seen: set[ItemIdentifier] = set()
@@ -277,13 +284,15 @@ def lazy_reciprocal_rank_fuse(
                 exhausted.add(channel_name)
                 continue
             positions[channel_name] += 1
-            try:
-                already_seen = item_id in seen
-                seen.add(item_id)
-            except TypeError as exc:
-                raise ValueError(
-                    "lazy ranking item identifiers must be hashable"
-                ) from exc
+            _register_channel_item(
+                item_id,
+                channel_items_seen[channel_name],
+                channel_name=channel_name,
+                position_label="rank",
+                position=positions[channel_name],
+            )
+            already_seen = item_id in seen
+            seen.add(item_id)
             if already_seen:
                 continue
             first_seen_order, resolved = resolve_ranks(item_id)
@@ -304,11 +313,10 @@ def lazy_reciprocal_rank_fuse(
         )
         if len(selected) < validated_limit:
             continue
-        frontier = math.fsum(
-            1.0 / (validated_eta + positions[name] + 1)
-            for name in iterators
-            if name not in exhausted
-        )
+        frontier = 0.0
+        for name in iterators:
+            if name not in exhausted:
+                frontier += 1.0 / (validated_eta + positions[name] + 1)
         if selected[-1][1][0] <= frontier:
             continue
         return [
