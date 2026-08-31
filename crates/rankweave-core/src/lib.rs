@@ -530,6 +530,14 @@ mod tests {
                 "packed_vector_byte_length",
             ),
             (
+                rank_semantic_units_packed(&[f64::NAN], &one_candidate, &1.0_f64.to_be_bytes()),
+                "non_finite_vector",
+            ),
+            (
+                rank_semantic_units_packed(&[0.0], &one_candidate, &1.0_f64.to_be_bytes()),
+                "zero_norm_vector",
+            ),
+            (
                 rank_semantic_units_packed(&[1.0], &one_candidate, &f64::NAN.to_be_bytes()),
                 "non_finite_vector",
             ),
@@ -605,6 +613,14 @@ mod tests {
             }
             .to_string(),
             "candidate dimension must be 2, got 1"
+        );
+        assert_eq!(
+            SemanticUnitRankingError::PackedVectorByteLength {
+                expected: 16,
+                actual: 5,
+            }
+            .to_string(),
+            "packed candidate vectors must contain 16 bytes, got 5"
         );
     }
 }
