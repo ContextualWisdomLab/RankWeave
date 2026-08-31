@@ -302,12 +302,63 @@ impl SemanticUnitIndex {
         query_vector: &[f64],
         authorized_candidate_ids: &[(&str, &str)],
     ) -> Result<SemanticIndexRankingReport, SemanticIndexError> {
-        let mut reports = self.rank_authorized_batch_refs(
-            model_identity,
-            &[query_vector],
+        let model_digest = digest_bytes(
+            b"rankweave.semantic-unit-index.model.v1\0",
+            [model_identity.as_bytes()],
+        );
+        if model_digest != self.evidence.model_digest {
+            return Err(SemanticIndexError::ModelMismatch);
+        }
+        if authorized_candidate_ids.is_empty() {
+            return Err(SemanticIndexError::EmptyAuthorization);
+        }
+        let mut authorization_seen = HashSet::new();
+        let mut authorized_indices = Vec::with_capacity(authorized_candidate_ids.len());
+        for (item_id, unit_id) in authorized_candidate_ids {
+            if !authorization_seen.insert((item_id, unit_id)) {
+                return Err(SemanticIndexError::DuplicateAuthorization {
+                    item_id: (*item_id).to_owned(),
+                    unit_id: (*unit_id).to_owned(),
+                });
+            }
+            let Some(index) = self
+                .candidate_lookup
+                .get(*item_id)
+                .and_then(|units| units.get(*unit_id))
+            else {
+                return Err(SemanticIndexError::UnknownAuthorizedCandidate {
+                    item_id: (*item_id).to_owned(),
+                    unit_id: (*unit_id).to_owned(),
+                });
+            };
+            authorized_indices.push(*index);
+        }
+        let query = self.prepare_query(query_vector)?;
+        let dimension = self.evidence.vector_dimension;
+        let scored = authorized_indices
+            .par_iter()
+            .map(|index| {
+                let start = index * dimension;
+                let dot = query
+                    .normalized
+                    .iter()
+                    .zip(&self.normalized_vectors[start..start + dimension])
+                    .fold(0.0, |sum, (left, right)| sum + left * right);
+                let score = (dot / (query.norm * self.vector_norms[*index])).clamp(0.0, 1.0);
+                (*index, score)
+            })
+            .collect::<Vec<_>>();
+        let mut best_by_item = HashMap::new();
+        for (index, score) in scored {
+            let (item_id, unit_id) = &self.candidate_ids[index];
+            retain_best_unit(&mut best_by_item, item_id, unit_id, score);
+        }
+        Ok(self.finish_query_report(
+            &model_digest,
+            query_vector,
             authorized_candidate_ids,
-        )?;
-        Ok(reports.pop().expect("one validated query report"))
+            best_by_item,
+        ))
     }
 
     fn rank_authorized_batch_refs(
@@ -837,6 +888,49 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(batch, independent);
+    }
+
+    #[test]
+    fn packed_batch_validation_failures_are_explicit() {
+        let index = index("snapshot-v1");
+        let known = ("item-a".to_owned(), "unit-a".to_owned());
+        let cases = [
+            index.rank_authorized_batch_packed(
+                "other-model",
+                &[vec![1.0, 0.0]],
+                &packed_authorization(std::slice::from_ref(&known)),
+            ),
+            index.rank_authorized_batch_packed(
+                "model-v1",
+                &[vec![1.0, 0.0]],
+                &packed_authorization(&[]),
+            ),
+            index.rank_authorized_batch_packed(
+                "model-v1",
+                &[vec![1.0, 0.0]],
+                &packed_authorization(&[known.clone(), known.clone()]),
+            ),
+            index.rank_authorized_batch_packed(
+                "model-v1",
+                &[vec![1.0, 0.0]],
+                &packed_authorization(&[("missing".to_owned(), "unit".to_owned())]),
+            ),
+            index.rank_authorized_batch_packed(
+                "model-v1",
+                &[vec![1.0]],
+                &packed_authorization(std::slice::from_ref(&known)),
+            ),
+        ];
+        let codes = [
+            "model_mismatch",
+            "empty_authorization",
+            "duplicate_authorization",
+            "unknown_authorized_candidate",
+            "dimension_mismatch",
+        ];
+        for (result, code) in cases.into_iter().zip(codes) {
+            assert_eq!(result.unwrap_err().code(), code);
+        }
     }
 
     #[test]
