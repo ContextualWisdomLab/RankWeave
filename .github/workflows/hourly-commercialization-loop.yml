@@ -135,6 +135,15 @@ jobs:
           python -m venv "$venv"
           "$venv/bin/python" -m pip install --upgrade pip
           "$venv/bin/python" -m pip install -e ".[dev]" maturin==1.14.1
+          native_cores=(src/rankweave/_rankweave_core*.so)
+          if [[ "${#native_cores[@]}" -ne 1 || ! -f "${native_cores[0]}" ]]; then
+            echo "trusted editable install did not produce exactly one native core" >&2
+            exit 1
+          fi
+          native_core_name="$(basename "${native_cores[0]}")"
+          trusted_native_core="${RUNNER_TEMP}/rankweave-trusted-native-core.so"
+          sudo install -o root -g root -m 0555 \
+            "${native_cores[0]}" "$trusted_native_core"
           sudo chown -R root:root "$venv"
           sudo chmod -R a-w "$venv"
           sandbox_uid="$(id -u nobody)"
@@ -150,12 +159,16 @@ jobs:
           sudo chown -R root:root "$sandbox_rust/toolchain"
           sudo chmod -R a+rX,go-w "$sandbox_rust/toolchain"
           command -v setpriv >/dev/null
-          echo "AUTOMATION_VENV=$venv" >>"$GITHUB_ENV"
-          echo "AUTOMATION_BASE_SHA=$(git rev-parse HEAD)" >>"$GITHUB_ENV"
-          echo "SANDBOX_UID=$sandbox_uid" >>"$GITHUB_ENV"
-          echo "SANDBOX_GID=$sandbox_gid" >>"$GITHUB_ENV"
-          echo "SANDBOX_CARGO_HOME=$sandbox_rust/cargo" >>"$GITHUB_ENV"
-          echo "SANDBOX_RUST_TOOLCHAIN=$sandbox_rust/toolchain" >>"$GITHUB_ENV"
+          {
+            echo "AUTOMATION_VENV=$venv"
+            echo "AUTOMATION_NATIVE_CORE_NAME=$native_core_name"
+            echo "AUTOMATION_TRUSTED_NATIVE_CORE=$trusted_native_core"
+            echo "AUTOMATION_BASE_SHA=$(git rev-parse HEAD)"
+            echo "SANDBOX_UID=$sandbox_uid"
+            echo "SANDBOX_GID=$sandbox_gid"
+            echo "SANDBOX_CARGO_HOME=$sandbox_rust/cargo"
+            echo "SANDBOX_RUST_TOOLCHAIN=$sandbox_rust/toolchain"
+          } >>"$GITHUB_ENV"
           {
             echo "/opencode.json"
             echo "/.agent-red-output.txt"
@@ -295,6 +308,10 @@ jobs:
           set -euo pipefail
           rm -f opencode.json
           git clean -fdX
+          cp "$AUTOMATION_TRUSTED_NATIVE_CORE" \
+            "src/rankweave/$AUTOMATION_NATIVE_CORE_NAME"
+          test "$(sha256sum "$AUTOMATION_TRUSTED_NATIVE_CORE" | cut -d " " -f1)" = \
+            "$(sha256sum "src/rankweave/$AUTOMATION_NATIVE_CORE_NAME" | cut -d " " -f1)"
           "$AUTOMATION_VENV/bin/python" - <<'PY'
           from __future__ import annotations
 
@@ -390,7 +407,7 @@ jobs:
             --noprofile
             --norc
             -c
-            'cd "$WORKSPACE" && python -m pytest -q -p no:cacheprovider'
+            "cd \"$GITHUB_WORKSPACE\" && python -m pytest -q -p no:cacheprovider"
           )
           set +e
           "${red_sandbox[@]}" "${red_environment[@]}" >"$red_output" 2>&1
@@ -527,6 +544,10 @@ jobs:
           set -euo pipefail
           rm -f opencode.json .agent-red-output.txt
           git clean -fdX
+          cp "$AUTOMATION_TRUSTED_NATIVE_CORE" \
+            "src/rankweave/$AUTOMATION_NATIVE_CORE_NAME"
+          test "$(sha256sum "$AUTOMATION_TRUSTED_NATIVE_CORE" | cut -d " " -f1)" = \
+            "$(sha256sum "src/rankweave/$AUTOMATION_NATIVE_CORE_NAME" | cut -d " " -f1)"
           "$AUTOMATION_VENV/bin/python" - <<'PY'
           from __future__ import annotations
 
@@ -593,11 +614,18 @@ jobs:
               "README.md",
               "pyproject.toml",
           }
-          allowed_prefixes = ("src/rankweave/", "tests/", "docs/")
+          allowed_prefixes = (
+              "crates/rankweave-core/src/",
+              "crates/rankweave-python/src/",
+              "src/rankweave/",
+              "tests/",
+              "docs/",
+          )
           allowed_suffixes = {
               ".json",
               ".md",
               ".py",
+              ".rs",
               ".toml",
               ".txt",
               ".yaml",
@@ -623,7 +651,14 @@ jobs:
                   raise SystemExit(f"path is outside autonomous scope: {path_text}")
               if path.suffix not in allowed_suffixes:
                   raise SystemExit(f"non-text or unsupported path changed: {path_text}")
-              if path_text.startswith("src/rankweave/") and path.suffix == ".py":
+              if (
+                  path_text.startswith("src/rankweave/") and path.suffix == ".py"
+              ) or (
+                  path_text.startswith(
+                      ("crates/rankweave-core/src/", "crates/rankweave-python/src/")
+                  )
+                  and path.suffix == ".rs"
+              ):
                   production_changed = True
               info = path.lstat()
               if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
@@ -645,7 +680,7 @@ jobs:
 
           if not production_changed:
               raise SystemExit(
-                  "buyer-visible increment must change a production Python module"
+                  "buyer-visible increment must change a production Python or Rust module"
               )
           if not any(path.startswith("tests/") for path in changed):
               raise SystemExit("autonomous increment must include regression tests")

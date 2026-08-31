@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ inputs.release_sha || github.sha }}
+          ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -85,21 +85,22 @@ jobs:
             exit 1
           fi
 
-          checked_out_sha="$(git rev-parse HEAD)"
-          if [[ "$checked_out_sha" != "$release_sha" ]]; then
-            echo "checked-out commit ${checked_out_sha} does not match " \
-              "released commit ${release_sha}" >&2
-            exit 1
-          fi
-          git fetch --force --tags origin "$DEFAULT_BRANCH"
+          git fetch --force --tags origin "$DEFAULT_BRANCH" "$release_sha"
           if ! git merge-base --is-ancestor \
-            "$checked_out_sha" "origin/$DEFAULT_BRANCH"; then
+            "$release_sha" "origin/$DEFAULT_BRANCH"; then
             echo "released commit must be reachable from the default branch" >&2
             exit 1
           fi
           tag_commit="$(git rev-list -n 1 "$release_tag")"
           if [[ "$tag_commit" != "$release_sha" ]]; then
             echo "release tag does not resolve to the released commit" >&2
+            exit 1
+          fi
+          git checkout --detach "$release_sha"
+          checked_out_sha="$(git rev-parse HEAD)"
+          if [[ "$checked_out_sha" != "$release_sha" ]]; then
+            echo "checked-out commit ${checked_out_sha} does not match " \
+              "released commit ${release_sha}" >&2
             exit 1
           fi
 
@@ -221,8 +222,19 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.build.outputs.release_sha }}
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
           persist-credentials: false
+      - name: Revalidate and checkout released commit
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_SHA: ${{ needs.build.outputs.release_sha }}
+        run: |
+          git fetch --force origin "$DEFAULT_BRANCH" "$RELEASE_SHA"
+          git merge-base --is-ancestor "$RELEASE_SHA" "origin/$DEFAULT_BRANCH"
+          git checkout --detach "$RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.13"
@@ -253,6 +265,20 @@ jobs:
         run: >-
           python scripts/verify_release_archives.py --dist-dir dist
           --version "$PACKAGE_VERSION" --wheel-tag "$WHEEL_TAG"
+      - name: Smoke-test built native wheel
+        shell: bash
+        run: |
+          python -m venv wheel-smoke
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            smoke_python="wheel-smoke/Scripts/python.exe"
+            smoke_cli="wheel-smoke/Scripts/rankweave.exe"
+          else
+            smoke_python="wheel-smoke/bin/python"
+            smoke_cli="wheel-smoke/bin/rankweave"
+          fi
+          "$smoke_python" -m pip install --no-index --find-links dist rankweave
+          "$smoke_python" -c 'from rankweave import SemanticUnitExactIndex; assert SemanticUnitExactIndex'
+          "$smoke_cli" --help
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rankweave-build-wheel-${{ matrix.artifact }}
@@ -272,8 +298,18 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.build.outputs.release_sha }}
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
           persist-credentials: false
+      - name: Revalidate and checkout released commit
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_SHA: ${{ needs.build.outputs.release_sha }}
+        run: |
+          git fetch --force origin "$DEFAULT_BRANCH" "$RELEASE_SHA"
+          git merge-base --is-ancestor "$RELEASE_SHA" "origin/$DEFAULT_BRANCH"
+          git checkout --detach "$RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: rankweave-build-*

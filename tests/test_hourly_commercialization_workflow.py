@@ -181,7 +181,19 @@ def test_autonomous_diff_is_text_only_bounded_and_policy_safe():
     assert "non-regular file changed" in workflow
     assert "NUL byte found" in workflow
     assert "non-text or unsupported path changed" in workflow
-    assert "must change a production Python module" in workflow
+    assert '"crates/rankweave-core/src/"' in workflow
+    assert '"crates/rankweave-python/src/"' in workflow
+    assert '".rs"' in workflow
+    assert "must change a production Python or Rust module" in workflow
+
+
+def test_ignored_native_core_is_restored_from_trusted_copy_after_each_cleanup():
+    workflow = _workflow_text()
+
+    assert "trusted editable install did not produce exactly one native core" in workflow
+    assert workflow.count('git clean -fdX') == 2
+    assert workflow.count('cp "$AUTOMATION_TRUSTED_NATIVE_CORE"') == 2
+    assert workflow.count('sha256sum "$AUTOMATION_TRUSTED_NATIVE_CORE"') == 2
 
 
 def test_untrusted_validation_has_no_network_or_inherited_environment():

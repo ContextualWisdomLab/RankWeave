@@ -137,9 +137,9 @@ separate.
 `publish.yml` independently accepts an external stable release event or the
 explicit tag/SHA dispatch. Its read-only build job verifies the existing GitHub
 Release, tag-to-commit identity, default-branch reachability, package version,
-complete quality gate, and wheel/source contents. It records a SHA-256 manifest
-and uploads both distributions plus that manifest as one immutable Actions
-artifact.
+complete quality gate, and platform-wheel/source contents. It records a SHA-256
+manifest and uploads the Linux, macOS, and Windows wheels, source distribution,
+and that manifest as one immutable Actions artifact.
 
 Separate provenance and publication jobs verify the handoff before use. The
 provenance job creates GitHub build-provenance attestations. The protected

@@ -98,12 +98,15 @@ def verify_release_archives(
             raise ValueError(
                 f"wheel is missing: {sorted(missing_wheel_members)!r}"
             )
+        expected_extension = ".pyd" if "-win_" in wheel.name else ".so"
         if not any(
             member.startswith("rankweave/_rankweave_core.")
-            and member.endswith((".so", ".pyd"))
+            and member.endswith(expected_extension)
             for member in wheel_members
         ):
-            raise ValueError("wheel is missing the compiled RankWeave core")
+            raise ValueError(
+                "wheel is missing the compiled RankWeave core for its platform"
+            )
 
     source_distributions = tuple(sorted(dist_dir.glob("rankweave-*.tar.gz")))
     expected_sdist_count = int(require_sdist)

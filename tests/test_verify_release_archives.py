@@ -15,12 +15,16 @@ from scripts.verify_release_archives import (
 VERSION = "0.18.0"
 
 
-def _write_wheel(dist_dir: Path, *, omitted_member: str | None = None) -> None:
-    wheel_path = (
-        dist_dir / f"rankweave-{VERSION}-cp310-abi3-linux_x86_64.whl"
-    )
+def _write_wheel(
+    dist_dir: Path,
+    *,
+    omitted_member: str | None = None,
+    platform_tag: str = "linux_x86_64",
+    extension_suffix: str = ".so",
+) -> None:
+    wheel_path = dist_dir / f"rankweave-{VERSION}-cp310-abi3-{platform_tag}.whl"
     members = set(REQUIRED_WHEEL_MEMBERS)
-    members.add("rankweave/_rankweave_core.abi3.so")
+    members.add(f"rankweave/_rankweave_core.abi3{extension_suffix}")
     if omitted_member is not None:
         members.remove(omitted_member)
     with ZipFile(wheel_path, "w", ZIP_DEFLATED) as archive:
@@ -85,5 +89,17 @@ def test_verify_release_archives_rejects_wrong_platform_set(tmp_path):
             tmp_path,
             VERSION,
             expected_wheel_tags=("macosx",),
+            require_sdist=False,
+        )
+
+
+def test_verify_release_archives_rejects_so_in_windows_wheel(tmp_path):
+    _write_wheel(tmp_path, platform_tag="win_amd64", extension_suffix=".so")
+
+    with pytest.raises(ValueError, match="for its platform"):
+        verify_release_archives(
+            tmp_path,
+            VERSION,
+            expected_wheel_tags=("win_amd64",),
             require_sdist=False,
         )

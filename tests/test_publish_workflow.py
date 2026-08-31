@@ -95,6 +95,14 @@ def test_publish_workflow_separates_jobs_and_handoffs_one_artifact():
     assert "runner: macos-14" in wheels_block
     assert "runner: windows-latest" in wheels_block
     assert "uvx --from maturin==1.14.1 maturin build" in wheels_block
+    assert workflow_text.count(
+        "ref: ${{ github.event.repository.default_branch }}"
+    ) == 3
+    assert workflow_text.count("Revalidate and checkout released commit") == 2
+    assert workflow_text.count(
+        'git merge-base --is-ancestor "$RELEASE_SHA" "origin/$DEFAULT_BRANCH"'
+    ) == 2
+    assert "ref: ${{ needs.build.outputs.release_sha }}" not in workflow_text
     assert "compatibility: manylinux2014" in wheels_block
     assert "name: rankweave-distributions" in assemble_block
     assert (
@@ -147,7 +155,7 @@ def test_distribution_handoff_is_checksum_verified_before_use():
 def test_build_job_checks_exact_release_identity_and_default_branch():
     build_block = _job_block(_publish_workflow(), "build", "wheels")
 
-    assert "ref: ${{ inputs.release_sha || github.sha }}" in build_block
+    assert "ref: ${{ github.event.repository.default_branch }}" in build_block
     assert "fetch-depth: 0" in build_block
     assert "persist-credentials: false" in build_block
     for expected in (
@@ -171,6 +179,9 @@ def test_build_job_checks_exact_release_identity_and_default_branch():
         "stable GitHub Release must not be a prerelease",
     ):
         assert expected in build_block
+    assert build_block.index("git merge-base --is-ancestor") < build_block.index(
+        'git checkout --detach "$release_sha"'
+    )
 
 
 def test_build_job_checks_package_version_and_complete_quality_gate():
@@ -188,6 +199,10 @@ def test_build_job_checks_package_version_and_complete_quality_gate():
     assert "python -m coverage report" in build_block
     assert "uv build --sdist --out-dir dist" in build_block
     assert "uvx --from maturin==1.14.1 maturin build" in wheels_block
+    assert "Smoke-test built native wheel" in wheels_block
+    assert "pip install --no-index --find-links dist rankweave" in wheels_block
+    assert "from rankweave import SemanticUnitExactIndex" in wheels_block
+    assert '"$smoke_cli" --help' in wheels_block
     assert "scripts/verify_release_archives.py" in build_block
     assert "scripts/verify_release_archives.py" in wheels_block
     assert "scripts/verify_release_archives.py" in assemble_block

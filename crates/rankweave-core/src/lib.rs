@@ -363,7 +363,19 @@ pub fn rank_semantic_units_packed(
 /// Scale a finite score with finite theoretical bounds and clamp it to `[0, 1]`.
 #[must_use]
 pub fn theoretical_min_max_normalize(score: f64, lower: f64, upper: f64) -> f64 {
-    ((score - lower) / (upper - lower)).clamp(0.0, 1.0)
+    if score <= lower {
+        return 0.0;
+    }
+    if score >= upper {
+        return 1.0;
+    }
+    let width = upper - lower;
+    let normalized = if width.is_finite() {
+        (score - lower) / width
+    } else {
+        (score / 2.0 - lower / 2.0) / (upper / 2.0 - lower / 2.0)
+    };
+    normalized.clamp(0.0, 1.0)
 }
 
 /// Combine two normalized scores using the caller-supplied semantic weight.
@@ -404,6 +416,15 @@ mod tests {
     fn normalization_uses_theoretical_bounds_and_clamps() {
         assert_eq!(theoretical_min_max_normalize(0.5, 0.0, 2.0), 0.25);
         assert_eq!(theoretical_min_max_normalize(3.0, 0.0, 2.0), 1.0);
+        assert_eq!(theoretical_min_max_normalize(0.0, -f64::MAX, f64::MAX), 0.5);
+        assert_eq!(
+            theoretical_min_max_normalize(-f64::MAX, -f64::MAX, f64::MAX),
+            0.0
+        );
+        assert_eq!(
+            theoretical_min_max_normalize(f64::MAX, -f64::MAX, f64::MAX),
+            1.0
+        );
     }
 
     #[test]
