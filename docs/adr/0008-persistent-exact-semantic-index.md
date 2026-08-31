@@ -97,6 +97,22 @@ needs a separately versioned top-k output digest and adversarial near-tie and
 all-ambiguous conformance tests before activation; an empirical tolerance is
 not a substitute.
 
+The follow-up proof profile applies the standard binary64 unit roundoff
+`u = 2^-53` and `gamma_n = nu / (1 - nu)`. Both BLAS and the required
+coordinate-ordered scalar dot lie within `gamma_n |x|^T|y|` of the real dot;
+Cauchy-Schwarz therefore gives a conservative scalar-cosine interval of
+`BLAS cosine +/- 2 gamma_n`. Only a candidate whose upper endpoint is strictly
+below the kth-largest lower endpoint is excluded. Equality remains ambiguous,
+and every ambiguous candidate is recomputed in coordinate order before stable
+top-k. At 6,578 by 3,072 by four, the complete screened proof measured
+3.605-4.762 ms, at most six ambiguous candidates per query, and zero screened
+top-four differences from the scalar reference, despite 13,007 bit-different
+BLAS dots. Near-tie and all-equal interval tests retain every candidate that
+can cross the boundary. This remains a profile, not an activated backend:
+production code must additionally fall back for any operand set where the
+standard no-underflow error model is not established, pool units to items
+before screening, and bind a separately versioned exact top-k digest.
+
 ## Responsibility boundary
 
 - The consumer persists the source projection, selects the model-specific
