@@ -12,8 +12,10 @@ naruon or another service-oriented system.
 ## Architectural boundaries
 
 1. **Pure calculation core** — fusion, evaluation, randomization, Holm
-   correction, and tuning accept in-memory values and perform no network,
-   database, provider, or filesystem access.
+   correction, tuning, and exact semantic indexing accept in-memory values and
+   perform no network, database, provider, or filesystem access. Immutable
+   semantic snapshots precompute digest-bound scale and norm metadata, then
+   atomically replace only after complete validation (ADR 0008).
 2. **Interchange adapters** — TREC parsers and formatters convert strict text
    artifacts to immutable domain records.
 3. **Transport adapters** — the CLI performs bounded local reads and delegates
@@ -48,6 +50,8 @@ scientific validity.
 - `score_fusion.py` — scalar fusion primitives.
 - `semantic_vector_ranking.py` — typed adapter to Rust-owned semantic-unit
   cosine ranking; authorization and embedding generation remain upstream.
+- `semantic_index.py` — typed adapter to immutable exact Rust index snapshots;
+  the caller owns persistence, model selection, and authorized candidate IDs.
 - `ranked_list_fusion.py` — complete-list fusion and contribution evidence.
 - `evaluation.py` — precision, recall, reciprocal rank, and graded nDCG.
 - `comparison.py` — exact and deterministic Monte Carlo paired randomization.

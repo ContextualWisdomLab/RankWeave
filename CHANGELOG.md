@@ -5,6 +5,10 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 ## [Unreleased]
 
 ### Added
+- Added immutable exact semantic-unit index snapshots with atomic validated
+  replacement, digest-bound model/dimension/vector evidence, caller-supplied
+  row or packed authorization, and deterministic multithreaded Rust scoring
+  (ADR 0008).
 - Added a Rust-owned, versioned semantic-unit cosine ranking API with strict
   vector validation, deterministic item/unit ties, winning-unit evidence, and
   an ordered-input SHA-256 digest. Provider selection, authorization, weights,

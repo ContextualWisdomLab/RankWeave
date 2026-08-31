@@ -107,6 +107,11 @@ from rankweave.score_fusion import (
     weighted_convex_combination_score,
     weighted_reciprocal_rank_fusion_score,
 )
+from rankweave.semantic_index import (
+    SemanticIndexRankingReport,
+    SemanticIndexSnapshotEvidence,
+    SemanticUnitExactIndex,
+)
 from rankweave.semantic_vector_ranking import (
     SemanticUnitCandidate,
     SemanticUnitRank,
@@ -192,6 +197,9 @@ __all__ = [
     "RankingEvaluationReport",
     "RankingMetrics",
     "SemanticUnitCandidate",
+    "SemanticIndexRankingReport",
+    "SemanticIndexSnapshotEvidence",
+    "SemanticUnitExactIndex",
     "SemanticUnitRank",
     "SemanticUnitRankingReport",
     "ReportSchemaDescriptor",
