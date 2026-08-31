@@ -153,6 +153,45 @@ def test_lazy_reciprocal_rank_fuse_exhausts_small_overlapping_channels():
     ) == reciprocal_rank_fuse(channels)
 
 
+def test_lazy_reciprocal_rank_fuse_rejects_duplicate_item_in_one_channel():
+    channels = {"first": ["a", "a"]}
+    resolved = {"a": (0, {"first": 1})}
+
+    with pytest.raises(ValueError, match="duplicate item"):
+        lazy_reciprocal_rank_fuse(channels, resolved.__getitem__, limit=2)
+
+
+def test_lazy_reciprocal_rank_fuse_keeps_float_frontier_conservative():
+    channels = {f"a-{index}": ["a"] for index in range(40)}
+    channels.update(
+        {
+            f"b-{index}": [f"prefix-1-{index}", f"prefix-2-{index}", "b"]
+            for index in range(56)
+        }
+    )
+    ranks = {}
+    first_seen = {}
+    for channel_name, ranking in channels.items():
+        for rank, item_id in enumerate(ranking, start=1):
+            ranks.setdefault(item_id, {})[channel_name] = rank
+            first_seen.setdefault(item_id, len(first_seen))
+
+    actual = lazy_reciprocal_rank_fuse(
+        channels,
+        lambda item_id: (first_seen[item_id], ranks[item_id]),
+        limit=1,
+        rank_constant_eta=4,
+    )
+    expected = reciprocal_rank_fuse(
+        channels,
+        limit=1,
+        rank_constant_eta=4,
+    )
+
+    assert [item.item_id for item in expected] == ["b"]
+    assert actual == expected
+
+
 @pytest.mark.parametrize(
     ("channels", "resolver", "message"),
     [
