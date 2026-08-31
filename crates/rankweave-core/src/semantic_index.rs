@@ -625,6 +625,13 @@ impl SemanticUnitIndex {
         model_identity: &str,
         packed_authorization: &[u8],
     ) -> Result<SemanticIndexRankingReport, SemanticIndexError> {
+        let model_digest = digest_bytes(
+            b"rankweave.semantic-unit-index.model.v1\0",
+            [model_identity.as_bytes()],
+        );
+        if model_digest != self.evidence.model_digest {
+            return Err(SemanticIndexError::ModelMismatch);
+        }
         let authorized = parse_packed_authorization(packed_authorization)?;
         let Some((item_id, unit_id)) = authorized.first() else {
             return Err(SemanticIndexError::EmptyAuthorization);
@@ -915,6 +922,10 @@ mod tests {
     fn packed_preflight_rejects_empty_and_unknown_scopes() {
         let index = index("snapshot-v1");
         let cases = [
+            index.preflight_authorized_packed(
+                "other-model",
+                &packed_authorization(&[("missing".to_owned(), "unit".to_owned())]),
+            ),
             index.preflight_authorized_packed("model-v1", b"short"),
             index.preflight_authorized_packed("model-v1", &packed_authorization(&[])),
             index.preflight_authorized_packed(
@@ -923,13 +934,14 @@ mod tests {
             ),
         ];
 
+        assert_eq!(cases[0].as_ref().unwrap_err().code(), "model_mismatch");
         assert_eq!(
-            cases[0].as_ref().unwrap_err().code(),
+            cases[1].as_ref().unwrap_err().code(),
             "malformed_packed_authorization"
         );
-        assert_eq!(cases[1].as_ref().unwrap_err().code(), "empty_authorization");
+        assert_eq!(cases[2].as_ref().unwrap_err().code(), "empty_authorization");
         assert_eq!(
-            cases[2].as_ref().unwrap_err().code(),
+            cases[3].as_ref().unwrap_err().code(),
             "unknown_authorized_candidate"
         );
     }
