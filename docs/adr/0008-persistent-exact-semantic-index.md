@@ -52,6 +52,24 @@ produces the same input digest, scores, output digest, and failure semantics as
 the row transport. It removes per-identity Python/FFI rows but does not alter
 the caller-supplied authorization set.
 
+An additive packed batch operation accepts two or more ordered query vectors
+against one identical packed authorization buffer and immutable snapshot. It
+validates and resolves that authorization once, then visits each authorized
+candidate vector once while accumulating every query's dot product in that
+query's original coordinate order. Candidate traversal remains Rayon-parallel;
+the terms of any one dot product are never parallel-reduced. Each returned
+query report is evidence-equivalent to an independent packed query: the same
+ordered-input digest, output digest, scores, winning units, and ordering. The
+batch has no cross-request result cache and is valid only when the consumer
+proves that every request supplied the same authorization snapshot digest;
+each consumer still post-authorizes its own returned rows. The explicit query
+and authorization sequences bound the work surface without introducing a
+workload-size dispatch heuristic.
+Bit-identical query vectors inside one batch share one exact dot-product
+calculation as deterministic common-subexpression elimination; the operation
+still emits a separately ordered report and the independently defined input
+and output digests for every supplied query. This lifetime ends with the batch.
+
 'replace_snapshot' first builds and validates a complete replacement outside
 the active lock, then swaps one immutable reference atomically. A concurrent
 query retains the old snapshot for its whole execution or acquires the new one;
@@ -65,6 +83,19 @@ RankWeave advertises no GPU profile in v1. A future accelerator requires its own
 accepted owner decision, real device execution evidence, and exact or
 explicitly bounded parity against the CPU profile; a device label alone is not
 evidence.
+
+A 2026-08-31 Apple Accelerate `dgemm` profile over a synthetic
+6,578-by-3,072 matrix and four queries measured 3.291-3.584 ms, but 13,007 of
+26,312 dot products differed bitwise from the coordinate-ordered owner result
+(maximum absolute difference 3.41e-13). Stable top-k alone cannot repair the
+existing complete-result digest, so this backend remains unavailable. A future
+exact top-k accelerator may use Higham's IEEE-754 forward-error bound only to
+prove that a candidate cannot cross the kth boundary, followed by
+coordinate-ordered scalar recomputation of every ambiguous candidate. If the
+bound excludes none, it must run the complete scalar path. Such screening
+needs a separately versioned top-k output digest and adversarial near-tie and
+all-ambiguous conformance tests before activation; an empirical tolerance is
+not a substitute.
 
 ## Responsibility boundary
 
@@ -84,6 +115,8 @@ evidence.
   identities.
 - Exact precomputed scales and norms remove repeated decode, validation, and
   norm work. Every authorized coordinate still participates in scoring.
+- Identically authorized concurrent queries can share one candidate-vector
+  traversal without sharing results or relaxing per-query evidence.
 - Rayon adds a lockfile-pinned Rust dependency but no Python runtime
   dependency. Worker count comes from the owner runtime and is reported; it is
   not a ranking parameter.
@@ -104,6 +137,9 @@ evidence.
   the digest boundary.
 - **Fixed worker count:** is an ungrounded deployment knob. Indexed parallel
   work is deterministic for every observed worker count.
+- **Coalesce by model or question alone:** authorization equality is not
+  implied by either value and would risk returning a row outside one caller's
+  evidence snapshot.
 
 ## References — APA 7th edition
 
@@ -113,6 +149,10 @@ IEEE Computer Society. (2019). *IEEE standard for floating-point arithmetic*
 National Institute of Standards and Technology. (2015). *Secure Hash Standard
 (SHS)* (FIPS PUB 180-4). U.S. Department of Commerce.
 https://doi.org/10.6028/NIST.FIPS.180-4
+
+Higham, N. J. (2002). *Accuracy and stability of numerical algorithms* (2nd
+ed.). Society for Industrial and Applied Mathematics.
+https://doi.org/10.1137/1.9780898718027
 
 Salton, G., & Buckley, C. (1988). Term-weighting approaches in automatic text
 retrieval. *Information Processing & Management, 24*(5), 513–523.
