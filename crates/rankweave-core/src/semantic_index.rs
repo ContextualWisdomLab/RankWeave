@@ -131,7 +131,7 @@ impl std::error::Error for SemanticIndexError {}
 pub struct SemanticUnitIndex {
     evidence: SemanticIndexSnapshotEvidence,
     candidate_ids: Vec<(String, String)>,
-    candidate_lookup: HashMap<(String, String), usize>,
+    candidate_lookup: HashMap<String, HashMap<String, usize>>,
     normalized_vectors: Vec<f64>,
     vector_norms: Vec<f64>,
 }
@@ -186,18 +186,22 @@ impl SemanticUnitIndex {
         }
 
         let mut identities = HashSet::new();
-        let mut candidate_lookup = HashMap::with_capacity(candidate_ids.len());
+        let mut candidate_lookup: HashMap<String, HashMap<String, usize>> =
+            HashMap::with_capacity(candidate_ids.len());
         let mut normalized_vectors = Vec::with_capacity(candidate_ids.len() * vector_dimension);
         let mut vector_norms = Vec::with_capacity(candidate_ids.len());
         let vector_byte_count = vector_dimension * size_of::<f64>();
         for (index, (item_id, unit_id)) in candidate_ids.iter().enumerate() {
             if !identities.insert((item_id.clone(), unit_id.clone())) {
                 return Err(SemanticIndexError::DuplicateCandidate {
-                    item_id: item_id.clone(),
-                    unit_id: unit_id.clone(),
+                    item_id: (*item_id).to_owned(),
+                    unit_id: (*unit_id).to_owned(),
                 });
             }
-            candidate_lookup.insert((item_id.clone(), unit_id.clone()), index);
+            candidate_lookup
+                .entry(item_id.clone())
+                .or_default()
+                .insert(unit_id.clone(), index);
             let start = index * vector_byte_count;
             let vector = packed_vectors[start..start + vector_byte_count]
                 .chunks_exact(8)
@@ -282,6 +286,19 @@ impl SemanticUnitIndex {
         query_vector: &[f64],
         authorized_candidate_ids: &[(String, String)],
     ) -> Result<SemanticIndexRankingReport, SemanticIndexError> {
+        let authorized_refs = authorized_candidate_ids
+            .iter()
+            .map(|(item_id, unit_id)| (item_id.as_str(), unit_id.as_str()))
+            .collect::<Vec<_>>();
+        self.rank_authorized_refs(model_identity, query_vector, &authorized_refs)
+    }
+
+    fn rank_authorized_refs(
+        &self,
+        model_identity: &str,
+        query_vector: &[f64],
+        authorized_candidate_ids: &[(&str, &str)],
+    ) -> Result<SemanticIndexRankingReport, SemanticIndexError> {
         let model_digest = digest_bytes(
             b"rankweave.semantic-unit-index.model.v1\0",
             [model_identity.as_bytes()],
@@ -317,17 +334,18 @@ impl SemanticUnitIndex {
         for (item_id, unit_id) in authorized_candidate_ids {
             if !authorization_seen.insert((item_id, unit_id)) {
                 return Err(SemanticIndexError::DuplicateAuthorization {
-                    item_id: item_id.clone(),
-                    unit_id: unit_id.clone(),
+                    item_id: (*item_id).to_owned(),
+                    unit_id: (*unit_id).to_owned(),
                 });
             }
             let Some(index) = self
                 .candidate_lookup
-                .get(&(item_id.clone(), unit_id.clone()))
+                .get(*item_id)
+                .and_then(|units| units.get(*unit_id))
             else {
                 return Err(SemanticIndexError::UnknownAuthorizedCandidate {
-                    item_id: item_id.clone(),
-                    unit_id: unit_id.clone(),
+                    item_id: (*item_id).to_owned(),
+                    unit_id: (*unit_id).to_owned(),
                 });
             };
             authorized_indices.push(*index);
@@ -441,7 +459,7 @@ impl SemanticUnitIndex {
         if cursor != packed_authorization.len() {
             return Err(SemanticIndexError::MalformedPackedAuthorization);
         }
-        self.rank_authorized(model_identity, query_vector, &authorized)
+        self.rank_authorized_refs(model_identity, query_vector, &authorized)
     }
 }
 
@@ -456,7 +474,10 @@ fn read_packed_u64(bytes: &[u8], cursor: &mut usize) -> Result<u64, SemanticInde
     ))
 }
 
-fn read_packed_text(bytes: &[u8], cursor: &mut usize) -> Result<String, SemanticIndexError> {
+fn read_packed_text<'a>(
+    bytes: &'a [u8],
+    cursor: &mut usize,
+) -> Result<&'a str, SemanticIndexError> {
     let length = read_packed_u64(bytes, cursor)?;
     if length > (bytes.len() - *cursor) as u64 {
         return Err(SemanticIndexError::MalformedPackedAuthorization);
@@ -465,7 +486,7 @@ fn read_packed_text(bytes: &[u8], cursor: &mut usize) -> Result<String, Semantic
     let end = *cursor + length;
     let value = &bytes[*cursor..end];
     *cursor = end;
-    String::from_utf8(value.to_vec()).map_err(|_| SemanticIndexError::NonUtf8PackedAuthorization)
+    std::str::from_utf8(value).map_err(|_| SemanticIndexError::NonUtf8PackedAuthorization)
 }
 
 /// Atomically replace an immutable exact index only after successful validation.
