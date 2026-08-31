@@ -148,6 +148,7 @@ pub struct SemanticUnitIndex {
     candidate_ids: Vec<(String, String)>,
     candidate_lookup: HashMap<String, HashMap<String, usize>>,
     normalized_vectors: Vec<f64>,
+    #[cfg(target_os = "macos")]
     absolute_normalized_vectors: Vec<f64>,
     vector_norms: Vec<f64>,
 }
@@ -205,6 +206,7 @@ impl SemanticUnitIndex {
         let mut candidate_lookup: HashMap<String, HashMap<String, usize>> =
             HashMap::with_capacity(candidate_ids.len());
         let mut normalized_vectors = Vec::with_capacity(candidate_ids.len() * vector_dimension);
+        #[cfg(target_os = "macos")]
         let mut absolute_normalized_vectors =
             Vec::with_capacity(candidate_ids.len() * vector_dimension);
         let mut vector_norms = Vec::with_capacity(candidate_ids.len());
@@ -235,6 +237,7 @@ impl SemanticUnitIndex {
             }
             let offset = normalized_vectors.len();
             normalized_vectors.extend(vector.iter().map(|value| value / scale));
+            #[cfg(target_os = "macos")]
             absolute_normalized_vectors
                 .extend(normalized_vectors[offset..].iter().map(|value| value.abs()));
             let norm = normalized_vectors[offset..]
@@ -289,6 +292,7 @@ impl SemanticUnitIndex {
             candidate_ids,
             candidate_lookup,
             normalized_vectors,
+            #[cfg(target_os = "macos")]
             absolute_normalized_vectors,
             vector_norms,
         })
@@ -973,12 +977,14 @@ struct PreparedQuery {
     norm: f64,
 }
 
+#[cfg(any(target_os = "macos", test))]
 #[derive(Clone, Copy, Debug)]
 struct DotRoundoffBound {
     gamma: f64,
     underflow_allowance: f64,
 }
 
+#[cfg(any(target_os = "macos", test))]
 impl DotRoundoffBound {
     fn new(term_count: usize) -> Option<Self> {
         let rounded_terms = term_count as f64 * f64::EPSILON / 2.0;
@@ -1032,6 +1038,7 @@ impl DotRoundoffBound {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn ambiguous_items<'a>(
     item_intervals: &HashMap<&'a str, (f64, f64)>,
     top_k: usize,

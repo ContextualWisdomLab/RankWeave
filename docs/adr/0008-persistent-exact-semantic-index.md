@@ -155,6 +155,25 @@ at 61.509 ms during host contention. The profile is therefore an exact
 calculation prerequisite, not evidence that a consumer's 20 ms end-to-end SLO
 is met.
 
+A subsequent process-isolation profile removed Python and the consumer event
+loop. A host-native Rust process held the same-shape 6,578-by-3,072 synthetic
+snapshot behind one immutable handle, assigned macOS user-initiated QoS to the
+caller and a dedicated Rayon pool, and checked stable output digests for four
+distinct mixed-sign queries. An initial 100-call sweep of every outer worker
+count from one through the host's ten physical cores measured 10.052-15.216 ms
+and appeared to pass 20 ms. That apparent calibration did not survive ten
+fresh one-worker processes: two of 1,000 later calls took 52.948 ms and 81.775
+ms. A startup worker-count calibration therefore cannot prove a deterministic
+maximum and is not an accepted execution contract.
+
+The same harness in the declared four-vCPU Colima Linux runtime exercised the
+portable coordinate-ordered scalar fallback. One through four outer workers
+respectively measured maxima of 82.359, 56.221, 52.808, and 80.210 ms across
+100 calls each. Neither the native macOS process nor the portable Linux profile
+proves that every call completes within 20 ms. RankWeave consequently does not
+publish a native owner service, hard-coded worker count, or consumer endpoint
+from these measurements.
+
 ## Responsibility boundary
 
 - The consumer persists the source projection, selects the model-specific
