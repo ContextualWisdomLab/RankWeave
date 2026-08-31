@@ -2,7 +2,7 @@
 
 - **Status: Accepted**
 - **Date:** 2026-08-22
-- **Scope:** the `rankweave` package-root public surface (`rankweave.__all__`)
+- **Scope:** the package-root API, installed CLI, and versioned JSON transports
 
 ## Context
 

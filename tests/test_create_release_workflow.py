@@ -154,10 +154,11 @@ def test_verify_job_runs_complete_quality_gate_before_build_handoff():
     )
     positions = tuple(verify_block.index(command) for command in commands)
     assert positions == tuple(sorted(positions))
-    assert "exactly one wheel and one source distribution" in verify_block
-    assert '"rankweave-${version}-cp310-abi3-"*.whl' in verify_block
-    assert "unexpected stable-ABI wheel name" in verify_block
-    assert "rankweave-${version}.tar.gz" in verify_block
+    assert "rustup toolchain install 1.97.1" in verify_block
+    assert "scripts/verify_release_archives.py" in verify_block
+    assert '--version "$RELEASE_VERSION"' in verify_block
+    assert "--wheel-tag linux" in verify_block
+    assert "--require-sdist" in verify_block
     assert "Extract deterministic release notes" in verify_block
     assert "## [${version}]" in verify_block
     assert "name: rankweave-release-notes" in verify_block

@@ -71,29 +71,39 @@ def test_publish_workflow_pins_exact_current_actions():
 
     references = _action_references(workflow_text)
     assert set(references) == set(EXPECTED_PUBLISH_ACTIONS.items())
-    assert len(references) == 8
+    assert len(references) == 15
 
 
 def test_publish_workflow_separates_jobs_and_handoffs_one_artifact():
     workflow_text = _publish_workflow()
-    build_block = _job_block(workflow_text, "build", "provenance")
+    build_block = _job_block(workflow_text, "build", "wheels")
+    wheels_block = _job_block(workflow_text, "wheels", "assemble")
+    assemble_block = _job_block(workflow_text, "assemble", "provenance")
     provenance_block = _job_block(workflow_text, "provenance", "publish")
     publish_block = _job_block(workflow_text, "publish", None)
 
     assert "needs:" not in build_block
-    assert "needs: build" in provenance_block
-    assert "needs: [build, provenance]" in publish_block
+    assert "needs: build" in wheels_block
+    assert "needs: [build, wheels]" in assemble_block
+    assert "needs: assemble" in provenance_block
+    assert "needs: [assemble, provenance]" in publish_block
     assert build_block.index("python -m coverage run -m pytest -q") < (
-        build_block.index("uv build --wheel --sdist --out-dir dist")
+        build_block.index("uv build --sdist --out-dir dist")
     )
-    assert "name: rankweave-distributions" in build_block
+    assert "runs-on: ${{ matrix.runner }}" in wheels_block
+    assert "runner: ubuntu-latest" in wheels_block
+    assert "runner: macos-14" in wheels_block
+    assert "runner: windows-latest" in wheels_block
+    assert "uvx --from maturin==1.14.1 maturin build" in wheels_block
+    assert "compatibility: manylinux2014" in wheels_block
+    assert "name: rankweave-distributions" in assemble_block
     assert (
         "path: |\n"
         "            dist/\n"
         "            release-handoff/SHA256SUMS"
-    ) in build_block
-    assert "if-no-files-found: error" in build_block
-    assert "include-hidden-files: false" in build_block
+    ) in assemble_block
+    assert "if-no-files-found: error" in assemble_block
+    assert "include-hidden-files: false" in assemble_block
     assert "retention-days: 7" in build_block
     assert "name: rankweave-distributions" in provenance_block
     assert "path: handoff/" in provenance_block
@@ -104,22 +114,22 @@ def test_publish_workflow_separates_jobs_and_handoffs_one_artifact():
 
 def test_distribution_handoff_is_checksum_verified_before_use():
     workflow_text = _publish_workflow()
-    build_block = _job_block(workflow_text, "build", "provenance")
+    assemble_block = _job_block(workflow_text, "assemble", "provenance")
     provenance_block = _job_block(workflow_text, "provenance", "publish")
     publish_block = _job_block(workflow_text, "publish", None)
 
     assert (
         "manifest_sha256: ${{ steps.distributions.outputs.manifest_sha256 }}"
-        in build_block
+        in assemble_block
     )
-    assert ") > release-handoff/SHA256SUMS" in build_block
-    assert "sha256sum release-handoff/SHA256SUMS" in build_block
-    assert "manifest_sha256=%s" in build_block
+    assert ") > release-handoff/SHA256SUMS" in assemble_block
+    assert "sha256sum release-handoff/SHA256SUMS" in assemble_block
+    assert "manifest_sha256=%s" in assemble_block
     for job_block in (provenance_block, publish_block):
         assert "Verify immutable distribution handoff" in job_block
         assert (
             "EXPECTED_MANIFEST_SHA256: "
-            "${{ needs.build.outputs.manifest_sha256 }}"
+            "${{ needs.assemble.outputs.manifest_sha256 }}"
         ) in job_block
         assert "handoff/release-handoff/SHA256SUMS" in job_block
         assert "sha256sum --check --strict -" in job_block
@@ -135,7 +145,7 @@ def test_distribution_handoff_is_checksum_verified_before_use():
 
 
 def test_build_job_checks_exact_release_identity_and_default_branch():
-    build_block = _job_block(_publish_workflow(), "build", "provenance")
+    build_block = _job_block(_publish_workflow(), "build", "wheels")
 
     assert "ref: ${{ inputs.release_sha || github.sha }}" in build_block
     assert "fetch-depth: 0" in build_block
@@ -164,7 +174,10 @@ def test_build_job_checks_exact_release_identity_and_default_branch():
 
 
 def test_build_job_checks_package_version_and_complete_quality_gate():
-    build_block = _job_block(_publish_workflow(), "build", "provenance")
+    workflow_text = _publish_workflow()
+    build_block = _job_block(workflow_text, "build", "wheels")
+    wheels_block = _job_block(workflow_text, "wheels", "assemble")
+    assemble_block = _job_block(workflow_text, "assemble", "provenance")
 
     assert '"$release_tag" != "v${version}"' in build_block
     assert "rankweave.__version__" in build_block
@@ -173,19 +186,20 @@ def test_build_job_checks_package_version_and_complete_quality_gate():
     assert "python -m ruff check ." in build_block
     assert "python -m coverage run -m pytest -q" in build_block
     assert "python -m coverage report" in build_block
-    assert "uv build --wheel --sdist --out-dir dist" in build_block
-    assert "release must contain exactly one wheel and one " in build_block
-    assert '"source distribution"' in build_block
-    assert 'startswith(f"{expected_prefix}-cp310-abi3-")' in build_block
-    assert "unexpected stable-ABI wheel name" in build_block
-    assert "wheel is missing the compiled RankWeave core" in build_block
-    assert "rankweave/schemas/artifact-verification-v1.schema.json" in build_block
-    assert "CHANGELOG.md" in build_block
+    assert "uv build --sdist --out-dir dist" in build_block
+    assert "uvx --from maturin==1.14.1 maturin build" in wheels_block
+    assert "scripts/verify_release_archives.py" in build_block
+    assert "scripts/verify_release_archives.py" in wheels_block
+    assert "scripts/verify_release_archives.py" in assemble_block
+    assert "--wheel-tag manylinux --wheel-tag macosx" in assemble_block
+    assert "--wheel-tag win_amd64 --require-sdist" in assemble_block
+    assert build_block.count("rustup toolchain install 1.97.1") == 1
+    assert wheels_block.count("rustup toolchain install 1.97.1") == 1
 
 
 def test_release_jobs_use_least_privilege_and_protected_environment():
     workflow_text = _publish_workflow()
-    build_block = _job_block(workflow_text, "build", "provenance")
+    build_block = _job_block(workflow_text, "build", "wheels")
     provenance_block = _job_block(workflow_text, "provenance", "publish")
     publish_block = _job_block(workflow_text, "publish", None)
 
@@ -254,15 +268,29 @@ def test_normal_package_ci_builds_and_exercises_release_archives():
     ci_workflow = _read_repository_file(".github/workflows/ci.yml")
 
     assert "uv build --wheel --sdist --out-dir dist" in ci_workflow
-    assert "Verify source distribution contents" in ci_workflow
-    assert '"-cp310-abi3-" not in wheel_path.name' in ci_workflow
-    assert "package job requires exactly one source distribution" in ci_workflow
-    assert 'source_root + "CHANGELOG.md"' in ci_workflow
-    assert 'source_root + "tests/test_version.py"' in ci_workflow
+    assert "Verify wheel and source distribution contents" in ci_workflow
+    assert "scripts/verify_release_archives.py" in ci_workflow
+    assert "--wheel-tag linux --require-sdist" in ci_workflow
     assert "Exercise release checksum handoff" in ci_workflow
-    assert "sha256sum *.whl *.tar.gz" in ci_workflow
+    assert "sha256sum ./*.whl ./*.tar.gz" in ci_workflow
     assert "release-handoff/SHA256SUMS" in ci_workflow
     assert "sha256sum --check --strict -" in ci_workflow
     assert "sha256sum --check --strict ../release-handoff/SHA256SUMS" in (
         ci_workflow
     )
+
+
+def test_release_archive_verifier_has_one_complete_member_contract():
+    verifier = _read_repository_file("scripts/verify_release_archives.py")
+
+    for required_member in (
+        "rankweave/_rankweave_core.pyi",
+        "rankweave/semantic_vector_ranking.py",
+        "Cargo.lock",
+        "Cargo.toml",
+        "crates/rankweave-core/Cargo.toml",
+        "crates/rankweave-python/Cargo.toml",
+    ):
+        assert required_member in verifier
+    assert "unexpected stable-ABI wheel name" in verifier
+    assert "wheel is missing the compiled RankWeave core" in verifier
