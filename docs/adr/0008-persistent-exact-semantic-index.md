@@ -99,22 +99,61 @@ not a substitute.
 
 The follow-up proof profile applies the standard binary64 unit roundoff
 `u = 2^-53` and `gamma_n = nu / (1 - nu)`. Both BLAS and the required
-coordinate-ordered scalar dot lie within `gamma_n |x|^T|y|` of the real dot;
-Cauchy-Schwarz therefore gives a conservative scalar-cosine interval of
-`BLAS cosine +/- 2 gamma_n`. Only a candidate whose upper endpoint is strictly
-below the kth-largest lower endpoint is excluded. Equality remains ambiguous,
-and every ambiguous candidate is recomputed in coordinate order before stable
-top-k. At 6,578 by 3,072 by four, the complete screened proof measured
-3.605-4.762 ms, at most six ambiguous candidates per query, and zero screened
-top-four differences from the scalar reference, despite 13,007 bit-different
-BLAS dots. A corrective 30-sample rerun using nearest-rank p95 (sample 29)
-measured 3.573 ms minimum, 4.063 ms mean, 4.604 ms p95, and 5.686 ms maximum,
-again with at most six ambiguous candidates and zero screened top-four
-differences. Near-tie and all-equal interval tests retain every candidate that
-can cross the boundary. This remains a profile, not an activated backend:
-production code must additionally fall back for any operand set where the
-standard no-underflow error model is not established, pool units to items
-before screening, and bind a separately versioned exact top-k digest.
+coordinate-ordered scalar dot lie within `gamma_n |x|^T|y|` of the real dot.
+The owner therefore performs one `dgemm(A, Q)` for approximate signed dots and
+a second `dgemm(|A|, |Q|)` to bound the absolute dot for every matrix/query
+pair. `|A|` is immutable derived snapshot metadata bound by the same source
+vector digest; `|Q|` exists only for the batch. The absolute GEMM's own error
+is inverted conservatively before the two dot-error bounds are added. The
+implementation also charges one minimum-normal absolute error for each
+multiply and add, divided by the standard error denominator, so cancellation,
+subnormal products, and gradual underflow remain contained rather than relying
+on the relative-error model outside its assumptions. Invalid or non-finite
+bounds fall back to the complete scalar path.
+
+Only a candidate whose upper endpoint is strictly below the kth-largest lower
+endpoint is excluded. Each score interval is widened outward by one binary64
+value around the positive-norm division. Equality remains ambiguous, and every
+ambiguous candidate is recomputed in coordinate order before stable top-k.
+The earlier one-GEMM 6,578-by-3,072-by-four profile measured 3.605-4.762 ms,
+but it was only a profile: it used a Cauchy-Schwarz simplification and a
+same-sign sufficient condition, so it did not cover the mixed-sign embedding
+workload. Its corrective 30-sample nearest-rank p95 was 4.604 ms. It is retained
+as historical motivation, not activation evidence. The accepted production
+contract is the two-GEMM absolute-dot proof above, with mixed-sign near-tie,
+all-equal, cancellation, and underflow conformance tests.
+
+The additive `rank_authorized_top_k_batch_packed` contract now implements that
+proof on macOS. Before screening, unit intervals pool to item intervals by
+taking the maximum lower and upper endpoints, matching the exact per-item
+maximum definition. A candidate item is excluded only when its maximum upper
+endpoint is strictly below the kth-largest item lower endpoint. Every unit of
+every remaining item is then recomputed with the existing coordinate-ordered
+scalar loop; equality, near ties, and an all-ambiguous set therefore retain the
+same stable item and winning-unit result as the scalar contract.
+
+Unavailable Accelerate, an unrepresentable BLAS dimension, a non-finite bound,
+or a screen that excludes no item falls back to the complete scalar path. The
+underflow allowance is part of the mathematical interval, never a workload
+tolerance. The top-k input and output digests use separate `v1` domains and
+bind `k`, so they cannot be confused with the complete-ranking digest.
+Non-macOS platforms retain the exact scalar top-k profile.
+
+`preflight_authorized_top_k_packed` uses the first identity from the caller's
+real packed authorization scope as its query and executes the same exact top-k
+profile. It exists only to close readiness before a consumer accepts traffic;
+the returned report remains fully versioned and is discarded by readiness
+callers rather than cached as a user result.
+
+The production two-GEMM implementation over the same synthetic
+6,578-by-3,072 matrix and four distinct queries preserved the scalar top-four
+prefix exactly. Thirty direct owner calls measured 11.939 ms minimum,
+12.260 ms mean, 12.861 ms nearest-rank p95, and 12.972 ms maximum. This does
+not establish a deterministic wall-clock maximum: a later 500-iteration
+consumer-path trace observed four calls above 20 ms, including one owner call
+at 61.509 ms during host contention. The profile is therefore an exact
+calculation prerequisite, not evidence that a consumer's 20 ms end-to-end SLO
+is met.
 
 ## Responsibility boundary
 

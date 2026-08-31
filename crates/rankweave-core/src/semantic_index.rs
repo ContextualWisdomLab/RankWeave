@@ -16,6 +16,15 @@ pub const SEMANTIC_INDEX_SNAPSHOT_SCHEMA_VERSION: &str =
 /// Deterministic portable CPU execution profile.
 pub const SEMANTIC_INDEX_CPU_EXECUTION_PROFILE: &str = "rankweave.semantic-unit-index.cpu-rayon.v1";
 
+/// Exact top-k profile after a conservative scalar fallback.
+pub const SEMANTIC_INDEX_TOP_K_CPU_EXECUTION_PROFILE: &str =
+    "rankweave.semantic-unit-index.top-k.cpu-rayon.v1";
+
+/// Exact top-k profile screened by an interval-bounded Apple Accelerate call.
+#[cfg(target_os = "macos")]
+pub const SEMANTIC_INDEX_TOP_K_ACCELERATE_EXECUTION_PROFILE: &str =
+    "rankweave.semantic-unit-index.top-k.accelerate-interval.v1";
+
 /// Immutable evidence describing one validated exact index snapshot.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SemanticIndexSnapshotEvidence {
@@ -79,6 +88,8 @@ pub enum SemanticIndexError {
     ModelMismatch,
     /// A batch contains no query vectors.
     EmptyQueryBatch,
+    /// An exact top-k request asks for zero results.
+    EmptyTopK,
     /// Query vector dimension does not match the snapshot.
     DimensionMismatch { expected: usize, actual: usize },
     /// Query contains no authorized candidate identities.
@@ -110,6 +121,7 @@ impl SemanticIndexError {
             Self::DuplicateCandidate { .. } => "duplicate_candidate",
             Self::ModelMismatch => "model_mismatch",
             Self::EmptyQueryBatch => "empty_query_batch",
+            Self::EmptyTopK => "empty_top_k",
             Self::DimensionMismatch { .. } => "dimension_mismatch",
             Self::EmptyAuthorization => "empty_authorization",
             Self::DuplicateAuthorization { .. } => "duplicate_authorization",
@@ -136,6 +148,7 @@ pub struct SemanticUnitIndex {
     candidate_ids: Vec<(String, String)>,
     candidate_lookup: HashMap<String, HashMap<String, usize>>,
     normalized_vectors: Vec<f64>,
+    absolute_normalized_vectors: Vec<f64>,
     vector_norms: Vec<f64>,
 }
 
@@ -192,6 +205,8 @@ impl SemanticUnitIndex {
         let mut candidate_lookup: HashMap<String, HashMap<String, usize>> =
             HashMap::with_capacity(candidate_ids.len());
         let mut normalized_vectors = Vec::with_capacity(candidate_ids.len() * vector_dimension);
+        let mut absolute_normalized_vectors =
+            Vec::with_capacity(candidate_ids.len() * vector_dimension);
         let mut vector_norms = Vec::with_capacity(candidate_ids.len());
         let vector_byte_count = vector_dimension * size_of::<f64>();
         for (index, (item_id, unit_id)) in candidate_ids.iter().enumerate() {
@@ -220,6 +235,8 @@ impl SemanticUnitIndex {
             }
             let offset = normalized_vectors.len();
             normalized_vectors.extend(vector.iter().map(|value| value / scale));
+            absolute_normalized_vectors
+                .extend(normalized_vectors[offset..].iter().map(|value| value.abs()));
             let norm = normalized_vectors[offset..]
                 .iter()
                 .map(|value| value * value)
@@ -272,6 +289,7 @@ impl SemanticUnitIndex {
             candidate_ids,
             candidate_lookup,
             normalized_vectors,
+            absolute_normalized_vectors,
             vector_norms,
         })
     }
@@ -493,6 +511,147 @@ impl SemanticUnitIndex {
             .collect())
     }
 
+    #[cfg(target_os = "macos")]
+    fn rank_authorized_top_k_accelerate_refs(
+        &self,
+        model_identity: &str,
+        query_vectors: &[&[f64]],
+        authorized_candidate_ids: &[(&str, &str)],
+        top_k: usize,
+    ) -> Result<Vec<SemanticIndexRankingReport>, SemanticIndexError> {
+        let model_digest = digest_bytes(
+            b"rankweave.semantic-unit-index.model.v1\0",
+            [model_identity.as_bytes()],
+        );
+        if model_digest != self.evidence.model_digest {
+            return Err(SemanticIndexError::ModelMismatch);
+        }
+        if query_vectors.is_empty() {
+            return Err(SemanticIndexError::EmptyQueryBatch);
+        }
+        if authorized_candidate_ids.is_empty() {
+            return Err(SemanticIndexError::EmptyAuthorization);
+        }
+        let mut authorization_seen = HashSet::new();
+        let mut authorized_indices = Vec::with_capacity(authorized_candidate_ids.len());
+        for (item_id, unit_id) in authorized_candidate_ids {
+            if !authorization_seen.insert((item_id, unit_id)) {
+                return Err(SemanticIndexError::DuplicateAuthorization {
+                    item_id: (*item_id).to_owned(),
+                    unit_id: (*unit_id).to_owned(),
+                });
+            }
+            let Some(index) = self
+                .candidate_lookup
+                .get(*item_id)
+                .and_then(|units| units.get(*unit_id))
+            else {
+                return Err(SemanticIndexError::UnknownAuthorizedCandidate {
+                    item_id: (*item_id).to_owned(),
+                    unit_id: (*unit_id).to_owned(),
+                });
+            };
+            authorized_indices.push(*index);
+        }
+        let Some(roundoff) = DotRoundoffBound::new(self.evidence.vector_dimension) else {
+            return self.scalar_top_k_batch_refs(
+                model_identity,
+                query_vectors,
+                authorized_candidate_ids,
+                top_k,
+            );
+        };
+        let prepared_queries = query_vectors
+            .iter()
+            .map(|query| self.prepare_query(query))
+            .collect::<Result<Vec<_>, _>>()?;
+        let Some((approximate_dots, approximate_absolute_dots)) = accelerate_matrix_multiply_pair(
+            &self.normalized_vectors,
+            &self.absolute_normalized_vectors,
+            &prepared_queries,
+            self.evidence.candidate_count,
+            self.evidence.vector_dimension,
+        ) else {
+            return self.scalar_top_k_batch_refs(
+                model_identity,
+                query_vectors,
+                authorized_candidate_ids,
+                top_k,
+            );
+        };
+        let query_count = prepared_queries.len();
+        let mut reports = Vec::with_capacity(query_count);
+        for (query_index, query) in prepared_queries.iter().enumerate() {
+            let mut item_intervals: HashMap<&str, (f64, f64)> = HashMap::new();
+            for index in &authorized_indices {
+                let (item_id, _) = &self.candidate_ids[*index];
+                let offset = *index * query_count + query_index;
+                let interval = roundoff
+                    .scalar_score_interval(
+                        approximate_dots[offset],
+                        approximate_absolute_dots[offset],
+                        query.norm * self.vector_norms[*index],
+                    )
+                    .unwrap_or((0.0, 1.0));
+                item_intervals
+                    .entry(item_id)
+                    .and_modify(|current| {
+                        current.0 = current.0.max(interval.0);
+                        current.1 = current.1.max(interval.1);
+                    })
+                    .or_insert(interval);
+            }
+            let ambiguity = ambiguous_items(&item_intervals, top_k);
+            if ambiguity.len() == item_intervals.len() {
+                let full = self
+                    .rank_authorized_refs(
+                        model_identity,
+                        query_vectors[query_index],
+                        authorized_candidate_ids,
+                    )
+                    .expect("screening inputs were validated before scalar recomputation");
+                reports.push(self.finish_top_k_report(
+                    &model_digest,
+                    query_vectors[query_index],
+                    authorized_candidate_ids,
+                    full.results,
+                    top_k,
+                    SEMANTIC_INDEX_TOP_K_CPU_EXECUTION_PROFILE,
+                ));
+                continue;
+            }
+            let dimension = self.evidence.vector_dimension;
+            let scored = authorized_indices
+                .par_iter()
+                .filter(|index| ambiguity.contains(self.candidate_ids[**index].0.as_str()))
+                .map(|index| {
+                    let start = index * dimension;
+                    let dot = query
+                        .normalized
+                        .iter()
+                        .zip(&self.normalized_vectors[start..start + dimension])
+                        .fold(0.0, |sum, (left, right)| sum + left * right);
+                    let score = (dot / (query.norm * self.vector_norms[*index])).clamp(0.0, 1.0);
+                    (*index, score)
+                })
+                .collect::<Vec<_>>();
+            let mut best_by_item = HashMap::new();
+            for (index, score) in scored {
+                let (item_id, unit_id) = &self.candidate_ids[index];
+                retain_best_unit(&mut best_by_item, item_id, unit_id, score);
+            }
+            reports.push(self.finish_top_k_report(
+                &model_digest,
+                query_vectors[query_index],
+                authorized_candidate_ids,
+                best_by_item.into_values().collect(),
+                top_k,
+                SEMANTIC_INDEX_TOP_K_ACCELERATE_EXECUTION_PROFILE,
+            ));
+        }
+        Ok(reports)
+    }
+
     fn prepare_query(&self, query_vector: &[f64]) -> Result<PreparedQuery, SemanticIndexError> {
         if query_vector.len() != self.evidence.vector_dimension {
             return Err(SemanticIndexError::DimensionMismatch {
@@ -576,6 +735,90 @@ impl SemanticUnitIndex {
         }
     }
 
+    fn finish_top_k_report(
+        &self,
+        model_digest: &str,
+        query_vector: &[f64],
+        authorized_candidate_ids: &[(&str, &str)],
+        mut results: Vec<SemanticUnitRank>,
+        top_k: usize,
+        execution_profile: &'static str,
+    ) -> SemanticIndexRankingReport {
+        results.sort_by(|left, right| {
+            right
+                .score
+                .total_cmp(&left.score)
+                .then_with(|| left.item_id.cmp(&right.item_id))
+        });
+        results.truncate(top_k);
+
+        let mut input_hasher = Sha256::new();
+        input_hasher.update(b"rankweave.semantic-unit-index.top-k-query.v1\0");
+        update_length_prefixed(&mut input_hasher, self.evidence.snapshot_digest.as_bytes());
+        update_length_prefixed(&mut input_hasher, model_digest.as_bytes());
+        input_hasher.update((top_k as u64).to_be_bytes());
+        input_hasher.update((query_vector.len() as u64).to_be_bytes());
+        for value in query_vector {
+            input_hasher.update(value.to_bits().to_be_bytes());
+        }
+        input_hasher.update((authorized_candidate_ids.len() as u64).to_be_bytes());
+        for (item_id, unit_id) in authorized_candidate_ids {
+            update_length_prefixed(&mut input_hasher, item_id.as_bytes());
+            update_length_prefixed(&mut input_hasher, unit_id.as_bytes());
+        }
+        let ordered_input_digest = format!("sha256:{:x}", input_hasher.finalize());
+
+        let mut output_hasher = Sha256::new();
+        output_hasher.update(b"rankweave.semantic-unit-index.top-k-result.v1\0");
+        output_hasher.update((top_k as u64).to_be_bytes());
+        output_hasher.update((results.len() as u64).to_be_bytes());
+        for result in &results {
+            update_length_prefixed(&mut output_hasher, result.item_id.as_bytes());
+            update_length_prefixed(&mut output_hasher, result.winning_unit_id.as_bytes());
+            output_hasher.update(result.score.to_bits().to_be_bytes());
+        }
+        let output_digest = format!("sha256:{:x}", output_hasher.finalize());
+        SemanticIndexRankingReport {
+            snapshot: self.evidence.clone(),
+            algorithm_version: SEMANTIC_UNIT_COSINE_ALGORITHM_VERSION,
+            execution_profile,
+            worker_count: rayon::current_num_threads(),
+            ordered_input_digest,
+            output_digest,
+            results,
+        }
+    }
+
+    fn scalar_top_k_batch_refs(
+        &self,
+        model_identity: &str,
+        query_vectors: &[&[f64]],
+        authorized_candidate_ids: &[(&str, &str)],
+        top_k: usize,
+    ) -> Result<Vec<SemanticIndexRankingReport>, SemanticIndexError> {
+        let model_digest = digest_bytes(
+            b"rankweave.semantic-unit-index.model.v1\0",
+            [model_identity.as_bytes()],
+        );
+        self.rank_authorized_batch_refs(model_identity, query_vectors, authorized_candidate_ids)
+            .map(|reports| {
+                reports
+                    .into_iter()
+                    .zip(query_vectors)
+                    .map(|(report, query)| {
+                        self.finish_top_k_report(
+                            &model_digest,
+                            query,
+                            authorized_candidate_ids,
+                            report.results,
+                            top_k,
+                            SEMANTIC_INDEX_TOP_K_CPU_EXECUTION_PROFILE,
+                        )
+                    })
+                    .collect()
+            })
+    }
+
     /// Rank ordered queries against one identical canonical packed authorization.
     pub fn rank_authorized_batch_packed(
         &self,
@@ -586,6 +829,37 @@ impl SemanticUnitIndex {
         let authorized = parse_packed_authorization(packed_authorization)?;
         let query_refs = query_vectors.iter().map(Vec::as_slice).collect::<Vec<_>>();
         self.rank_authorized_batch_refs(model_identity, &query_refs, &authorized)
+    }
+
+    /// Return exact top-k reports for ordered queries and one packed authorization.
+    ///
+    /// Apple Accelerate may screen only candidates whose binary64 forward-error
+    /// intervals prove that they cannot cross the item-level kth boundary. Every
+    /// ambiguous item's units are recomputed in coordinate order. Other platforms
+    /// and operand sets outside the no-underflow proof fall back to the exact scalar
+    /// batch while retaining the separately versioned top-k digests.
+    pub fn rank_authorized_top_k_batch_packed(
+        &self,
+        model_identity: &str,
+        query_vectors: &[Vec<f64>],
+        packed_authorization: &[u8],
+        top_k: usize,
+    ) -> Result<Vec<SemanticIndexRankingReport>, SemanticIndexError> {
+        if top_k == 0 {
+            return Err(SemanticIndexError::EmptyTopK);
+        }
+        let authorized = parse_packed_authorization(packed_authorization)?;
+        let query_refs = query_vectors.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        #[cfg(target_os = "macos")]
+        let result = self.rank_authorized_top_k_accelerate_refs(
+            model_identity,
+            &query_refs,
+            &authorized,
+            top_k,
+        );
+        #[cfg(not(target_os = "macos"))]
+        let result = self.scalar_top_k_batch_refs(model_identity, &query_refs, &authorized, top_k);
+        result
     }
 
     /*
@@ -650,11 +924,220 @@ impl SemanticUnitIndex {
         let query = self.normalized_vectors[start..start + self.evidence.vector_dimension].to_vec();
         self.rank_authorized_refs(model_identity, &query, &authorized)
     }
+
+    /// Exercise the exact top-k profile for one real packed authorization scope.
+    pub fn preflight_authorized_top_k_packed(
+        &self,
+        model_identity: &str,
+        packed_authorization: &[u8],
+        top_k: usize,
+    ) -> Result<SemanticIndexRankingReport, SemanticIndexError> {
+        if top_k == 0 {
+            return Err(SemanticIndexError::EmptyTopK);
+        }
+        let model_digest = digest_bytes(
+            b"rankweave.semantic-unit-index.model.v1\0",
+            [model_identity.as_bytes()],
+        );
+        if model_digest != self.evidence.model_digest {
+            return Err(SemanticIndexError::ModelMismatch);
+        }
+        let authorized = parse_packed_authorization(packed_authorization)?;
+        let Some((item_id, unit_id)) = authorized.first() else {
+            return Err(SemanticIndexError::EmptyAuthorization);
+        };
+        let Some(index) = self
+            .candidate_lookup
+            .get(*item_id)
+            .and_then(|units| units.get(*unit_id))
+        else {
+            return Err(SemanticIndexError::UnknownAuthorizedCandidate {
+                item_id: (*item_id).to_owned(),
+                unit_id: (*unit_id).to_owned(),
+            });
+        };
+        let start = index * self.evidence.vector_dimension;
+        let query = self.normalized_vectors[start..start + self.evidence.vector_dimension].to_vec();
+        self.rank_authorized_top_k_batch_packed(
+            model_identity,
+            &[query],
+            packed_authorization,
+            top_k,
+        )
+        .map(|mut reports| reports.remove(0))
+    }
 }
 
 struct PreparedQuery {
     normalized: Vec<f64>,
     norm: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct DotRoundoffBound {
+    gamma: f64,
+    underflow_allowance: f64,
+}
+
+impl DotRoundoffBound {
+    fn new(term_count: usize) -> Option<Self> {
+        let rounded_terms = term_count as f64 * f64::EPSILON / 2.0;
+        if !rounded_terms.is_finite() || rounded_terms >= 1.0 {
+            return None;
+        }
+        let gamma = rounded_terms / (1.0 - rounded_terms);
+        // The usual relative model excludes underflow. Conservatively charge
+        // one minimum-normal absolute error for every multiply and add, then
+        // amplify the accumulated errors by the same standard denominator.
+        let underflow_operations = 2.0 * term_count as f64;
+        let underflow_allowance = underflow_operations * f64::MIN_POSITIVE / (1.0 - rounded_terms);
+        Some(Self {
+            gamma,
+            underflow_allowance,
+        })
+    }
+
+    fn scalar_score_interval(
+        self,
+        approximate_dot: f64,
+        approximate_absolute_dot: f64,
+        norm_product: f64,
+    ) -> Option<(f64, f64)> {
+        if !approximate_dot.is_finite()
+            || !approximate_absolute_dot.is_finite()
+            || approximate_absolute_dot < 0.0
+            || !norm_product.is_finite()
+            || norm_product <= 0.0
+        {
+            return None;
+        }
+        // The second GEMM estimates |x|^T|y|. Its own forward bound gives an
+        // upper bound on the real absolute dot, which then bounds both the
+        // BLAS dot and the required coordinate-ordered scalar dot.
+        let absolute_dot_upper =
+            (approximate_absolute_dot + self.underflow_allowance) / (1.0 - self.gamma);
+        let dot_difference = 2.0 * (self.gamma * absolute_dot_upper + self.underflow_allowance);
+        if !absolute_dot_upper.is_finite() || !dot_difference.is_finite() {
+            return None;
+        }
+        // Division is monotone for the positive norm product. Widen each
+        // endpoint by one representable value to contain its rounded division.
+        let lower = ((approximate_dot - dot_difference) / norm_product)
+            .next_down()
+            .clamp(0.0, 1.0);
+        let upper = ((approximate_dot + dot_difference) / norm_product)
+            .next_up()
+            .clamp(0.0, 1.0);
+        Some((lower, upper))
+    }
+}
+
+fn ambiguous_items<'a>(
+    item_intervals: &HashMap<&'a str, (f64, f64)>,
+    top_k: usize,
+) -> HashSet<&'a str> {
+    if top_k >= item_intervals.len() {
+        return item_intervals.keys().copied().collect();
+    }
+    let mut lower_bounds = item_intervals
+        .values()
+        .map(|interval| interval.0)
+        .collect::<Vec<_>>();
+    lower_bounds.sort_by(|left, right| right.total_cmp(left));
+    let kth_lower = lower_bounds[top_k - 1];
+    item_intervals
+        .iter()
+        .filter_map(|(item_id, interval)| (interval.1 >= kth_lower).then_some(*item_id))
+        .collect()
+}
+
+#[cfg(target_os = "macos")]
+#[link(name = "Accelerate", kind = "framework")]
+unsafe extern "C" {
+    fn cblas_dgemm(
+        order: i32,
+        transpose_a: i32,
+        transpose_b: i32,
+        rows: i32,
+        columns: i32,
+        shared: i32,
+        alpha: f64,
+        left: *const f64,
+        left_stride: i32,
+        right: *const f64,
+        right_stride: i32,
+        beta: f64,
+        output: *mut f64,
+        output_stride: i32,
+    );
+}
+
+#[cfg(target_os = "macos")]
+fn accelerate_matrix_multiply_pair(
+    matrix: &[f64],
+    absolute_matrix: &[f64],
+    queries: &[PreparedQuery],
+    candidate_count: usize,
+    dimension: usize,
+) -> Option<(Vec<f64>, Vec<f64>)> {
+    let (rows, columns, shared) = accelerate_dimensions(candidate_count, queries.len(), dimension)?;
+    let mut queries_by_coordinate = Vec::with_capacity(dimension * queries.len());
+    for coordinate in 0..dimension {
+        queries_by_coordinate.extend(queries.iter().map(|query| query.normalized[coordinate]));
+    }
+    let absolute_queries_by_coordinate = queries_by_coordinate
+        .iter()
+        .map(|value| value.abs())
+        .collect::<Vec<_>>();
+    let mut output = vec![0.0; candidate_count * queries.len()];
+    let mut absolute_output = vec![0.0; candidate_count * queries.len()];
+    // SAFETY: every pointer addresses a contiguous allocation sized for the
+    // row-major dimensions and leading strides passed to Accelerate. The call
+    // is synchronous, and the immutable inputs outlive it.
+    unsafe {
+        cblas_dgemm(
+            101,
+            111,
+            111,
+            rows,
+            columns,
+            shared,
+            1.0,
+            matrix.as_ptr(),
+            shared,
+            queries_by_coordinate.as_ptr(),
+            columns,
+            0.0,
+            output.as_mut_ptr(),
+            columns,
+        );
+        cblas_dgemm(
+            101,
+            111,
+            111,
+            rows,
+            columns,
+            shared,
+            1.0,
+            absolute_matrix.as_ptr(),
+            shared,
+            absolute_queries_by_coordinate.as_ptr(),
+            columns,
+            0.0,
+            absolute_output.as_mut_ptr(),
+            columns,
+        );
+    }
+    Some((output, absolute_output))
+}
+
+#[cfg(target_os = "macos")]
+fn accelerate_dimensions(rows: usize, columns: usize, shared: usize) -> Option<(i32, i32, i32)> {
+    Some((
+        i32::try_from(rows).ok()?,
+        i32::try_from(columns).ok()?,
+        i32::try_from(shared).ok()?,
+    ))
 }
 
 fn vectors_have_identical_bits(left: &[f64], right: &[f64]) -> bool {
@@ -675,22 +1158,24 @@ fn retain_best_unit(
     unit_id: &str,
     score: f64,
 ) {
-    let proposed = SemanticUnitRank {
-        item_id: item_id.to_owned(),
-        winning_unit_id: unit_id.to_owned(),
-        score,
-    };
-    best_by_item
-        .entry(item_id.to_owned())
-        .and_modify(|current| {
-            if proposed.score > current.score
-                || (proposed.score == current.score
-                    && proposed.winning_unit_id < current.winning_unit_id)
-            {
-                *current = proposed.clone();
-            }
-        })
-        .or_insert(proposed);
+    if let Some(current) = best_by_item.get_mut(item_id) {
+        if score > current.score
+            || (score == current.score && unit_id < current.winning_unit_id.as_str())
+        {
+            current.winning_unit_id.clear();
+            current.winning_unit_id.push_str(unit_id);
+            current.score = score;
+        }
+        return;
+    }
+    best_by_item.insert(
+        item_id.to_owned(),
+        SemanticUnitRank {
+            item_id: item_id.to_owned(),
+            winning_unit_id: unit_id.to_owned(),
+            score,
+        },
+    );
 }
 
 fn parse_packed_authorization(
@@ -775,10 +1260,16 @@ impl SemanticUnitIndexHandle {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{HashMap, HashSet};
     use std::sync::Arc;
     use std::thread;
 
-    use super::{SemanticIndexError, SemanticUnitIndex, SemanticUnitIndexHandle};
+    use super::{
+        DotRoundoffBound, SEMANTIC_INDEX_TOP_K_CPU_EXECUTION_PROFILE, SemanticIndexError,
+        SemanticUnitIndex, SemanticUnitIndexHandle, ambiguous_items,
+    };
+    #[cfg(target_os = "macos")]
+    use super::{SEMANTIC_INDEX_TOP_K_ACCELERATE_EXECUTION_PROFILE, accelerate_dimensions};
     use crate::{SemanticUnitCandidate, rank_semantic_units};
     use rayon::ThreadPoolBuilder;
 
@@ -916,6 +1407,12 @@ mod tests {
         assert_eq!(report.results[1].item_id, "item-b");
         assert!(report.ordered_input_digest.starts_with("sha256:"));
         assert!(report.output_digest.starts_with("sha256:"));
+
+        let top_k = index
+            .preflight_authorized_top_k_packed("model-v1", &packed_authorization(&authorization), 1)
+            .unwrap();
+        assert_eq!(top_k.results.len(), 1);
+        assert_eq!(top_k.results[0], report.results[0]);
     }
 
     #[test]
@@ -944,6 +1441,35 @@ mod tests {
             cases[3].as_ref().unwrap_err().code(),
             "unknown_authorized_candidate"
         );
+
+        let top_k_cases = [
+            index.preflight_authorized_top_k_packed("model-v1", b"short", 1),
+            index.preflight_authorized_top_k_packed("model-v1", &packed_authorization(&[]), 1),
+            index.preflight_authorized_top_k_packed(
+                "model-v1",
+                &packed_authorization(&[("missing".to_owned(), "unit".to_owned())]),
+                1,
+            ),
+            index.preflight_authorized_top_k_packed(
+                "other-model",
+                &packed_authorization(&[("item-a".to_owned(), "unit-a".to_owned())]),
+                1,
+            ),
+            index.preflight_authorized_top_k_packed(
+                "model-v1",
+                &packed_authorization(&[("item-a".to_owned(), "unit-a".to_owned())]),
+                0,
+            ),
+        ];
+        for (result, code) in top_k_cases.into_iter().zip([
+            "malformed_packed_authorization",
+            "empty_authorization",
+            "unknown_authorized_candidate",
+            "model_mismatch",
+            "empty_top_k",
+        ]) {
+            assert_eq!(result.unwrap_err().code(), code);
+        }
     }
 
     #[test]
@@ -975,6 +1501,266 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(batch, independent);
+    }
+
+    #[test]
+    fn interval_screened_top_k_matches_coordinate_ordered_scalar() {
+        let ids = vec![
+            ("item-a".to_owned(), "unit-low".to_owned()),
+            ("item-a".to_owned(), "unit-high".to_owned()),
+            ("item-b".to_owned(), "unit".to_owned()),
+            ("item-c".to_owned(), "unit".to_owned()),
+        ];
+        let index = SemanticUnitIndex::build(
+            "snapshot-v1",
+            "model-v1",
+            2,
+            ids.clone(),
+            &packed(&[&[0.0, 1.0], &[1.0, 0.0], &[0.9, 0.1], &[0.0, 1.0]]),
+        )
+        .unwrap();
+        let authorization = packed_authorization(&ids);
+        let queries = vec![vec![1.0, 0.0], vec![0.8, 0.2]];
+        let top_k = index
+            .rank_authorized_top_k_batch_packed("model-v1", &queries, &authorization, 2)
+            .unwrap();
+        let full = index
+            .rank_authorized_batch_packed("model-v1", &queries, &authorization)
+            .unwrap();
+
+        for (top_k_report, full_report) in top_k.iter().zip(full) {
+            assert_eq!(top_k_report.results, full_report.results[..2]);
+            assert_ne!(
+                top_k_report.ordered_input_digest,
+                full_report.ordered_input_digest
+            );
+            assert_ne!(top_k_report.output_digest, full_report.output_digest);
+        }
+        #[cfg(target_os = "macos")]
+        assert!(top_k.iter().any(|report| {
+            report.execution_profile == SEMANTIC_INDEX_TOP_K_ACCELERATE_EXECUTION_PROFILE
+        }));
+    }
+
+    #[test]
+    fn all_ambiguous_top_k_recomputes_complete_scalar_set() {
+        let ids = (0..8)
+            .map(|index| (format!("item-{index}"), "unit".to_owned()))
+            .collect::<Vec<_>>();
+        let vectors = (0..8).map(|_| &[1.0, 0.0][..]).collect::<Vec<_>>();
+        let index =
+            SemanticUnitIndex::build("snapshot-v1", "model-v1", 2, ids.clone(), &packed(&vectors))
+                .unwrap();
+        let top_k = index
+            .rank_authorized_top_k_batch_packed(
+                "model-v1",
+                &[vec![1.0, 0.0]],
+                &packed_authorization(&ids),
+                4,
+            )
+            .unwrap();
+        let full = index
+            .rank_authorized("model-v1", &[1.0, 0.0], &ids)
+            .unwrap();
+
+        assert_eq!(top_k[0].results, full.results[..4]);
+        assert_eq!(
+            top_k[0].execution_profile,
+            SEMANTIC_INDEX_TOP_K_CPU_EXECUTION_PROFILE
+        );
+    }
+
+    #[test]
+    fn mixed_sign_interval_screen_matches_scalar() {
+        let ids = vec![
+            ("item-a".to_owned(), "unit".to_owned()),
+            ("item-b".to_owned(), "unit".to_owned()),
+            ("item-c".to_owned(), "unit".to_owned()),
+            ("item-d".to_owned(), "unit".to_owned()),
+        ];
+        let index = SemanticUnitIndex::build(
+            "snapshot-v1",
+            "model-v1",
+            3,
+            ids.clone(),
+            &packed(&[
+                &[1.0, -0.5, 0.25],
+                &[0.9, -0.45, 0.2],
+                &[-0.5, 1.0, 0.25],
+                &[-1.0, -0.5, 0.1],
+            ]),
+        )
+        .unwrap();
+        let authorization = packed_authorization(&ids);
+        let queries = vec![vec![1.0, -0.25, 0.5], vec![-0.4, 1.0, 0.2]];
+        let top_k = index
+            .rank_authorized_top_k_batch_packed("model-v1", &queries, &authorization, 2)
+            .unwrap();
+        let full = index
+            .rank_authorized_batch_packed("model-v1", &queries, &authorization)
+            .unwrap();
+
+        for (screened, scalar) in top_k.iter().zip(full) {
+            assert_eq!(screened.results, scalar.results[..2]);
+        }
+        #[cfg(target_os = "macos")]
+        assert!(top_k.iter().any(|report| {
+            report.execution_profile == SEMANTIC_INDEX_TOP_K_ACCELERATE_EXECUTION_PROFILE
+        }));
+    }
+
+    #[test]
+    fn interval_bound_contains_underflow_and_cancellation_cases() {
+        let bound = DotRoundoffBound::new(3).unwrap();
+        let cancellation = bound.scalar_score_interval(0.0, 3.0, 1.0).unwrap();
+        assert!(cancellation.0 <= 0.0);
+        assert!(cancellation.1 > 0.0);
+
+        let underflow = bound
+            .scalar_score_interval(0.0, f64::MIN_POSITIVE, 1.0)
+            .unwrap();
+        assert!(underflow.0 <= 0.0);
+        assert!(underflow.1 >= f64::MIN_POSITIVE);
+
+        assert!(DotRoundoffBound::new(usize::MAX).is_none());
+        for invalid in [
+            bound.scalar_score_interval(f64::NAN, 1.0, 1.0),
+            bound.scalar_score_interval(1.0, f64::NAN, 1.0),
+            bound.scalar_score_interval(1.0, -1.0, 1.0),
+            bound.scalar_score_interval(1.0, 1.0, f64::INFINITY),
+            bound.scalar_score_interval(1.0, 1.0, 0.0),
+            bound.scalar_score_interval(f64::MAX, f64::MAX, f64::MIN_POSITIVE),
+        ] {
+            assert!(invalid.is_none());
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn interval_top_k_validation_and_scalar_fallback_are_explicit() {
+        let exact_index = index("snapshot-v1");
+        let known = ("item-a".to_owned(), "unit-a".to_owned());
+        let packed_known = packed_authorization(std::slice::from_ref(&known));
+        let cases = [
+            exact_index.rank_authorized_top_k_batch_packed(
+                "other-model",
+                &[vec![1.0, 0.0]],
+                &packed_known,
+                1,
+            ),
+            exact_index.rank_authorized_top_k_batch_packed("model-v1", &[], &packed_known, 1),
+            exact_index.rank_authorized_top_k_batch_packed(
+                "model-v1",
+                &[vec![1.0, 0.0]],
+                &packed_authorization(&[]),
+                1,
+            ),
+            exact_index.rank_authorized_top_k_batch_packed(
+                "model-v1",
+                &[vec![1.0, 0.0]],
+                &packed_authorization(&[known.clone(), known.clone()]),
+                1,
+            ),
+            exact_index.rank_authorized_top_k_batch_packed(
+                "model-v1",
+                &[vec![1.0, 0.0]],
+                &packed_authorization(&[("missing".to_owned(), "unit".to_owned())]),
+                1,
+            ),
+            exact_index.rank_authorized_top_k_batch_packed(
+                "model-v1",
+                &[vec![1.0]],
+                &packed_known,
+                1,
+            ),
+            exact_index.rank_authorized_top_k_batch_packed(
+                "model-v1",
+                &[vec![1.0, 0.0]],
+                b"short",
+                1,
+            ),
+        ];
+        for (result, code) in cases.into_iter().zip([
+            "model_mismatch",
+            "empty_query_batch",
+            "empty_authorization",
+            "duplicate_authorization",
+            "unknown_authorized_candidate",
+            "dimension_mismatch",
+            "malformed_packed_authorization",
+        ]) {
+            assert_eq!(result.unwrap_err().code(), code);
+        }
+
+        let authorization = [("item-a", "unit-a")];
+        let scalar = exact_index
+            .scalar_top_k_batch_refs("model-v1", &[&[0.0, 1.0]], &authorization, 1)
+            .unwrap();
+        assert_eq!(scalar[0].results.len(), 1);
+        assert_eq!(
+            scalar[0].execution_profile,
+            SEMANTIC_INDEX_TOP_K_CPU_EXECUTION_PROFILE
+        );
+
+        let mut oversized_dimension = index("snapshot-v1");
+        oversized_dimension.evidence.vector_dimension = usize::MAX;
+        assert_eq!(
+            oversized_dimension
+                .rank_authorized_top_k_accelerate_refs(
+                    "model-v1",
+                    &[&[0.0, 1.0]],
+                    &authorization,
+                    1,
+                )
+                .unwrap_err()
+                .code(),
+            "dimension_mismatch"
+        );
+
+        let mut oversized_candidate_count = index("snapshot-v1");
+        oversized_candidate_count.evidence.candidate_count = i32::MAX as usize + 1;
+        let fallback = oversized_candidate_count
+            .rank_authorized_top_k_accelerate_refs("model-v1", &[&[0.0, 1.0]], &authorization, 1)
+            .unwrap();
+        assert_eq!(
+            fallback[0].execution_profile,
+            SEMANTIC_INDEX_TOP_K_CPU_EXECUTION_PROFILE
+        );
+
+        let too_large = i32::MAX as usize + 1;
+        assert_eq!(accelerate_dimensions(1, 1, 1), Some((1, 1, 1)));
+        assert!(accelerate_dimensions(too_large, 1, 1).is_none());
+        assert!(accelerate_dimensions(1, too_large, 1).is_none());
+        assert!(accelerate_dimensions(1, 1, too_large).is_none());
+    }
+
+    #[test]
+    fn item_interval_screen_keeps_near_ties_and_pools_units_first() {
+        let intervals = HashMap::from([
+            ("item-a", (0.90, 0.91)),
+            ("item-b", (0.89, 0.905)),
+            ("item-c", (0.10, 0.20)),
+        ]);
+        assert_eq!(
+            ambiguous_items(&intervals, 1),
+            HashSet::from(["item-a", "item-b"])
+        );
+        assert_eq!(
+            ambiguous_items(&intervals, 3),
+            intervals.keys().copied().collect()
+        );
+    }
+
+    #[test]
+    fn exact_top_k_rejects_zero_k() {
+        let index = index("snapshot-v1");
+        assert_eq!(
+            index
+                .rank_authorized_top_k_batch_packed("model-v1", &[vec![1.0, 0.0]], b"", 0)
+                .unwrap_err()
+                .code(),
+            "empty_top_k"
+        );
     }
 
     #[test]

@@ -75,11 +75,14 @@ def test_exact_index_preflights_one_real_packed_authorization_scope() -> None:
     )
 
     report = index.preflight_authorized_packed("model-v1", authorization)
+    top_k = index.preflight_authorized_top_k_packed("model-v1", authorization, 1)
 
     assert report.snapshot == index.snapshot_evidence
     assert {result.item_id for result in report.results} == {"item-a", "item-b"}
     assert report.ordered_input_digest.startswith("sha256:")
     assert report.output_digest.startswith("sha256:")
+    assert top_k.results == report.results[:1]
+    assert top_k.ordered_input_digest != report.ordered_input_digest
 
 
 def test_exact_index_packed_batch_matches_independent_reports() -> None:
@@ -102,6 +105,34 @@ def test_exact_index_packed_batch_rejects_empty_queries() -> None:
     with pytest.raises(ValueError, match="^empty_query_batch:"):
         exact_index().rank_authorized_batch_packed(
             "model-v1", [], packed_authorization(("item-a", "unit-a"))
+        )
+
+
+def test_exact_top_k_batch_matches_scalar_prefix_with_distinct_digest() -> None:
+    index = exact_index()
+    authorization = packed_authorization(
+        ("item-b", "unit-z"), ("item-a", "unit-z"), ("item-a", "unit-a")
+    )
+    queries = ([1.0, 0.0], [0.0, 1.0])
+
+    top_k = index.rank_authorized_top_k_batch_packed(
+        "model-v1", queries, authorization, 1
+    )
+    full = index.rank_authorized_batch_packed("model-v1", queries, authorization)
+
+    for top_k_report, full_report in zip(top_k, full, strict=True):
+        assert top_k_report.results == full_report.results[:1]
+        assert top_k_report.ordered_input_digest != full_report.ordered_input_digest
+        assert top_k_report.output_digest != full_report.output_digest
+
+
+def test_exact_top_k_batch_rejects_zero_k() -> None:
+    with pytest.raises(ValueError, match="^empty_top_k:"):
+        exact_index().rank_authorized_top_k_batch_packed(
+            "model-v1",
+            [[1.0, 0.0]],
+            packed_authorization(("item-a", "unit-a")),
+            0,
         )
 
 
@@ -173,5 +204,7 @@ def test_native_stub_declares_every_packed_scope_operation() -> None:
     assert {
         "rank_authorized_packed",
         "preflight_authorized_packed",
+        "preflight_authorized_top_k_packed",
         "rank_authorized_batch_packed",
+        "rank_authorized_top_k_batch_packed",
     } <= methods

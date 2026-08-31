@@ -101,11 +101,44 @@ class SemanticUnitIndex:
         list[tuple[str, str, float]],
     ]: ...
 
+    def preflight_authorized_top_k_packed(
+        self,
+        model_identity: str,
+        packed_authorization: bytes,
+        top_k: int,
+    ) -> tuple[
+        tuple[str, str, str, str, str, str, int, int],
+        str,
+        str,
+        int,
+        str,
+        str,
+        list[tuple[str, str, float]],
+    ]: ...
+
     def rank_authorized_batch_packed(
         self,
         model_identity: str,
         query_vectors: list[list[float]],
         packed_authorization: bytes,
+    ) -> list[
+        tuple[
+            tuple[str, str, str, str, str, str, int, int],
+            str,
+            str,
+            int,
+            str,
+            str,
+            list[tuple[str, str, float]],
+        ]
+    ]: ...
+
+    def rank_authorized_top_k_batch_packed(
+        self,
+        model_identity: str,
+        query_vectors: list[list[float]],
+        packed_authorization: bytes,
+        top_k: int,
     ) -> list[
         tuple[
             tuple[str, str, str, str, str, str, int, int],
