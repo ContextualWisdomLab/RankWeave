@@ -338,6 +338,10 @@ requirement independently of locale-specific text-stream encodings.
 IEEE Computer Society. (2019). *IEEE standard for floating-point arithmetic*
 (IEEE Std 754-2019). IEEE. https://doi.org/10.1109/IEEESTD.2019.8766229
 
+Higham, N. J. (2002). *Accuracy and stability of numerical algorithms* (2nd
+ed.). Society for Industrial and Applied Mathematics.
+https://doi.org/10.1137/1.9780898718027
+
 NVIDIA Corporation. (2026). *CUDA C++ best practices guide* (Version 13.3).
 https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/
 

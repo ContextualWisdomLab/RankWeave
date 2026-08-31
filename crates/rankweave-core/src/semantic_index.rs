@@ -77,6 +77,8 @@ pub enum SemanticIndexError {
     DuplicateCandidate { item_id: String, unit_id: String },
     /// Query model does not match the snapshot model.
     ModelMismatch,
+    /// A batch contains no query vectors.
+    EmptyQueryBatch,
     /// Query vector dimension does not match the snapshot.
     DimensionMismatch { expected: usize, actual: usize },
     /// Query contains no authorized candidate identities.
@@ -107,6 +109,7 @@ impl SemanticIndexError {
             Self::ZeroNormVector { .. } => "zero_norm_vector",
             Self::DuplicateCandidate { .. } => "duplicate_candidate",
             Self::ModelMismatch => "model_mismatch",
+            Self::EmptyQueryBatch => "empty_query_batch",
             Self::DimensionMismatch { .. } => "dimension_mismatch",
             Self::EmptyAuthorization => "empty_authorization",
             Self::DuplicateAuthorization { .. } => "duplicate_authorization",
@@ -299,6 +302,20 @@ impl SemanticUnitIndex {
         query_vector: &[f64],
         authorized_candidate_ids: &[(&str, &str)],
     ) -> Result<SemanticIndexRankingReport, SemanticIndexError> {
+        let mut reports = self.rank_authorized_batch_refs(
+            model_identity,
+            &[query_vector],
+            authorized_candidate_ids,
+        )?;
+        Ok(reports.pop().expect("one validated query report"))
+    }
+
+    fn rank_authorized_batch_refs(
+        &self,
+        model_identity: &str,
+        query_vectors: &[&[f64]],
+        authorized_candidate_ids: &[(&str, &str)],
+    ) -> Result<Vec<SemanticIndexRankingReport>, SemanticIndexError> {
         let model_digest = digest_bytes(
             b"rankweave.semantic-unit-index.model.v1\0",
             [model_identity.as_bytes()],
@@ -306,25 +323,8 @@ impl SemanticUnitIndex {
         if model_digest != self.evidence.model_digest {
             return Err(SemanticIndexError::ModelMismatch);
         }
-        if query_vector.len() != self.evidence.vector_dimension {
-            return Err(SemanticIndexError::DimensionMismatch {
-                expected: self.evidence.vector_dimension,
-                actual: query_vector.len(),
-            });
-        }
-        if query_vector.iter().any(|value| !value.is_finite()) {
-            return Err(SemanticIndexError::NonFiniteVector {
-                vector_label: "query vector".to_owned(),
-            });
-        }
-        let query_scale = query_vector
-            .iter()
-            .map(|value| value.abs())
-            .fold(0.0, f64::max);
-        if query_scale == 0.0 {
-            return Err(SemanticIndexError::ZeroNormVector {
-                vector_label: "query vector".to_owned(),
-            });
+        if query_vectors.is_empty() {
+            return Err(SemanticIndexError::EmptyQueryBatch);
         }
         if authorized_candidate_ids.is_empty() {
             return Err(SemanticIndexError::EmptyAuthorization);
@@ -351,49 +351,137 @@ impl SemanticUnitIndex {
             authorized_indices.push(*index);
         }
 
-        let normalized_query = query_vector
+        let prepared_queries = query_vectors
+            .iter()
+            .map(|query_vector| self.prepare_query(query_vector))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut unique_query_indices = Vec::new();
+        let mut original_to_unique = Vec::with_capacity(query_vectors.len());
+        for (query_index, query_vector) in query_vectors.iter().enumerate() {
+            let existing = unique_query_indices.iter().position(|unique_index| {
+                vectors_have_identical_bits(query_vectors[*unique_index], query_vector)
+            });
+            original_to_unique.push(existing.unwrap_or_else(|| {
+                unique_query_indices.push(query_index);
+                unique_query_indices.len() - 1
+            }));
+        }
+        let unique_queries = unique_query_indices
+            .iter()
+            .map(|index| &prepared_queries[*index])
+            .collect::<Vec<_>>();
+        let dimension = self.evidence.vector_dimension;
+        let query_count = unique_queries.len();
+        let mut normalized_queries_by_coordinate = Vec::new();
+        for coordinate in 0..dimension {
+            normalized_queries_by_coordinate.extend(
+                unique_queries
+                    .iter()
+                    .map(|query| query.normalized[coordinate]),
+            );
+        }
+        let best_by_query = authorized_indices
+            .par_iter()
+            .fold(
+                || (vec![0.0; query_count], empty_best_maps(query_count)),
+                |(mut dots, mut best_by_query), index| {
+                    dots.fill(0.0);
+                    let start = index * dimension;
+                    for coordinate in 0..dimension {
+                        let candidate_value = self.normalized_vectors[start + coordinate];
+                        let query_start = coordinate * query_count;
+                        for (dot, query_value) in dots.iter_mut().zip(
+                            &normalized_queries_by_coordinate
+                                [query_start..query_start + query_count],
+                        ) {
+                            *dot += query_value * candidate_value;
+                        }
+                    }
+                    let (item_id, unit_id) = &self.candidate_ids[*index];
+                    for (query_index, query) in unique_queries.iter().enumerate() {
+                        let score = (dots[query_index] / (query.norm * self.vector_norms[*index]))
+                            .clamp(0.0, 1.0);
+                        retain_best_unit(&mut best_by_query[query_index], item_id, unit_id, score);
+                    }
+                    (dots, best_by_query)
+                },
+            )
+            .map(|(_, best_by_query)| best_by_query)
+            .reduce(
+                || empty_best_maps(query_count),
+                |mut left, right| {
+                    for (left_query, right_query) in left.iter_mut().zip(right) {
+                        for result in right_query.into_values() {
+                            retain_best_unit(
+                                left_query,
+                                &result.item_id,
+                                &result.winning_unit_id,
+                                result.score,
+                            );
+                        }
+                    }
+                    left
+                },
+            );
+
+        let unique_reports = unique_query_indices
+            .iter()
+            .zip(best_by_query)
+            .map(|(query_index, best_by_item)| {
+                self.finish_query_report(
+                    &model_digest,
+                    query_vectors[*query_index],
+                    authorized_candidate_ids,
+                    best_by_item,
+                )
+            })
+            .collect::<Vec<_>>();
+        Ok(original_to_unique
+            .into_iter()
+            .map(|unique_index| unique_reports[unique_index].clone())
+            .collect())
+    }
+
+    fn prepare_query(&self, query_vector: &[f64]) -> Result<PreparedQuery, SemanticIndexError> {
+        if query_vector.len() != self.evidence.vector_dimension {
+            return Err(SemanticIndexError::DimensionMismatch {
+                expected: self.evidence.vector_dimension,
+                actual: query_vector.len(),
+            });
+        }
+        if query_vector.iter().any(|value| !value.is_finite()) {
+            return Err(SemanticIndexError::NonFiniteVector {
+                vector_label: "query vector".to_owned(),
+            });
+        }
+        let query_scale = query_vector
+            .iter()
+            .map(|value| value.abs())
+            .fold(0.0, f64::max);
+        if query_scale == 0.0 {
+            return Err(SemanticIndexError::ZeroNormVector {
+                vector_label: "query vector".to_owned(),
+            });
+        }
+        let normalized = query_vector
             .iter()
             .map(|value| value / query_scale)
             .collect::<Vec<_>>();
-        let query_norm = normalized_query
+        let norm = normalized
             .iter()
             .map(|value| value * value)
             .sum::<f64>()
             .sqrt();
-        let dimension = self.evidence.vector_dimension;
-        let scored = authorized_indices
-            .par_iter()
-            .map(|index| {
-                let start = index * dimension;
-                let dot = normalized_query
-                    .iter()
-                    .zip(&self.normalized_vectors[start..start + dimension])
-                    .fold(0.0, |sum, (left, right)| sum + left * right);
-                let score = (dot / (query_norm * self.vector_norms[*index])).clamp(0.0, 1.0);
-                (*index, score)
-            })
-            .collect::<Vec<_>>();
+        Ok(PreparedQuery { normalized, norm })
+    }
 
-        let mut best_by_item: HashMap<String, SemanticUnitRank> = HashMap::new();
-        for (index, score) in scored {
-            let (item_id, unit_id) = &self.candidate_ids[index];
-            let proposed = SemanticUnitRank {
-                item_id: item_id.clone(),
-                winning_unit_id: unit_id.clone(),
-                score,
-            };
-            best_by_item
-                .entry(item_id.clone())
-                .and_modify(|current| {
-                    if proposed.score > current.score
-                        || (proposed.score == current.score
-                            && proposed.winning_unit_id < current.winning_unit_id)
-                    {
-                        *current = proposed.clone();
-                    }
-                })
-                .or_insert(proposed);
-        }
+    fn finish_query_report(
+        &self,
+        model_digest: &str,
+        query_vector: &[f64],
+        authorized_candidate_ids: &[(&str, &str)],
+        best_by_item: HashMap<String, SemanticUnitRank>,
+    ) -> SemanticIndexRankingReport {
         let mut results = best_by_item.into_values().collect::<Vec<_>>();
         results.sort_by(|left, right| {
             right
@@ -426,7 +514,7 @@ impl SemanticUnitIndex {
             output_hasher.update(result.score.to_bits().to_be_bytes());
         }
         let output_digest = format!("sha256:{:x}", output_hasher.finalize());
-        Ok(SemanticIndexRankingReport {
+        SemanticIndexRankingReport {
             snapshot: self.evidence.clone(),
             algorithm_version: SEMANTIC_UNIT_COSINE_ALGORITHM_VERSION,
             execution_profile: SEMANTIC_INDEX_CPU_EXECUTION_PROFILE,
@@ -434,7 +522,34 @@ impl SemanticUnitIndex {
             ordered_input_digest,
             output_digest,
             results,
-        })
+        }
+    }
+
+    /// Rank ordered queries against one identical canonical packed authorization.
+    pub fn rank_authorized_batch_packed(
+        &self,
+        model_identity: &str,
+        query_vectors: &[Vec<f64>],
+        packed_authorization: &[u8],
+    ) -> Result<Vec<SemanticIndexRankingReport>, SemanticIndexError> {
+        let authorized = parse_packed_authorization(packed_authorization)?;
+        let query_refs = query_vectors.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        self.rank_authorized_batch_refs(model_identity, &query_refs, &authorized)
+    }
+
+    /*
+        The single-query packed API remains the stable compatibility surface;
+        parsing delegates to the same borrowed authorization representation as
+        the batch operation.
+    */
+    fn rank_authorized_packed_inner(
+        &self,
+        model_identity: &str,
+        query_vector: &[f64],
+        packed_authorization: &[u8],
+    ) -> Result<SemanticIndexRankingReport, SemanticIndexError> {
+        let authorized = parse_packed_authorization(packed_authorization)?;
+        self.rank_authorized_refs(model_identity, query_vector, &authorized)
     }
 
     /// Rank a canonical packed ordered authorization set without Python rows.
@@ -444,23 +559,70 @@ impl SemanticUnitIndex {
         query_vector: &[f64],
         packed_authorization: &[u8],
     ) -> Result<SemanticIndexRankingReport, SemanticIndexError> {
-        let mut cursor = 0_usize;
-        let count = read_packed_u64(packed_authorization, &mut cursor)?;
-        if count > ((packed_authorization.len() - cursor) / 16) as u64 {
-            return Err(SemanticIndexError::MalformedPackedAuthorization);
-        }
-        let count = count as usize;
-        let mut authorized = Vec::with_capacity(count);
-        for _ in 0..count {
-            let item = read_packed_text(packed_authorization, &mut cursor)?;
-            let unit = read_packed_text(packed_authorization, &mut cursor)?;
-            authorized.push((item, unit));
-        }
-        if cursor != packed_authorization.len() {
-            return Err(SemanticIndexError::MalformedPackedAuthorization);
-        }
-        self.rank_authorized_refs(model_identity, query_vector, &authorized)
+        self.rank_authorized_packed_inner(model_identity, query_vector, packed_authorization)
     }
+}
+
+struct PreparedQuery {
+    normalized: Vec<f64>,
+    norm: f64,
+}
+
+fn vectors_have_identical_bits(left: &[f64], right: &[f64]) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .all(|(left, right)| left.to_bits() == right.to_bits())
+}
+
+fn empty_best_maps(query_count: usize) -> Vec<HashMap<String, SemanticUnitRank>> {
+    (0..query_count).map(|_| HashMap::new()).collect()
+}
+
+fn retain_best_unit(
+    best_by_item: &mut HashMap<String, SemanticUnitRank>,
+    item_id: &str,
+    unit_id: &str,
+    score: f64,
+) {
+    let proposed = SemanticUnitRank {
+        item_id: item_id.to_owned(),
+        winning_unit_id: unit_id.to_owned(),
+        score,
+    };
+    best_by_item
+        .entry(item_id.to_owned())
+        .and_modify(|current| {
+            if proposed.score > current.score
+                || (proposed.score == current.score
+                    && proposed.winning_unit_id < current.winning_unit_id)
+            {
+                *current = proposed.clone();
+            }
+        })
+        .or_insert(proposed);
+}
+
+fn parse_packed_authorization(
+    packed_authorization: &[u8],
+) -> Result<Vec<(&str, &str)>, SemanticIndexError> {
+    let mut cursor = 0_usize;
+    let count = read_packed_u64(packed_authorization, &mut cursor)?;
+    if count > ((packed_authorization.len() - cursor) / 16) as u64 {
+        return Err(SemanticIndexError::MalformedPackedAuthorization);
+    }
+    let count = count as usize;
+    let mut authorized = Vec::with_capacity(count);
+    for _ in 0..count {
+        let item = read_packed_text(packed_authorization, &mut cursor)?;
+        let unit = read_packed_text(packed_authorization, &mut cursor)?;
+        authorized.push((item, unit));
+    }
+    if cursor != packed_authorization.len() {
+        return Err(SemanticIndexError::MalformedPackedAuthorization);
+    }
+    Ok(authorized)
 }
 
 fn read_packed_u64(bytes: &[u8], cursor: &mut usize) -> Result<u64, SemanticIndexError> {
@@ -647,8 +809,46 @@ mod tests {
     }
 
     #[test]
+    fn packed_batch_matches_every_independent_query_and_digest() {
+        let authorization = vec![
+            ("item-b".to_owned(), "unit-z".to_owned()),
+            ("item-a".to_owned(), "unit-z".to_owned()),
+            ("item-a".to_owned(), "unit-a".to_owned()),
+        ];
+        let packed_authorization = packed_authorization(&authorization);
+        let queries = vec![
+            vec![1.0, 0.0],
+            vec![0.0, 1.0],
+            vec![1.0, 1.0],
+            vec![1.0, 0.0],
+        ];
+        let index = index("snapshot-v1");
+
+        let batch = index
+            .rank_authorized_batch_packed("model-v1", &queries, &packed_authorization)
+            .unwrap();
+        let independent = queries
+            .iter()
+            .map(|query| {
+                index
+                    .rank_authorized_packed("model-v1", query, &packed_authorization)
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(batch, independent);
+    }
+
+    #[test]
     fn malformed_packed_authorization_fails_closed() {
         let index = index("snapshot-v1");
+        assert_eq!(
+            index
+                .rank_authorized_batch_packed("model-v1", &[vec![1.0, 0.0]], b"short")
+                .unwrap_err()
+                .code(),
+            "malformed_packed_authorization"
+        );
         let cases = [
             (&b"short"[..], "malformed_packed_authorization"),
             (
@@ -844,6 +1044,13 @@ mod tests {
         for (result, code) in rank_cases.into_iter().zip(rank_codes) {
             assert_eq!(result.unwrap_err().code(), code);
         }
+        assert_eq!(
+            index
+                .rank_authorized_batch_packed("model", &[], &packed_authorization(&ids),)
+                .unwrap_err()
+                .code(),
+            "empty_query_batch"
+        );
     }
 
     #[test]
@@ -901,6 +1108,7 @@ mod tests {
     fn error_display_is_the_stable_code() {
         for error in [
             SemanticIndexError::ModelMismatch,
+            SemanticIndexError::EmptyQueryBatch,
             SemanticIndexError::SnapshotLockPoisoned,
         ] {
             assert_eq!(error.to_string(), error.code());

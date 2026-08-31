@@ -66,6 +66,29 @@ def test_exact_index_packed_authorization_matches_row_transport() -> None:
     assert packed_rows == rows
 
 
+def test_exact_index_packed_batch_matches_independent_reports() -> None:
+    index = exact_index()
+    authorization = packed_authorization(
+        ("item-b", "unit-z"), ("item-a", "unit-z"), ("item-a", "unit-a")
+    )
+    queries = ([1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0])
+
+    batch = index.rank_authorized_batch_packed("model-v1", queries, authorization)
+    independent = tuple(
+        index.rank_authorized_packed("model-v1", query, authorization)
+        for query in queries
+    )
+
+    assert batch == independent
+
+
+def test_exact_index_packed_batch_rejects_empty_queries() -> None:
+    with pytest.raises(ValueError, match="^empty_query_batch:"):
+        exact_index().rank_authorized_batch_packed(
+            "model-v1", [], packed_authorization(("item-a", "unit-a"))
+        )
+
+
 def test_exact_index_replacement_is_atomic_after_validation() -> None:
     index = exact_index()
 
