@@ -71,10 +71,16 @@ the red gate.
 ### 3. Implementation and deterministic validation
 
 The verified red state is committed locally only so model fallback can return
-to a known tree. The implementation phase may edit normal product,
-documentation, version, and package files, but it still cannot execute Bash,
-use the web, touch external directories, or edit `.github/`, `.git/`, or agent
-control files.
+to a known tree. The implementation phase may edit normal Python product and
+documentation files, but it still cannot execute Bash, use the web, touch
+external directories, or edit `.github/`, `.git/`, or agent control files.
+
+This autonomous lane is limited to Python production changes. Rust source,
+Cargo manifests, `pyproject.toml`, and the complete `crates/` tree are outside
+its diff boundary. That restriction keeps model-authored native code out of
+later credentialed builders and makes the trusted base extension the correct
+native dependency for final validation. A Rust-core increment requires a
+separate maintainer-authored and reviewed pull request.
 
 A deterministic post-agent gate rejects:
 
@@ -84,7 +90,8 @@ A deterministic post-agent gate rejects:
 - more than 25 changed files;
 - any file larger than 256 KiB;
 - more than 1 MiB of changed-file content;
-- proposals without a production `src/rankweave/*.py` change.
+- proposals without a production `src/rankweave/*.py` change;
+- Rust, Cargo, or Python build-metadata changes.
 
 The accepted proposal then runs, with no provider or GitHub credential and no
 network access:

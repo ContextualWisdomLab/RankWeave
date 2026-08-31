@@ -508,6 +508,11 @@ jobs:
           statistical or standards claim without a primary source already recorded in
           the repository. Figma is not applicable because RankWeave has no UI.
 
+          This autonomous lane is Python-only. Do not edit Rust source, Cargo
+          manifests, build configuration, or Python build metadata. A Rust-core
+          increment requires a separately authored and reviewed maintainer pull
+          request.
+
           Do not commit, push, open, approve, merge, publish, or release anything;
           the workflow performs deterministic validation and packages one protected
           pull request with maintainer-owned metadata.
@@ -606,17 +611,15 @@ jobs:
               ".gitmodules",
               "AGENTS.md",
               "CODEOWNERS",
+              "pyproject.toml",
               "SECURITY.md",
           }
-          forbidden_prefixes = (".github/", ".git/")
+          forbidden_prefixes = (".github/", ".git/", "crates/")
           allowed_exact = {
               "CHANGELOG.md",
               "README.md",
-              "pyproject.toml",
           }
           allowed_prefixes = (
-              "crates/rankweave-core/src/",
-              "crates/rankweave-python/src/",
               "src/rankweave/",
               "tests/",
               "docs/",
@@ -625,8 +628,6 @@ jobs:
               ".json",
               ".md",
               ".py",
-              ".rs",
-              ".toml",
               ".txt",
               ".yaml",
               ".yml",
@@ -651,14 +652,7 @@ jobs:
                   raise SystemExit(f"path is outside autonomous scope: {path_text}")
               if path.suffix not in allowed_suffixes:
                   raise SystemExit(f"non-text or unsupported path changed: {path_text}")
-              if (
-                  path_text.startswith("src/rankweave/") and path.suffix == ".py"
-              ) or (
-                  path_text.startswith(
-                      ("crates/rankweave-core/src/", "crates/rankweave-python/src/")
-                  )
-                  and path.suffix == ".rs"
-              ):
+              if path_text.startswith("src/rankweave/") and path.suffix == ".py":
                   production_changed = True
               info = path.lstat()
               if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
@@ -680,7 +674,7 @@ jobs:
 
           if not production_changed:
               raise SystemExit(
-                  "buyer-visible increment must change a production Python or Rust module"
+                  "buyer-visible increment must change a production Python module"
               )
           if not any(path.startswith("tests/") for path in changed):
               raise SystemExit("autonomous increment must include regression tests")

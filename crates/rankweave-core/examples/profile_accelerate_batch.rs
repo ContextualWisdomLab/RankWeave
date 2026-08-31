@@ -246,7 +246,7 @@ mod macos {
         let mean = elapsed.iter().sum::<f64>() / elapsed.len() as f64;
         println!(
             "shape={CANDIDATES}x{DIMENSION}x{QUERIES} min_ms={:.3} mean_ms={mean:.3} p95_ms={:.3} max_ms={:.3} bit_mismatches={mismatched} approximate_top4_mismatches={top_four_mismatches} screened_top4_mismatches={screened_top_four_mismatches} maximum_ambiguity={maximum_ambiguity} max_abs_diff={maximum_absolute_difference:e}",
-            elapsed[0], elapsed[27], elapsed[29]
+            elapsed[0], elapsed[28], elapsed[29]
         );
     }
 

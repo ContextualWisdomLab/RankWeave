@@ -1,4 +1,6 @@
+import ast
 import struct
+from pathlib import Path
 
 import pytest
 
@@ -152,3 +154,24 @@ def test_exact_index_fails_closed(
         exact_index().rank_authorized(model, query, authorization)
     assert str(raised.value).count(code) == 1
     assert "exact semantic index rejected input" in str(raised.value)
+
+
+def test_native_stub_declares_every_packed_scope_operation() -> None:
+    stub = ast.parse(
+        (Path(__file__).parents[1] / "src/rankweave/_rankweave_core.pyi").read_text(
+            encoding="utf-8"
+        )
+    )
+    index_class = next(
+        node
+        for node in stub.body
+        if isinstance(node, ast.ClassDef) and node.name == "SemanticUnitIndex"
+    )
+    methods = {
+        node.name for node in index_class.body if isinstance(node, ast.FunctionDef)
+    }
+    assert {
+        "rank_authorized_packed",
+        "preflight_authorized_packed",
+        "rank_authorized_batch_packed",
+    } <= methods
