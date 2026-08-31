@@ -111,5 +111,7 @@ def test_exact_index_fails_closed(
     authorization: list[tuple[str, str]],
     code: str,
 ) -> None:
-    with pytest.raises(ValueError, match=f"^{code}:"):
+    with pytest.raises(ValueError, match=f"^{code}:") as raised:
         exact_index().rank_authorized(model, query, authorization)
+    assert str(raised.value).count(code) == 1
+    assert "exact semantic index rejected input" in str(raised.value)

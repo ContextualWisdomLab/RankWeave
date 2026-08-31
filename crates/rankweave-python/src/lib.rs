@@ -41,7 +41,10 @@ type SemanticIndexReportTuple = (
 );
 
 fn index_error(error: rankweave_core::semantic_index::SemanticIndexError) -> PyErr {
-    PyValueError::new_err(format!("{}: {error}", error.code()))
+    PyValueError::new_err(format!(
+        "{}: exact semantic index rejected input ({error:?})",
+        error.code()
+    ))
 }
 
 fn evidence_tuple(evidence: &SemanticIndexSnapshotEvidence) -> SemanticIndexEvidenceTuple {
