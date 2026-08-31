@@ -168,6 +168,34 @@ class SemanticUnitExactIndex:
             results=tuple(SemanticUnitRank(*row) for row in rows),
         )
 
+    def preflight_authorized_top_k_packed(
+        self,
+        model_identity: str,
+        packed_authorization: bytes,
+        top_k: int,
+    ) -> SemanticIndexRankingReport:
+        """Exercise the exact top-k profile for one real authorization scope."""
+        (
+            snapshot,
+            algorithm,
+            execution_profile,
+            worker_count,
+            input_digest,
+            output_digest,
+            rows,
+        ) = self._native.preflight_authorized_top_k_packed(
+            model_identity, packed_authorization, top_k
+        )
+        return SemanticIndexRankingReport(
+            snapshot=SemanticIndexSnapshotEvidence(*snapshot),
+            algorithm_version=algorithm,
+            execution_profile=execution_profile,
+            worker_count=worker_count,
+            ordered_input_digest=input_digest,
+            output_digest=output_digest,
+            results=tuple(SemanticUnitRank(*row) for row in rows),
+        )
+
     def rank_authorized_batch_packed(
         self,
         model_identity: str,
@@ -180,6 +208,42 @@ class SemanticUnitExactIndex:
             model_identity,
             [list(query) for query in query_vectors],
             packed_authorization,
+        )
+        return tuple(
+            SemanticIndexRankingReport(
+                snapshot=SemanticIndexSnapshotEvidence(*snapshot),
+                algorithm_version=algorithm,
+                execution_profile=execution_profile,
+                worker_count=worker_count,
+                ordered_input_digest=input_digest,
+                output_digest=output_digest,
+                results=tuple(SemanticUnitRank(*row) for row in rows),
+            )
+            for (
+                snapshot,
+                algorithm,
+                execution_profile,
+                worker_count,
+                input_digest,
+                output_digest,
+                rows,
+            ) in reports
+        )
+
+    def rank_authorized_top_k_batch_packed(
+        self,
+        model_identity: str,
+        query_vectors: Sequence[Sequence[float]],
+        packed_authorization: bytes,
+        top_k: int,
+    ) -> tuple[SemanticIndexRankingReport, ...]:
+        """Return exact top-k reports with interval-safe owner acceleration."""
+
+        reports = self._native.rank_authorized_top_k_batch_packed(
+            model_identity,
+            [list(query) for query in query_vectors],
+            packed_authorization,
+            top_k,
         )
         return tuple(
             SemanticIndexRankingReport(

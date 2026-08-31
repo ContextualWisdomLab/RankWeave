@@ -177,6 +177,23 @@ impl SemanticUnitIndex {
         })
     }
 
+    fn preflight_authorized_top_k_packed(
+        &self,
+        py: Python<'_>,
+        model_identity: String,
+        packed_authorization: &Bound<'_, PyBytes>,
+        top_k: usize,
+    ) -> PyResult<SemanticIndexReportTuple> {
+        let snapshot = self.handle.snapshot().map_err(index_error)?;
+        let packed_authorization = packed_authorization.as_bytes().to_vec();
+        py.detach(move || {
+            snapshot
+                .preflight_authorized_top_k_packed(&model_identity, &packed_authorization, top_k)
+                .map(index_report_tuple)
+                .map_err(index_error)
+        })
+    }
+
     fn rank_authorized_batch_packed(
         &self,
         py: Python<'_>,
@@ -192,6 +209,29 @@ impl SemanticUnitIndex {
                     &model_identity,
                     &query_vectors,
                     &packed_authorization,
+                )
+                .map(|reports| reports.into_iter().map(index_report_tuple).collect())
+                .map_err(index_error)
+        })
+    }
+
+    fn rank_authorized_top_k_batch_packed(
+        &self,
+        py: Python<'_>,
+        model_identity: String,
+        query_vectors: Vec<Vec<f64>>,
+        packed_authorization: &Bound<'_, PyBytes>,
+        top_k: usize,
+    ) -> PyResult<Vec<SemanticIndexReportTuple>> {
+        let snapshot = self.handle.snapshot().map_err(index_error)?;
+        let packed_authorization = packed_authorization.as_bytes().to_vec();
+        py.detach(move || {
+            snapshot
+                .rank_authorized_top_k_batch_packed(
+                    &model_identity,
+                    &query_vectors,
+                    &packed_authorization,
+                    top_k,
                 )
                 .map(|reports| reports.into_iter().map(index_report_tuple).collect())
                 .map_err(index_error)
