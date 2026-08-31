@@ -39,8 +39,10 @@ and **GitHub mutation** into explicit trust zones.
 8. Commit the verified red state locally so model fallback can reset to a known
    tree without pushing anything.
 9. Run an **implementation phase** with the same no-execution and no-web
-   permissions. Edits are allowed in normal product and documentation files but
-   denied under `.github/`, `.git/`, and agent-control files.
+   permissions. Edits are allowed in Python product and documentation files but
+   denied under `.github/`, `.git/`, agent-control files, `crates/`, Cargo
+   manifests, and Python build metadata. Native changes require a separate
+   maintainer-authored and reviewed pull request.
 10. Apply a deterministic diff gate: text files only, no symlinks or submodules,
     no protected paths, no rename/copy/conflict state, bounded file count,
     bounded individual/aggregate bytes, and at least one production Python

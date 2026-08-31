@@ -172,19 +172,22 @@ def test_autonomous_diff_is_text_only_bounded_and_policy_safe():
     for protected_path in (
         '".gitmodules"',
         '"CODEOWNERS"',
+        '"pyproject.toml"',
         '"SECURITY.md"',
         '"AGENTS.md"',
         '".github/"',
         '".git/"',
+        '"crates/"',
     ):
         assert protected_path in workflow
     assert "non-regular file changed" in workflow
     assert "NUL byte found" in workflow
     assert "non-text or unsupported path changed" in workflow
-    assert '"crates/rankweave-core/src/"' in workflow
-    assert '"crates/rankweave-python/src/"' in workflow
-    assert '".rs"' in workflow
-    assert "must change a production Python or Rust module" in workflow
+    assert '"crates/rankweave-core/src/"' not in workflow
+    assert '"crates/rankweave-python/src/"' not in workflow
+    assert '".rs"' not in workflow
+    assert "must change a production Python module" in workflow
+    assert "This autonomous lane is Python-only" in workflow
 
 
 def test_ignored_native_core_is_restored_from_trusted_copy_after_each_cleanup():

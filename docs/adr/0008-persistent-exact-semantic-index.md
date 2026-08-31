@@ -107,7 +107,10 @@ and every ambiguous candidate is recomputed in coordinate order before stable
 top-k. At 6,578 by 3,072 by four, the complete screened proof measured
 3.605-4.762 ms, at most six ambiguous candidates per query, and zero screened
 top-four differences from the scalar reference, despite 13,007 bit-different
-BLAS dots. Near-tie and all-equal interval tests retain every candidate that
+BLAS dots. A corrective 30-sample rerun using nearest-rank p95 (sample 29)
+measured 3.573 ms minimum, 4.063 ms mean, 4.604 ms p95, and 5.686 ms maximum,
+again with at most six ambiguous candidates and zero screened top-four
+differences. Near-tie and all-equal interval tests retain every candidate that
 can cross the boundary. This remains a profile, not an activated backend:
 production code must additionally fall back for any operand set where the
 standard no-underflow error model is not established, pool units to items
