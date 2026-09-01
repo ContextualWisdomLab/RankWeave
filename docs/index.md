@@ -27,7 +27,7 @@ This landing page is a compact entry point rather than a second documentation au
 - [Report schemas](report-schemas.md)
 - [Release guidance](releasing.md)
 
-The product/technical gap baseline is being reviewed separately and should be linked here only after that document reaches protected `main`; an open documentation branch is not published-site authority.
+For product maturity and gap evidence, use documentation that is present on the protected default branch. Active pull-request documents are candidate evidence until they integrate and should not be treated as published-site authority.
 
 ## Release status
 
