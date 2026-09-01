@@ -19,12 +19,15 @@ The runtime uses only the Python standard library and is designed to work both a
 
 ## Documentation
 
-- [Repository overview and usage](../README.md)
+This landing page is a compact entry point rather than a second documentation authority map.
+
+- [Repository overview and usage](https://github.com/ContextualWisdomLab/RankWeave/blob/main/README.md)
 - [Command-line interface](cli.md)
-- [Research basis](research.md)
+- [Research basis](research/README.md)
 - [Report schemas](report-schemas.md)
 - [Release guidance](releasing.md)
-- [Product/technical gap baseline](product-technical-gap-baseline.md)
+
+The product/technical gap baseline is being reviewed separately and should be linked here only after that document reaches protected `main`; an open documentation branch is not published-site authority.
 
 ## Release status
 
