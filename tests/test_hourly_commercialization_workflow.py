@@ -42,7 +42,7 @@ def test_commercialization_loop_uses_pinned_central_pr_governance():
     # instead of a cross-repository pinned-SHA job here.
 
 
-def test_product_development_uses_nvidia_nim_and_fails_closed():
+def test_product_development_uses_contextual_orchestrator_gateway_and_fails_closed():
     workflow = _workflow_text()
 
     assert "NVIDIA_NIM_API_KEY" in workflow
@@ -50,21 +50,33 @@ def test_product_development_uses_nvidia_nim_and_fails_closed():
     assert "/agents/repos" not in workflow
     assert workflow.count("/pulls?state=open&per_page=1") == 3
     assert (
-        "NVIDIA_NIM_API_KEY is not configured; product development remains "
-        "fail-closed" in workflow
+        "No contextual-orchestrator provider secret is configured; product "
+        "development remains fail-closed" in workflow
     )
-    assert '"enabled_providers": ["nvidia"]' in workflow
-    assert "@ai-sdk/openai-compatible" not in workflow
+    assert '"enabled_providers": ["nvidia"]' not in workflow
+    assert workflow.count("@ai-sdk/openai-compatible") == 2
+    assert workflow.count("contextual_orchestrator_gateway/orchestrator/free") == 3
     assert "integrate.api.nvidia.com" not in workflow
+    assert "nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5" not in workflow
 
 
-def test_nvidia_secret_is_step_scoped_and_agent_has_no_github_credential():
+def test_provider_secrets_are_step_scoped_and_agent_has_no_github_credential():
     workflow = _workflow_text()
     develop = workflow[workflow.index("  develop-next-product-gap:\n") :]
     job_environment = develop.split("    steps:\n", maxsplit=1)[0]
 
-    assert "NVIDIA_API_KEY" not in job_environment
-    assert workflow.count("NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}") == 3
+    for secret_name in (
+        "BYTEZ_API_KEY",
+        "NVIDIA_NIM_API_KEY",
+        "NVIDIA_NIM_API_KEY_SUB",
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+    ):
+        assert secret_name not in job_environment
+        assert (
+            workflow.count(f"{secret_name}: ${{{{ secrets.{secret_name} }}}}") == 2
+        )
+    assert "NVIDIA_API_KEY" not in workflow
     assert "persist-credentials: false" in workflow
     assert workflow.count("env -u GH_TOKEN -u GITHUB_TOKEN") == 2
     assert workflow.count("-u ACTIONS_ID_TOKEN_REQUEST_TOKEN") == 2
@@ -72,6 +84,27 @@ def test_nvidia_secret_is_step_scoped_and_agent_has_no_github_credential():
         workflow.index("Author one design and failing regression test") :
         workflow.index("Enforce the autonomous diff boundary")
     ]
+
+
+def test_gateway_sidecar_is_vendored_at_an_exact_pin_and_becomes_healthy():
+    workflow = _workflow_text()
+    sidecar = workflow[
+        workflow.index("Provision the contextual-orchestrator gateway sidecar") :
+        workflow.index("Configure test-first authoring permissions")
+    ]
+
+    assert "CONTEXTUAL_ORCHESTRATOR_PIN_SHA" in sidecar
+    assert "ContextualWisdomLab/contextual-orchestrator.git" in sidecar
+    assert "--require-hashes" in sidecar
+    assert "requirements.lock" in sidecar
+    assert "scripts.ci.serve_seeded_gateway" in sidecar
+    assert "--auto-discover-model-agents" in sidecar
+    assert "/healthz" in sidecar
+    assert "did not become healthy" in sidecar
+    # The bearer is written to a private file, not exported as a job-wide
+    # environment variable, so it stays out of every later step's ambient env.
+    assert "contextual-orchestrator-gateway.token" in sidecar
+    assert "GITHUB_ENV" not in sidecar
 
 
 def test_opencode_permissions_block_execution_network_and_protected_edits():
@@ -272,18 +305,16 @@ def test_governance_permissions_are_scoped_per_calling_job():
         assert "secrets: inherit" not in merge_job
 
 
-def test_opencode_binary_and_models_are_pinned():
+def test_opencode_binary_and_gateway_model_are_pinned():
     workflow = _workflow_text()
 
     assert 'OPENCODE_VERSION: "1.17.13"' in workflow
     assert "OPENCODE_SHA256:" in workflow
     assert "sha256sum -c -" in workflow
-    for model in (
-        "nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5",
-        "nvidia/nvidia/nemotron-3-super-120b-a12b",
-        "nvidia/deepseek-ai/deepseek-v4-pro",
-    ):
-        assert model in workflow
+    pin_sha = "8839081659df587b19642be17b9114f9dee8b666"
+    assert f'CONTEXTUAL_ORCHESTRATOR_PIN_SHA: "{pin_sha}"' in workflow
+    assert "OPENCODE_MODEL_CANDIDATES" in workflow
+    assert "contextual_orchestrator_gateway/orchestrator/free" in workflow
 
 
 def test_untrusted_execution_drops_privileges():

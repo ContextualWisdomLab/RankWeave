@@ -79,10 +79,17 @@ jobs:
       BASE_BRANCH: main
       OPENCODE_VERSION: "1.17.13"
       OPENCODE_SHA256: 157afa289d1a8d9372de0ce19ac726119b937a1f6b201808d46f06e4e59bb348
+      # Exact-head vendoring pin for the org's governed LLM gateway (see
+      # ContextualWisdomLab/.github's scripts/ci/contextual_orchestrator_review_sidecar.sh
+      # and ContextualWisdomLab/contextual-orchestrator's own
+      # .github/workflows/opencode-hourly-loop.yml for the proven pattern this
+      # follows). Every model call this job makes is routed through the
+      # fail-closed orchestrator/free pool instead of any direct provider API.
+      CONTEXTUAL_ORCHESTRATOR_PIN_SHA: "8839081659df587b19642be17b9114f9dee8b666"
+      CONTEXTUAL_ORCHESTRATOR_GATEWAY_HOST: "127.0.0.1"
+      CONTEXTUAL_ORCHESTRATOR_GATEWAY_PORT: "8000"
       OPENCODE_MODEL_CANDIDATES: >-
-        nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5
-        nvidia/nvidia/nemotron-3-super-120b-a12b
-        nvidia/deepseek-ai/deepseek-v4-pro
+        contextual_orchestrator_gateway/orchestrator/free
       OPENCODE_RED_TIMEOUT_SECONDS: "300"
       OPENCODE_IMPLEMENT_TIMEOUT_SECONDS: "600"
       MAX_AUTONOMOUS_CHANGED_FILES: "25"
@@ -93,12 +100,26 @@ jobs:
         id: gate
         env:
           GH_TOKEN: ${{ github.token }}
-          NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
+          BYTEZ_API_KEY: ${{ secrets.BYTEZ_API_KEY }}
+          NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
+          NVIDIA_NIM_API_KEY_SUB: ${{ secrets.NVIDIA_NIM_API_KEY_SUB }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
 
-          if [ -z "${NVIDIA_API_KEY:-}" ]; then
-            echo "::warning::NVIDIA_NIM_API_KEY is not configured; product development remains fail-closed."
+          # Fail-closed exactly like the gateway sidecar's own bootstrap gate:
+          # at least one of the five org provider secrets must be configured,
+          # since any one of them alone can seed a routable orchestrator/free
+          # pool.
+          provider_secret_count=0
+          for secret_name in BYTEZ_API_KEY NVIDIA_NIM_API_KEY NVIDIA_NIM_API_KEY_SUB OPENROUTER_API_KEY OPENAI_API_KEY; do
+            if [ -n "${!secret_name:-}" ]; then
+              provider_secret_count=$((provider_secret_count + 1))
+            fi
+          done
+          if [ "$provider_secret_count" -lt 1 ]; then
+            echo "::warning::No contextual-orchestrator provider secret is configured; product development remains fail-closed."
             echo "eligible=false" >>"$GITHUB_OUTPUT"
             exit 0
           fi
@@ -181,15 +202,99 @@ jobs:
           "$install_dir/opencode" --version
           echo "$install_dir" >>"$GITHUB_PATH"
 
+      - name: Provision the contextual-orchestrator gateway sidecar
+        if: steps.gate.outputs.eligible == 'true'
+        env:
+          BYTEZ_API_KEY: ${{ secrets.BYTEZ_API_KEY }}
+          NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
+          NVIDIA_NIM_API_KEY_SUB: ${{ secrets.NVIDIA_NIM_API_KEY_SUB }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          # Vendor the org's gateway at an exact reviewed commit (same
+          # exact-head discipline as the org's other central sidecars) and
+          # install its hash-pinned runtime dependencies, isolated from the
+          # read-only AUTOMATION_VENV used for RankWeave's own trusted
+          # tooling.
+          gateway_source="${RUNNER_TEMP}/contextual-orchestrator-gateway"
+          rm -rf "$gateway_source"
+          git clone --quiet --filter=blob:none --no-checkout \
+            https://github.com/ContextualWisdomLab/contextual-orchestrator.git \
+            "$gateway_source"
+          git -C "$gateway_source" -c advice.detachedHead=false checkout --quiet \
+            "$CONTEXTUAL_ORCHESTRATOR_PIN_SHA"
+          checked_out="$(git -C "$gateway_source" rev-parse HEAD)"
+          if [ "$checked_out" != "$CONTEXTUAL_ORCHESTRATOR_PIN_SHA" ]; then
+            echo "::error::vendored gateway HEAD $checked_out != pin $CONTEXTUAL_ORCHESTRATOR_PIN_SHA"
+            exit 1
+          fi
+          python3 -m pip install --quiet --disable-pip-version-check --no-cache-dir \
+            --require-hashes --no-deps -r "$gateway_source/requirements.lock"
+
+          # The bearer authenticates only http://127.0.0.1 on this runner for
+          # the life of this job; write it to a private file rather than a
+          # job-wide environment variable so it stays out of every later
+          # step's ambient env (matching this workflow's existing
+          # step-scoped-secret discipline).
+          token_file="${RUNNER_TEMP}/contextual-orchestrator-gateway.token"
+          gateway_token="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          echo "::add-mask::$gateway_token"
+          (umask 077; printf '%s' "$gateway_token" >"$token_file")
+
+          # scripts/ci/serve_seeded_gateway.py seeds each present provider
+          # secret into the gateway's process-local KV once, then serves the
+          # normal OpenAI-compatible endpoint in this same process; discovery
+          # never re-reads the environment afterward. This is the exact
+          # bootstrap-transport launcher contextual-orchestrator's own hourly
+          # loop uses.
+          cd "$gateway_source"
+          CONTEXTUAL_ORCHESTRATOR_TOKEN="$gateway_token" \
+            nohup python3 -m scripts.ci.serve_seeded_gateway \
+              --serve \
+              --agents examples/agents.mock.json \
+              --auto-discover-model-agents \
+              --auth-token-key CONTEXTUAL_ORCHESTRATOR_TOKEN \
+              --host "$CONTEXTUAL_ORCHESTRATOR_GATEWAY_HOST" \
+              --port "$CONTEXTUAL_ORCHESTRATOR_GATEWAY_PORT" \
+              >"${RUNNER_TEMP}/contextual-orchestrator-gateway.log" 2>&1 &
+
+          for _attempt in $(seq 1 30); do
+            if curl -fsS \
+              "http://${CONTEXTUAL_ORCHESTRATOR_GATEWAY_HOST}:${CONTEXTUAL_ORCHESTRATOR_GATEWAY_PORT}/healthz" \
+              >/dev/null 2>&1; then
+              echo "contextual-orchestrator gateway ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::contextual-orchestrator gateway did not become healthy"
+          tail -n 100 "${RUNNER_TEMP}/contextual-orchestrator-gateway.log"
+          exit 1
+
       - name: Configure test-first authoring permissions
         if: steps.gate.outputs.eligible == 'true'
         run: |
           set -euo pipefail
-          cat >"$GITHUB_WORKSPACE/opencode.json" <<'CONFIG'
+          gateway_token="$(cat "${RUNNER_TEMP}/contextual-orchestrator-gateway.token")"
+          cat >"$GITHUB_WORKSPACE/opencode.json" <<CONFIG
           {
-            "$schema": "https://opencode.ai/config.json",
-            "enabled_providers": ["nvidia"],
-            "model": "nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            "\$schema": "https://opencode.ai/config.json",
+            "model": "contextual_orchestrator_gateway/orchestrator/free",
+            "provider": {
+              "contextual_orchestrator_gateway": {
+                "npm": "@ai-sdk/openai-compatible",
+                "name": "Contextual Orchestrator Gateway",
+                "options": {
+                  "baseURL": "http://${CONTEXTUAL_ORCHESTRATOR_GATEWAY_HOST}:${CONTEXTUAL_ORCHESTRATOR_GATEWAY_PORT}/v1",
+                  "apiKey": "$gateway_token"
+                },
+                "models": {
+                  "orchestrator/free": { "name": "fail-closed free-priced orchestration" }
+                }
+              }
+            },
             "lsp": false,
             "permission": {
               "read": {
@@ -226,8 +331,6 @@ jobs:
 
       - name: Author one design and failing regression test
         if: steps.gate.outputs.eligible == 'true'
-        env:
-          NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
         run: |
           set -euo pipefail
 
@@ -269,7 +372,7 @@ jobs:
             git clean -fd
           done
           if [ "$status" -ne 0 ]; then
-            echo "::error::Every NVIDIA model failed during test-first authoring."
+            echo "::error::The contextual-orchestrator gateway failed during test-first authoring."
             exit 1
           fi
 
@@ -405,11 +508,24 @@ jobs:
         if: steps.gate.outputs.eligible == 'true'
         run: |
           set -euo pipefail
-          cat >"$GITHUB_WORKSPACE/opencode.json" <<'CONFIG'
+          gateway_token="$(cat "${RUNNER_TEMP}/contextual-orchestrator-gateway.token")"
+          cat >"$GITHUB_WORKSPACE/opencode.json" <<CONFIG
           {
-            "$schema": "https://opencode.ai/config.json",
-            "enabled_providers": ["nvidia"],
-            "model": "nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            "\$schema": "https://opencode.ai/config.json",
+            "model": "contextual_orchestrator_gateway/orchestrator/free",
+            "provider": {
+              "contextual_orchestrator_gateway": {
+                "npm": "@ai-sdk/openai-compatible",
+                "name": "Contextual Orchestrator Gateway",
+                "options": {
+                  "baseURL": "http://${CONTEXTUAL_ORCHESTRATOR_GATEWAY_HOST}:${CONTEXTUAL_ORCHESTRATOR_GATEWAY_PORT}/v1",
+                  "apiKey": "$gateway_token"
+                },
+                "models": {
+                  "orchestrator/free": { "name": "fail-closed free-priced orchestration" }
+                }
+              }
+            },
             "lsp": false,
             "permission": {
               "read": {
@@ -450,8 +566,6 @@ jobs:
 
       - name: Implement the bounded product increment
         if: steps.gate.outputs.eligible == 'true'
-        env:
-          NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
         run: |
           set -euo pipefail
 
@@ -500,7 +614,7 @@ jobs:
               "$GITHUB_WORKSPACE/.agent-red-output.txt"
           done
           if [ "$status" -ne 0 ]; then
-            echo "::error::Every NVIDIA model failed during implementation."
+            echo "::error::The contextual-orchestrator gateway failed during implementation."
             exit 1
           fi
 
@@ -904,7 +1018,7 @@ jobs:
 
           title="RankWeave autonomous commercialization increment"
           body_file="${RUNNER_TEMP}/pr-body.md"
-          echo "Autonomous NVIDIA NIM increment; see the diff and CHANGELOG.md." \
+          echo "Autonomous contextual-orchestrator (orchestrator/free) increment; see the diff and CHANGELOG.md." \
             >"$body_file"
 
           git reset --soft "$AUTOMATION_BASE_SHA"
