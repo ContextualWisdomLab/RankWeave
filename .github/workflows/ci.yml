@@ -3,7 +3,33 @@ name: ci
 on:
   push:
     branches: [main]
+    # paths-ignore has no supported negation (GitHub Docs: "If you only want
+    # to exclude paths, use paths-ignore instead" of paths+!) so exceptions
+    # for content-checked docs use `paths` with `**` + `!` here instead.
+    # tests/test_create_release_workflow.py and tests/test_publish_workflow.py
+    # assert literal text inside these files; keep this list in sync with
+    # any new doc-content assertion added to those tests.
+    paths:
+      - "**"
+      - "!docs/**"
+      - "docs/releasing.md"
+      - "docs/adr/0004-separate-release-authorization-from-publication.md"
+      - "!*.md"
+      - "ARCHITECTURE.md"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "CHANGELOG.md"
   pull_request:
+    paths:
+      - "**"
+      - "!docs/**"
+      - "docs/releasing.md"
+      - "docs/adr/0004-separate-release-authorization-from-publication.md"
+      - "!*.md"
+      - "ARCHITECTURE.md"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "CHANGELOG.md"
 
 permissions:
   contents: read
