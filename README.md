@@ -541,14 +541,14 @@ initial size check cannot trigger an unbounded in-memory read.
 
 The default branch runs an hourly workflow at minute 17:
 
-`PR review/merge scan → review-feedback repair → exact-head revalidation → one
-bounded buyer-visible product proposal when the governed PR queue is empty`.
+`one bounded buyer-visible product proposal when the governed PR queue is
+empty`.
 
-PR inspection, review repair, and merge decisions use immutable reusable
-workflows from the organization's central `.github` repository. The local
-product stage uses a hash-pinned OpenCode binary with the official NVIDIA
-provider and `NVIDIA_NIM_API_KEY`; it does not use GitHub Copilot Agent Tasks or
-alter the existing review-agent credential path.
+PR inspection, review repair, and merge decisions run from the organization's
+central `.github` repository. The local product stage uses a hash-pinned
+OpenCode binary and a hash-pinned contextual-orchestrator sidecar. All model
+calls use its credential-backed `orchestrator/free` pool; provider credentials
+never enter the OpenCode process.
 
 The workflow first permits edits only to tests and a design specification, then
 runs pytest without network or inherited credentials and requires a genuine

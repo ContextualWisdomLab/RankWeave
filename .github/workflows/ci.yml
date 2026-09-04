@@ -20,6 +20,7 @@ on:
       - "CLAUDE.md"
       - "CHANGELOG.md"
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, closed]
     paths:
       - "**"
       - "!docs/**"
@@ -35,11 +36,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: >-
+    ${{ github.workflow }}-${{ github.repository }}-${{
+      github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id
+    }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
+    if: github.event_name != 'pull_request' || (github.event.action != 'closed' && github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -76,6 +81,7 @@ jobs:
           python -m coverage report
 
   package:
+    if: github.event_name != 'pull_request' || (github.event.action != 'closed' && github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -168,7 +174,7 @@ jobs:
           mkdir -p release-handoff
           (
             cd dist
-            sha256sum *.whl *.tar.gz
+            sha256sum ./*.whl ./*.tar.gz
           ) > release-handoff/SHA256SUMS
           manifest_sha256="$(
             sha256sum release-handoff/SHA256SUMS | cut -d ' ' -f1

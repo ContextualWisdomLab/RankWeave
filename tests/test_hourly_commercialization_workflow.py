@@ -2,7 +2,6 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = PROJECT_ROOT / ".github/workflows/hourly-commercialization-loop.yml"
-MERGE_WORKFLOW_SHA = "5983b41ace75040c1d81818171ca7d0f3653254e"
 
 
 def _workflow_text() -> str:
@@ -20,29 +19,21 @@ def test_commercialization_loop_runs_once_each_hour():
 
     assert 'cron: "17 * * * *"' in workflow
     assert "workflow_dispatch:" in workflow
-    assert "cancel-in-progress: true" in workflow
+    concurrency_group = (
+        "${{ github.workflow }}-${{ github.repository }}-${{ github.run_id }}"
+    )
+    assert concurrency_group in workflow
+    assert "cancel-in-progress: false" in workflow
 
 
-def test_commercialization_loop_uses_pinned_central_pr_governance():
+def test_commercialization_loop_does_not_duplicate_central_pr_governance():
     workflow = _workflow_text()
 
-    merge_reference = (
-        "ContextualWisdomLab/.github/.github/workflows/"
-        f"pr-review-merge-scheduler.yml@{MERGE_WORKFLOW_SHA}"
-    )
-    assert workflow.count(merge_reference) == 2
-    uses_references = [
-        line.split("uses:", maxsplit=1)[1].strip()
-        for line in workflow.splitlines()
-        if line.strip().startswith("uses:")
-    ]
-    assert all("pr-review-fix-scheduler.yml" not in ref for ref in uses_references)
-    # Review-feedback repair is dispatched by the central, always-current
-    # rankweave-hourly-review-repair.yml caller in ContextualWisdomLab/.github
-    # instead of a cross-repository pinned-SHA job here.
+    assert "pr-review-merge-scheduler.yml" not in workflow
+    assert "pr-review-fix-scheduler.yml" not in workflow
 
 
-def test_product_development_uses_nvidia_nim_and_fails_closed():
+def test_product_development_uses_contextual_orchestrator_gateway_and_fails_closed():
     workflow = _workflow_text()
 
     assert "NVIDIA_NIM_API_KEY" in workflow
@@ -50,21 +41,33 @@ def test_product_development_uses_nvidia_nim_and_fails_closed():
     assert "/agents/repos" not in workflow
     assert workflow.count("/pulls?state=open&per_page=1") == 3
     assert (
-        "NVIDIA_NIM_API_KEY is not configured; product development remains "
-        "fail-closed" in workflow
+        "No contextual-orchestrator provider secret is configured; product "
+        "development remains fail-closed" in workflow
     )
-    assert '"enabled_providers": ["nvidia"]' in workflow
-    assert "@ai-sdk/openai-compatible" not in workflow
+    assert '"enabled_providers": ["nvidia"]' not in workflow
+    assert workflow.count("@ai-sdk/openai-compatible") == 2
+    assert workflow.count("contextual_orchestrator_gateway/orchestrator/free") == 3
     assert "integrate.api.nvidia.com" not in workflow
+    assert "nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5" not in workflow
 
 
-def test_nvidia_secret_is_step_scoped_and_agent_has_no_github_credential():
+def test_provider_secrets_are_step_scoped_and_agent_has_no_github_credential():
     workflow = _workflow_text()
     develop = workflow[workflow.index("  develop-next-product-gap:\n") :]
     job_environment = develop.split("    steps:\n", maxsplit=1)[0]
 
-    assert "NVIDIA_API_KEY" not in job_environment
-    assert workflow.count("NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}") == 3
+    for secret_name in (
+        "BYTEZ_API_KEY",
+        "NVIDIA_NIM_API_KEY",
+        "NVIDIA_NIM_API_KEY_SUB",
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+    ):
+        assert secret_name not in job_environment
+        assert (
+            workflow.count(f"{secret_name}: ${{{{ secrets.{secret_name} }}}}") == 2
+        )
+    assert "NVIDIA_API_KEY" not in workflow
     assert "persist-credentials: false" in workflow
     assert workflow.count("env -u GH_TOKEN -u GITHUB_TOKEN") == 2
     assert workflow.count("-u ACTIONS_ID_TOKEN_REQUEST_TOKEN") == 2
@@ -72,6 +75,47 @@ def test_nvidia_secret_is_step_scoped_and_agent_has_no_github_credential():
         workflow.index("Author one design and failing regression test") :
         workflow.index("Enforce the autonomous diff boundary")
     ]
+
+
+def test_gateway_sidecar_is_vendored_at_an_exact_pin_and_becomes_healthy():
+    workflow = _workflow_text()
+    sidecar = workflow[
+        workflow.index("Prepare the contextual-orchestrator gateway sidecar") :
+        workflow.index("Configure test-first authoring permissions")
+    ]
+
+    assert "CONTEXTUAL_ORCHESTRATOR_PIN_SHA" in sidecar
+    assert "ContextualWisdomLab/contextual-orchestrator.git" in sidecar
+    assert "--require-hashes" in sidecar
+    assert "requirements.lock" in sidecar
+    assert "scripts.ci.serve_seeded_gateway" in sidecar
+    assert "--auto-discover-model-agents" in sidecar
+    assert "/healthz" in sidecar
+    assert "did not become healthy" in sidecar
+    # The bearer is written to a private file, not exported as a job-wide
+    # environment variable, so it stays out of every later step's ambient env.
+    assert "contextual-orchestrator-gateway.token" in sidecar
+    assert 'any(.id == "orchestrator/free")' in sidecar
+    assert 'echo "ready=true" >>"$GITHUB_OUTPUT"' in sidecar
+    assert workflow.count("steps.gateway.outputs.ready == 'true'") == 10
+    assert "GITHUB_ENV" not in sidecar
+
+
+def test_gateway_dependencies_are_installed_without_provider_credentials():
+    workflow = _workflow_text()
+    prepare = workflow[
+        workflow.index("Prepare the contextual-orchestrator gateway sidecar") :
+        workflow.index("Start the contextual-orchestrator gateway sidecar")
+    ]
+
+    for secret_name in (
+        "BYTEZ_API_KEY",
+        "NVIDIA_NIM_API_KEY",
+        "NVIDIA_NIM_API_KEY_SUB",
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+    ):
+        assert secret_name not in prepare
 
 
 def test_opencode_permissions_block_execution_network_and_protected_edits():
@@ -232,21 +276,16 @@ def test_final_queue_and_base_are_rechecked_before_pr_creation():
     assert "gh pr merge" not in workflow
 
 
-def test_product_development_requires_successful_pr_governance():
+def test_product_development_does_not_wait_for_a_local_queue_sweep():
     workflow = _workflow_text()
 
-    assert "needs: [inspect-pr-queue, revalidate-pr-queue]" in workflow
-    assert "needs.inspect-pr-queue.result == 'success'" in workflow
-    assert "needs.revalidate-pr-queue.result == 'success'" in workflow
+    assert "inspect-pr-queue" not in workflow
+    assert "revalidate-pr-queue" not in workflow
 
 
-def test_governance_permissions_are_scoped_per_calling_job():
+def test_workflow_default_permissions_are_read_only():
     workflow = _workflow_text()
     workflow_default = workflow.split("concurrency:", maxsplit=1)[0]
-    inspect = _job_section(workflow, "inspect-pr-queue", "revalidate-pr-queue")
-    revalidate = _job_section(
-        workflow, "revalidate-pr-queue", "develop-next-product-gap"
-    )
 
     assert "permissions:\n  contents: read" in workflow_default
     for forbidden_permission in (
@@ -258,32 +297,18 @@ def test_governance_permissions_are_scoped_per_calling_job():
     ):
         assert forbidden_permission not in workflow_default
 
-    for merge_job in (inspect, revalidate):
-        for permission in (
-            "actions: write",
-            "checks: read",
-            "contents: write",
-            "id-token: write",
-            "pull-requests: write",
-        ):
-            assert permission in merge_job
-        assert "issues: write" not in merge_job
-        assert "statuses: read" not in merge_job
-        assert "secrets: inherit" not in merge_job
 
 
-def test_opencode_binary_and_models_are_pinned():
+def test_opencode_binary_and_gateway_model_are_pinned():
     workflow = _workflow_text()
 
     assert 'OPENCODE_VERSION: "1.17.13"' in workflow
     assert "OPENCODE_SHA256:" in workflow
     assert "sha256sum -c -" in workflow
-    for model in (
-        "nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5",
-        "nvidia/nvidia/nemotron-3-super-120b-a12b",
-        "nvidia/deepseek-ai/deepseek-v4-pro",
-    ):
-        assert model in workflow
+    pin_sha = "8839081659df587b19642be17b9114f9dee8b666"
+    assert f'CONTEXTUAL_ORCHESTRATOR_PIN_SHA: "{pin_sha}"' in workflow
+    assert "OPENCODE_MODEL_CANDIDATES" in workflow
+    assert "contextual_orchestrator_gateway/orchestrator/free" in workflow
 
 
 def test_untrusted_execution_drops_privileges():

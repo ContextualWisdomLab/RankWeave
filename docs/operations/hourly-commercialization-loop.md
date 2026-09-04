@@ -17,9 +17,10 @@ Each run performs four jobs in order:
 3. **Revalidate the PR queue.** Call the merge scheduler again so a repaired or
    newly approved current head is reconsidered under the same checks.
 4. **Develop the next product gap.** Only when every governance job succeeded,
-   no PR is open, and `NVIDIA_NIM_API_KEY` exists, author one design, prove a
-   failing test, implement the bounded increment, validate it without network
-   or inherited credentials, and open one pull request.
+   no PR is open, and at least one of the org's five contextual-orchestrator
+   provider secrets exists, author one design, prove a failing test,
+   implement the bounded increment, validate it without network or inherited
+   credentials, and open one pull request.
 
 The reusable workflows are referenced at immutable commits:
 
@@ -47,9 +48,13 @@ base or unavailable isolation primitive blocks model execution.
 
 ### 2. Test-first authoring
 
-The hash-pinned OpenCode binary uses the official built-in NVIDIA provider. Its
-first phase may edit only `tests/` and `docs/superpowers/specs/`. The following
-tools and surfaces are explicitly denied:
+The hash-pinned OpenCode binary is configured with a single custom provider
+pointed at a locally vendored contextual-orchestrator gateway sidecar
+(`http://127.0.0.1:8000/v1`), routed through the org-wide, fail-closed
+`orchestrator/free` pool instead of any direct provider API — see
+[Gateway routing](#gateway-routing) below. Its first phase may edit only
+`tests/` and `docs/superpowers/specs/`. The following tools and surfaces are
+explicitly denied:
 
 - Bash and arbitrary code execution;
 - web search and URL fetching;
@@ -116,20 +121,50 @@ commit, disables Git hooks for commit and push, creates a run-unique branch,
 and opens one PR. It never approves, merges, tags, publishes, or releases that
 PR.
 
+## Gateway routing
+
+Every model call this job makes is routed through
+[ContextualWisdomLab/contextual-orchestrator](https://github.com/ContextualWisdomLab/contextual-orchestrator)'s
+fail-closed `orchestrator/free` pool instead of any direct provider API — the
+same governed-gateway pattern already used by contextual-orchestrator's own
+hourly maintenance loop and by the four central review workflows in
+ContextualWisdomLab/.github. The `develop-next-product-gap` job:
+
+1. vendors contextual-orchestrator's source at an exact reviewed commit
+   (`CONTEXTUAL_ORCHESTRATOR_PIN_SHA`) into `$RUNNER_TEMP`, isolated from the
+   read-only `AUTOMATION_VENV` used for RankWeave's own trusted tooling;
+2. installs its hash-pinned `requirements.lock` with `pip install
+   --require-hashes`;
+3. starts `python -m scripts.ci.serve_seeded_gateway --serve
+   --auto-discover-model-agents` in the background, which seeds each present
+   org provider secret into the gateway's process-local KV once (never
+   re-reading the environment afterward) and serves an OpenAI-compatible
+   `/v1/chat/completions` endpoint on `127.0.0.1:8000`;
+4. waits for `/healthz` before continuing.
+
+OpenCode's `opencode.json` then points its one configured provider,
+`contextual_orchestrator_gateway` (`npm: "@ai-sdk/openai-compatible"`), at
+that loopback endpoint with `model: "contextual_orchestrator_gateway/orchestrator/free"`.
+No provider secret is ever placed in the OpenCode process's own environment;
+only the loopback-only ephemeral bearer token (written to a private file, not
+a job-wide environment variable) authenticates to it.
+
 ## Credential boundary
 
-Configure a repository or organization Actions secret named
-`NVIDIA_NIM_API_KEY` with an NVIDIA API key for the official OpenCode NVIDIA
-provider. The key is step-scoped only to:
+Configure a repository or organization Actions secret for at least one of the
+org's five contextual-orchestrator provider credentials: `BYTEZ_API_KEY`,
+`NVIDIA_NIM_API_KEY`, `NVIDIA_NIM_API_KEY_SUB`, `OPENROUTER_API_KEY`, or
+`OPENAI_API_KEY`. Each present secret is step-scoped only to:
 
 - the static eligibility check;
-- the red authoring OpenCode process;
-- the implementation OpenCode process.
+- the gateway sidecar provisioning step (where it seeds the gateway's KV).
 
-It is not a job-level environment variable and is absent from every process
-that executes model-authored Python. The OpenCode processes explicitly remove
-`GH_TOKEN`, `GITHUB_TOKEN`, and OIDC request variables. Their tool permissions
-deny command execution and web access, so the provider key is not exposed to
+None of the five secrets is a job-level environment variable, and none is
+present in the OpenCode processes that execute model-authored prompts — those
+processes only ever see the loopback gateway's ephemeral bearer token, read
+from a private file. The OpenCode processes explicitly remove `GH_TOKEN`,
+`GITHUB_TOKEN`, and OIDC request variables. Their tool permissions deny
+command execution and web access, so no credential is exposed to
 model-authored shell or network operations.
 
 The GitHub token is present only in the two static queue/base checks and the
@@ -139,21 +174,24 @@ steps.
 ## Model and binary configuration
 
 OpenCode is pinned to version `1.17.13`; its Linux archive must match the
-reviewed SHA-256 digest before installation. The current ordered model fallback
-is:
+reviewed SHA-256 digest before installation. Model selection itself is no
+longer a static per-workflow list: `orchestrator/free` is a single virtual
+model that contextual-orchestrator routes, at request time, across every
+live-discovered, credential-backed, free-priced candidate across all
+configured providers. The workflow's own `OPENCODE_MODEL_CANDIDATES`
+retry loop now has exactly one entry (the gateway model) rather than several
+hand-picked NVIDIA model IDs — resilience against one candidate's failure is
+now the gateway's own internal routing concern, not this workflow's.
 
-1. `nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5`;
-2. `nvidia/nvidia/nemotron-3-super-120b-a12b`;
-3. `nvidia/deepseek-ai/deepseek-v4-pro`.
+The gateway has five minutes for the test-design phase and ten minutes for
+the implementation phase (unchanged from before this migration). Partial work
+from a failed attempt is discarded before any retry. The overall job has a
+55-minute timeout so the next hourly run cannot accumulate behind an
+unbounded agent session.
 
-A model has five minutes for the test-design phase and ten minutes for the
-implementation phase. Partial work from a failed model is discarded before the
-next candidate. The overall job has a 55-minute timeout so the next hourly run
-cannot accumulate behind an unbounded agent session.
-
-The model list is routing configuration, not a benchmark or scientific claim.
-Review model availability, licenses, and OpenCode compatibility whenever this
-list or OpenCode version changes.
+Review the vendored `CONTEXTUAL_ORCHESTRATOR_PIN_SHA` periodically against
+contextual-orchestrator's current `main` and re-pin after reviewing the delta,
+the same exact-head discipline the org's other central sidecars follow.
 
 ## Single-flight and TOCTOU behavior
 
@@ -177,12 +215,12 @@ PR maintenance still runs when product development is disabled. No generated
 branch or PR is created after any of these conditions:
 
 - failed central governance job;
-- missing NVIDIA secret;
+- no contextual-orchestrator provider secret configured;
 - open PR at either queue check;
 - base branch movement;
 - failed trusted-base validation;
 - missing network/PID namespace support;
-- OpenCode checksum or all-model failure;
+- OpenCode checksum, gateway sidecar, or gateway-model failure;
 - out-of-scope red edit or absence of a real failed test;
 - protected, binary, symlink, oversized, or overly broad diff;
 - final lint, test, coverage, build, installation, import, or dependency
@@ -199,10 +237,12 @@ After merging the workflow:
 1. Confirm the three central governance jobs use their immutable SHAs.
 2. Run the workflow manually with an open PR and confirm the development gate
    reports `eligible=false`.
-3. Remove the open PR while leaving `NVIDIA_NIM_API_KEY` absent and confirm PR
-   maintenance succeeds while development emits a fail-closed warning.
-4. Configure the secret and confirm the base Ruff/tests/coverage and namespace
-   preflight run before OpenCode.
+3. Remove the open PR while leaving all five provider secrets absent and
+   confirm PR maintenance succeeds while development emits a fail-closed
+   warning.
+4. Configure at least one provider secret and confirm the base
+   Ruff/tests/coverage and namespace preflight run before the gateway sidecar
+   and OpenCode.
 5. Inspect the red phase and confirm only tests/design changed and pytest exit
    status `1` was required.
 6. Inspect final validation and confirm it ran under `unshare`, `env -i`, no

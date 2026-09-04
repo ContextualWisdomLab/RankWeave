@@ -20,10 +20,11 @@ naruon or another service-oriented system.
 4. **Contract resources** — packaged JSON Schema Draft 2020-12 documents publish
    the exact pairwise and candidate-family v1/v2 JSON structures without adding
    a runtime validator dependency.
-5. **Governed delivery** — repository workflows call immutable central `.github`
-   review and merge workflows. The hourly product loop uses a hash-pinned
-   OpenCode executable and `NVIDIA_NIM_API_KEY`; it does not use
-   `COPILOT_GITHUB_TOKEN`.
+5. **Governed delivery** — central `.github` workflows own PR review and merge
+   governance. The hourly product loop uses hash-pinned OpenCode and
+   contextual-orchestrator artifacts, routing every model call through the
+   credential-backed `orchestrator/free` pool without exposing provider
+   credentials to OpenCode.
 
 ## Data flow
 
