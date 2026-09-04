@@ -21,6 +21,14 @@ def _workflow_text() -> str:
     return CI_WORKFLOW.read_text(encoding="utf-8")
 
 
+def test_ci_concurrency_only_cancels_superseded_pull_request_heads():
+    workflow = _workflow_text()
+
+    assert "${{ github.workflow }}-${{ github.repository }}-${{" in workflow
+    assert "github.event.pull_request.number || github.run_id" in workflow
+    assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in workflow
+
+
 def _references(workflow: str) -> tuple[tuple[str, str], ...]:
     return tuple(FULL_SHA_REFERENCE.findall(workflow))
 

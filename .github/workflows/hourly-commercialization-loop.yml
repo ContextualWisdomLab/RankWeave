@@ -9,65 +9,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: rankweave-hourly-commercialization-loop
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.repository }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
-  inspect-pr-queue:
-    permissions:
-      actions: write
-      checks: read
-      contents: write
-      id-token: write
-      pull-requests: write
-    uses: ContextualWisdomLab/.github/.github/workflows/pr-review-merge-scheduler.yml@5983b41ace75040c1d81818171ca7d0f3653254e
-    with:
-      base_branch: main
-      max_prs: "50"
-      trigger_reviews: true
-      review_dispatch_limit: "1"
-      branch_update_limit: "1"
-      enable_auto_merge: true
-      merge_mode: direct_or_auto
-      update_branches: true
-
-  # Review-feedback repair is dispatched by the central, always-current
-  # rankweave-hourly-review-repair.yml caller in ContextualWisdomLab/.github
-  # (uses: ./.github/workflows/pr-review-fix-scheduler.yml, a same-repository
-  # reference). A local repair-review-feedback job here previously called
-  # that reusable workflow cross-repository at a pinned commit SHA; that
-  # shape can never satisfy pr-review-fix-scheduler.yml's same-repository
-  # trusted-source check (github.repository == ContextualWisdomLab/.github),
-  # so every run failed before any job was scheduled ("workflow file issue",
-  # zero jobs created) for as long as that hardening has been in place.
-  revalidate-pr-queue:
-    needs: inspect-pr-queue
-    if: ${{ always() }}
-    permissions:
-      actions: write
-      checks: read
-      contents: write
-      id-token: write
-      pull-requests: write
-    uses: ContextualWisdomLab/.github/.github/workflows/pr-review-merge-scheduler.yml@5983b41ace75040c1d81818171ca7d0f3653254e
-    with:
-      base_branch: main
-      max_prs: "50"
-      trigger_reviews: true
-      review_dispatch_limit: "1"
-      branch_update_limit: "1"
-      enable_auto_merge: true
-      merge_mode: direct_or_auto
-      update_branches: true
-
   develop-next-product-gap:
-    needs: [inspect-pr-queue, revalidate-pr-queue]
-    if: >-
-      ${{
-        always() &&
-        needs.inspect-pr-queue.result == 'success' &&
-        needs.revalidate-pr-queue.result == 'success'
-      }}
     runs-on: ubuntu-latest
     timeout-minutes: 55
     permissions:
@@ -158,11 +104,11 @@ jobs:
           sandbox_uid="$(id -u nobody)"
           sandbox_gid="$(id -g nobody)"
           command -v setpriv >/dev/null
-          echo "AUTOMATION_VENV=$venv" >>"$GITHUB_ENV"
-          echo "AUTOMATION_BASE_SHA=$(git rev-parse HEAD)" >>"$GITHUB_ENV"
-          echo "SANDBOX_UID=$sandbox_uid" >>"$GITHUB_ENV"
-          echo "SANDBOX_GID=$sandbox_gid" >>"$GITHUB_ENV"
           {
+            echo "AUTOMATION_VENV=$venv"
+            echo "AUTOMATION_BASE_SHA=$(git rev-parse HEAD)"
+            echo "SANDBOX_UID=$sandbox_uid"
+            echo "SANDBOX_GID=$sandbox_gid"
             echo "/opencode.json"
             echo "/.agent-red-output.txt"
           } >>"$GITHUB_WORKSPACE/.git/info/exclude"
@@ -466,6 +412,7 @@ jobs:
             --inh-caps=-all
             --ambient-caps=-all
           )
+          # shellcheck disable=SC2016
           red_environment=(
             env -i
             "PATH=${AUTOMATION_VENV}/bin:/usr/bin:/bin"

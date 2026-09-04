@@ -2,7 +2,6 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = PROJECT_ROOT / ".github/workflows/hourly-commercialization-loop.yml"
-MERGE_WORKFLOW_SHA = "5983b41ace75040c1d81818171ca7d0f3653254e"
 
 
 def _workflow_text() -> str:
@@ -20,26 +19,15 @@ def test_commercialization_loop_runs_once_each_hour():
 
     assert 'cron: "17 * * * *"' in workflow
     assert "workflow_dispatch:" in workflow
-    assert "cancel-in-progress: true" in workflow
+    assert "${{ github.workflow }}-${{ github.repository }}-${{ github.run_id }}" in workflow
+    assert "cancel-in-progress: false" in workflow
 
 
-def test_commercialization_loop_uses_pinned_central_pr_governance():
+def test_commercialization_loop_does_not_duplicate_central_pr_governance():
     workflow = _workflow_text()
 
-    merge_reference = (
-        "ContextualWisdomLab/.github/.github/workflows/"
-        f"pr-review-merge-scheduler.yml@{MERGE_WORKFLOW_SHA}"
-    )
-    assert workflow.count(merge_reference) == 2
-    uses_references = [
-        line.split("uses:", maxsplit=1)[1].strip()
-        for line in workflow.splitlines()
-        if line.strip().startswith("uses:")
-    ]
-    assert all("pr-review-fix-scheduler.yml" not in ref for ref in uses_references)
-    # Review-feedback repair is dispatched by the central, always-current
-    # rankweave-hourly-review-repair.yml caller in ContextualWisdomLab/.github
-    # instead of a cross-repository pinned-SHA job here.
+    assert "pr-review-merge-scheduler.yml" not in workflow
+    assert "pr-review-fix-scheduler.yml" not in workflow
 
 
 def test_product_development_uses_contextual_orchestrator_gateway_and_fails_closed():
@@ -265,21 +253,16 @@ def test_final_queue_and_base_are_rechecked_before_pr_creation():
     assert "gh pr merge" not in workflow
 
 
-def test_product_development_requires_successful_pr_governance():
+def test_product_development_does_not_wait_for_a_local_queue_sweep():
     workflow = _workflow_text()
 
-    assert "needs: [inspect-pr-queue, revalidate-pr-queue]" in workflow
-    assert "needs.inspect-pr-queue.result == 'success'" in workflow
-    assert "needs.revalidate-pr-queue.result == 'success'" in workflow
+    assert "inspect-pr-queue" not in workflow
+    assert "revalidate-pr-queue" not in workflow
 
 
-def test_governance_permissions_are_scoped_per_calling_job():
+def test_workflow_default_permissions_are_read_only():
     workflow = _workflow_text()
     workflow_default = workflow.split("concurrency:", maxsplit=1)[0]
-    inspect = _job_section(workflow, "inspect-pr-queue", "revalidate-pr-queue")
-    revalidate = _job_section(
-        workflow, "revalidate-pr-queue", "develop-next-product-gap"
-    )
 
     assert "permissions:\n  contents: read" in workflow_default
     for forbidden_permission in (
@@ -291,18 +274,6 @@ def test_governance_permissions_are_scoped_per_calling_job():
     ):
         assert forbidden_permission not in workflow_default
 
-    for merge_job in (inspect, revalidate):
-        for permission in (
-            "actions: write",
-            "checks: read",
-            "contents: write",
-            "id-token: write",
-            "pull-requests: write",
-        ):
-            assert permission in merge_job
-        assert "issues: write" not in merge_job
-        assert "statuses: read" not in merge_job
-        assert "secrets: inherit" not in merge_job
 
 
 def test_opencode_binary_and_gateway_model_are_pinned():

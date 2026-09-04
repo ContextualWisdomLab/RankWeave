@@ -35,8 +35,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: >-
+    ${{ github.workflow }}-${{ github.repository }}-${{
+      github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id
+    }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -168,7 +171,7 @@ jobs:
           mkdir -p release-handoff
           (
             cd dist
-            sha256sum *.whl *.tar.gz
+            sha256sum ./*.whl ./*.tar.gz
           ) > release-handoff/SHA256SUMS
           manifest_sha256="$(
             sha256sum release-handoff/SHA256SUMS | cut -d ' ' -f1
