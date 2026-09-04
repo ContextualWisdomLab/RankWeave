@@ -29,6 +29,14 @@ def test_ci_concurrency_only_cancels_superseded_pull_request_heads():
     assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in workflow
 
 
+def test_ci_only_admits_ready_open_pull_requests():
+    workflow = _workflow_text()
+
+    assert "ready_for_review, converted_to_draft, closed" in workflow
+    assert workflow.count("github.event.pull_request.draft == false") == 2
+    assert workflow.count("github.event.action != 'closed'") == 2
+
+
 def _references(workflow: str) -> tuple[tuple[str, str], ...]:
     return tuple(FULL_SHA_REFERENCE.findall(workflow))
 
