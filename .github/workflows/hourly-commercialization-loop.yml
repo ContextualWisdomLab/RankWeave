@@ -30,15 +30,32 @@ jobs:
       merge_mode: direct_or_auto
       update_branches: true
 
-  # Review-feedback repair is dispatched by the central, always-current
-  # rankweave-hourly-review-repair.yml caller in ContextualWisdomLab/.github
-  # (uses: ./.github/workflows/pr-review-fix-scheduler.yml, a same-repository
-  # reference). A local repair-review-feedback job here previously called
-  # that reusable workflow cross-repository at a pinned commit SHA; that
-  # shape can never satisfy pr-review-fix-scheduler.yml's same-repository
-  # trusted-source check (github.repository == ContextualWisdomLab/.github),
-  # so every run failed before any job was scheduled ("workflow file issue",
-  # zero jobs created) for as long as that hardening has been in place.
+  repair-review-feedback:
+    needs: inspect-pr-queue
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      TARGET_REPOSITORY: ContextualWisdomLab/RankWeave
+    steps:
+      - name: Keep review repair fail-closed until protected NVIDIA repair is available
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          open_pr_count="$(
+            gh api "/repos/${TARGET_REPOSITORY}/pulls?state=open&per_page=1" \
+              --jq 'length'
+          )"
+          if [ "$open_pr_count" -eq 0 ]; then
+            echo "No pull request requires review repair."
+            exit 0
+          fi
+          echo "::notice::Review repair remains fail-closed while the protected central NVIDIA NIM scheduler is pending. Existing independent review agents and the central merge scheduler remain unchanged."
+
   revalidate-pr-queue:
     needs: inspect-pr-queue
     if: ${{ always() }}
@@ -92,15 +109,8 @@ jobs:
         id: gate
         env:
           GH_TOKEN: ${{ github.token }}
-          NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
         run: |
           set -euo pipefail
-
-          if [ -z "${NVIDIA_API_KEY:-}" ]; then
-            echo "::warning::NVIDIA_NIM_API_KEY is not configured; product development remains fail-closed."
-            echo "eligible=false" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
 
           open_pr_count="$(
             gh api "/repos/${TARGET_REPOSITORY}/pulls?state=open&per_page=1" \
@@ -229,6 +239,11 @@ jobs:
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
         run: |
           set -euo pipefail
+
+          if [ -z "${NVIDIA_API_KEY:-}" ]; then
+            echo "::error::NVIDIA_NIM_API_KEY is not configured; product development remains fail-closed."
+            exit 1
+          fi
 
           prompt="$(cat <<'PROMPT'
           Work only from the trusted files on the checked-out RankWeave main branch.

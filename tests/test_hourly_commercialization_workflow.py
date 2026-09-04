@@ -23,7 +23,7 @@ def test_commercialization_loop_runs_once_each_hour():
     assert "cancel-in-progress: true" in workflow
 
 
-def test_commercialization_loop_uses_pinned_central_pr_governance():
+def test_commercialization_loop_uses_reachable_merge_governance():
     workflow = _workflow_text()
 
     merge_reference = (
@@ -31,6 +31,8 @@ def test_commercialization_loop_uses_pinned_central_pr_governance():
         f"pr-review-merge-scheduler.yml@{MERGE_WORKFLOW_SHA}"
     )
     assert workflow.count(merge_reference) == 2
+    assert "pr-review-fix-scheduler.yml@" not in workflow
+    assert "secrets: inherit" not in workflow
     uses_references = [
         line.split("uses:", maxsplit=1)[1].strip()
         for line in workflow.splitlines()
@@ -39,7 +41,37 @@ def test_commercialization_loop_uses_pinned_central_pr_governance():
     assert all("pr-review-fix-scheduler.yml" not in ref for ref in uses_references)
     # Review-feedback repair is dispatched by the central, always-current
     # rankweave-hourly-review-repair.yml caller in ContextualWisdomLab/.github
-    # instead of a cross-repository pinned-SHA job here.
+    # instead of a cross-repository pinned-SHA job here; a local read-only
+    # fail-closed hold job below keeps the repair lane visible until the
+    # protected central NVIDIA NIM scheduler is reachable.
+
+
+def test_review_repair_bridge_is_local_read_only_and_provider_neutral():
+    workflow = _workflow_text()
+    repair = _job_section(
+        workflow,
+        "repair-review-feedback",
+        "revalidate-pr-queue",
+    )
+
+    assert "runs-on: ubuntu-latest" in repair
+    assert "contents: read" in repair
+    assert "pull-requests: read" in repair
+    for forbidden in (
+        "actions: write",
+        "contents: write",
+        "id-token: write",
+        "issues: write",
+        "statuses: read",
+        "secrets: inherit",
+        "github-models/",
+        "STRIX_GITHUB_MODELS_TOKEN",
+        "COPILOT_GITHUB_TOKEN",
+        "NVIDIA_NIM_API_KEY",
+    ):
+        assert forbidden not in repair
+    assert "protected central NVIDIA NIM scheduler is pending" in repair
+    assert "/pulls?state=open&per_page=1" in repair
 
 
 def test_product_development_uses_nvidia_nim_and_fails_closed():
@@ -48,7 +80,7 @@ def test_product_development_uses_nvidia_nim_and_fails_closed():
     assert "NVIDIA_NIM_API_KEY" in workflow
     assert "COPILOT_GITHUB_TOKEN" not in workflow
     assert "/agents/repos" not in workflow
-    assert workflow.count("/pulls?state=open&per_page=1") == 3
+    assert workflow.count("/pulls?state=open&per_page=1") == 4
     assert (
         "NVIDIA_NIM_API_KEY is not configured; product development remains "
         "fail-closed" in workflow
@@ -64,7 +96,7 @@ def test_nvidia_secret_is_step_scoped_and_agent_has_no_github_credential():
     job_environment = develop.split("    steps:\n", maxsplit=1)[0]
 
     assert "NVIDIA_API_KEY" not in job_environment
-    assert workflow.count("NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}") == 3
+    assert workflow.count("NVIDIA_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}") == 2
     assert "persist-credentials: false" in workflow
     assert workflow.count("env -u GH_TOKEN -u GITHUB_TOKEN") == 2
     assert workflow.count("-u ACTIONS_ID_TOKEN_REQUEST_TOKEN") == 2
@@ -222,7 +254,7 @@ def test_queue_and_base_are_checked_before_and_after_token_exchange():
 def test_final_queue_and_base_are_rechecked_before_pr_creation():
     workflow = _workflow_text()
 
-    assert workflow.count("/pulls?state=open&per_page=1") == 3
+    assert workflow.count("/pulls?state=open&per_page=1") == 4
     assert workflow.count("/commits/${BASE_BRANCH}") == 2
     assert "The base branch moved during authoring" in workflow
     assert "Another pull request acquired the queue" in workflow
@@ -243,7 +275,8 @@ def test_product_development_requires_successful_pr_governance():
 def test_governance_permissions_are_scoped_per_calling_job():
     workflow = _workflow_text()
     workflow_default = workflow.split("concurrency:", maxsplit=1)[0]
-    inspect = _job_section(workflow, "inspect-pr-queue", "revalidate-pr-queue")
+    inspect = _job_section(workflow, "inspect-pr-queue", "repair-review-feedback")
+    repair = _job_section(workflow, "repair-review-feedback", "revalidate-pr-queue")
     revalidate = _job_section(
         workflow, "revalidate-pr-queue", "develop-next-product-gap"
     )
@@ -269,7 +302,23 @@ def test_governance_permissions_are_scoped_per_calling_job():
             assert permission in merge_job
         assert "issues: write" not in merge_job
         assert "statuses: read" not in merge_job
+        assert "issues: write" not in merge_job
+        assert "statuses: read" not in merge_job
         assert "secrets: inherit" not in merge_job
+
+    for permission in (
+        "contents: read",
+        "pull-requests: read",
+    ):
+        assert permission in repair
+    for forbidden_permission in (
+        "actions: write",
+        "contents: write",
+        "id-token: write",
+        "issues: write",
+        "statuses: read",
+    ):
+        assert forbidden_permission not in repair
 
 
 def test_opencode_binary_and_models_are_pinned():
