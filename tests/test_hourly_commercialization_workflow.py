@@ -77,7 +77,7 @@ def test_provider_secrets_are_step_scoped_and_agent_has_no_github_credential():
 def test_gateway_sidecar_is_vendored_at_an_exact_pin_and_becomes_healthy():
     workflow = _workflow_text()
     sidecar = workflow[
-        workflow.index("Provision the contextual-orchestrator gateway sidecar") :
+        workflow.index("Prepare the contextual-orchestrator gateway sidecar") :
         workflow.index("Configure test-first authoring permissions")
     ]
 
@@ -92,7 +92,27 @@ def test_gateway_sidecar_is_vendored_at_an_exact_pin_and_becomes_healthy():
     # The bearer is written to a private file, not exported as a job-wide
     # environment variable, so it stays out of every later step's ambient env.
     assert "contextual-orchestrator-gateway.token" in sidecar
+    assert 'any(.id == "orchestrator/free")' in sidecar
+    assert 'echo "ready=true" >>"$GITHUB_OUTPUT"' in sidecar
+    assert workflow.count("steps.gateway.outputs.ready == 'true'") == 10
     assert "GITHUB_ENV" not in sidecar
+
+
+def test_gateway_dependencies_are_installed_without_provider_credentials():
+    workflow = _workflow_text()
+    prepare = workflow[
+        workflow.index("Prepare the contextual-orchestrator gateway sidecar") :
+        workflow.index("Start the contextual-orchestrator gateway sidecar")
+    ]
+
+    for secret_name in (
+        "BYTEZ_API_KEY",
+        "NVIDIA_NIM_API_KEY",
+        "NVIDIA_NIM_API_KEY_SUB",
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+    ):
+        assert secret_name not in prepare
 
 
 def test_opencode_permissions_block_execution_network_and_protected_edits():

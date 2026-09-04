@@ -148,14 +148,8 @@ jobs:
           "$install_dir/opencode" --version
           echo "$install_dir" >>"$GITHUB_PATH"
 
-      - name: Provision the contextual-orchestrator gateway sidecar
+      - name: Prepare the contextual-orchestrator gateway sidecar
         if: steps.gate.outputs.eligible == 'true'
-        env:
-          BYTEZ_API_KEY: ${{ secrets.BYTEZ_API_KEY }}
-          NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
-          NVIDIA_NIM_API_KEY_SUB: ${{ secrets.NVIDIA_NIM_API_KEY_SUB }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
 
@@ -178,6 +172,20 @@ jobs:
           fi
           python3 -m pip install --quiet --disable-pip-version-check --no-cache-dir \
             --require-hashes --no-deps -r "$gateway_source/requirements.lock"
+
+      - name: Start the contextual-orchestrator gateway sidecar
+        id: gateway
+        if: steps.gate.outputs.eligible == 'true'
+        env:
+          BYTEZ_API_KEY: ${{ secrets.BYTEZ_API_KEY }}
+          NVIDIA_NIM_API_KEY: ${{ secrets.NVIDIA_NIM_API_KEY }}
+          NVIDIA_NIM_API_KEY_SUB: ${{ secrets.NVIDIA_NIM_API_KEY_SUB }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          echo "ready=false" >>"$GITHUB_OUTPUT"
+          gateway_source="${RUNNER_TEMP}/contextual-orchestrator-gateway"
 
           # The bearer authenticates only http://127.0.0.1 on this runner for
           # the life of this job; write it to a private file rather than a
@@ -206,21 +214,35 @@ jobs:
               --port "$CONTEXTUAL_ORCHESTRATOR_GATEWAY_PORT" \
               >"${RUNNER_TEMP}/contextual-orchestrator-gateway.log" 2>&1 &
 
+          healthy=false
           for _attempt in $(seq 1 30); do
             if curl -fsS \
               "http://${CONTEXTUAL_ORCHESTRATOR_GATEWAY_HOST}:${CONTEXTUAL_ORCHESTRATOR_GATEWAY_PORT}/healthz" \
               >/dev/null 2>&1; then
-              echo "contextual-orchestrator gateway ready"
-              exit 0
+              healthy=true
+              break
             fi
             sleep 2
           done
-          echo "::error::contextual-orchestrator gateway did not become healthy"
-          tail -n 100 "${RUNNER_TEMP}/contextual-orchestrator-gateway.log"
-          exit 1
+          if [ "$healthy" != true ]; then
+            echo "::error::contextual-orchestrator gateway did not become healthy"
+            tail -n 100 "${RUNNER_TEMP}/contextual-orchestrator-gateway.log"
+            exit 1
+          fi
+          models="$({
+            curl -fsS \
+              -H "Authorization: Bearer ${gateway_token}" \
+              "http://${CONTEXTUAL_ORCHESTRATOR_GATEWAY_HOST}:${CONTEXTUAL_ORCHESTRATOR_GATEWAY_PORT}/v1/models"
+          } || true)"
+          if ! jq -e '.data | any(.id == "orchestrator/free")' \
+            >/dev/null 2>&1 <<<"$models"; then
+            echo "No enabled orchestrator/free route; product development remains fail-closed."
+            exit 0
+          fi
+          echo "ready=true" >>"$GITHUB_OUTPUT"
 
       - name: Configure test-first authoring permissions
-        if: steps.gate.outputs.eligible == 'true'
+        if: steps.gate.outputs.eligible == 'true' && steps.gateway.outputs.ready == 'true'
         run: |
           set -euo pipefail
           gateway_token="$(cat "${RUNNER_TEMP}/contextual-orchestrator-gateway.token")"
@@ -276,7 +298,7 @@ jobs:
           CONFIG
 
       - name: Author one design and failing regression test
-        if: steps.gate.outputs.eligible == 'true'
+        if: steps.gate.outputs.eligible == 'true' && steps.gateway.outputs.ready == 'true'
         run: |
           set -euo pipefail
 
@@ -323,7 +345,7 @@ jobs:
           fi
 
       - name: Verify test-only scope and observe the red state
-        if: steps.gate.outputs.eligible == 'true'
+        if: steps.gate.outputs.eligible == 'true' && steps.gateway.outputs.ready == 'true'
         run: |
           set -euo pipefail
           rm -f opencode.json
@@ -452,7 +474,7 @@ jobs:
           echo "AUTOMATION_RED_SHA=$(git rev-parse HEAD)" >>"$GITHUB_ENV"
 
       - name: Configure implementation permissions
-        if: steps.gate.outputs.eligible == 'true'
+        if: steps.gate.outputs.eligible == 'true' && steps.gateway.outputs.ready == 'true'
         run: |
           set -euo pipefail
           gateway_token="$(cat "${RUNNER_TEMP}/contextual-orchestrator-gateway.token")"
@@ -512,7 +534,7 @@ jobs:
           CONFIG
 
       - name: Implement the bounded product increment
-        if: steps.gate.outputs.eligible == 'true'
+        if: steps.gate.outputs.eligible == 'true' && steps.gateway.outputs.ready == 'true'
         run: |
           set -euo pipefail
 
@@ -566,7 +588,7 @@ jobs:
           fi
 
       - name: Enforce the autonomous diff boundary
-        if: steps.gate.outputs.eligible == 'true'
+        if: steps.gate.outputs.eligible == 'true' && steps.gateway.outputs.ready == 'true'
         run: |
           set -euo pipefail
           rm -f opencode.json .agent-red-output.txt
@@ -722,7 +744,7 @@ jobs:
           PY
 
       - name: Record the pre-validation workspace manifest
-        if: steps.gate.outputs.eligible == 'true'
+        if: steps.gate.outputs.eligible == 'true' && steps.gateway.outputs.ready == 'true'
         run: |
           set -euo pipefail
           "$AUTOMATION_VENV/bin/python" - <<'PY' \
@@ -758,7 +780,7 @@ jobs:
           PY
 
       - name: Validate untrusted changes without network or inherited environment
-        if: steps.gate.outputs.eligible == 'true'
+        if: steps.gate.outputs.eligible == 'true' && steps.gateway.outputs.ready == 'true'
         run: |
           set -euo pipefail
           validation_dist="/tmp/rankweave-validation-dist-${GITHUB_RUN_ID}"
@@ -824,7 +846,7 @@ jobs:
           )
           "${validation_sandbox[@]}" "${validation_environment[@]}"
       - name: Verify validation did not mutate the proposal
-        if: steps.gate.outputs.eligible == 'true'
+        if: steps.gate.outputs.eligible == 'true' && steps.gateway.outputs.ready == 'true'
         run: |
           set -euo pipefail
           "$AUTOMATION_VENV/bin/python" - <<'PY'
@@ -863,7 +885,7 @@ jobs:
 
       - name: Recheck queue and base before token exchange
         id: mutation_preflight
-        if: steps.gate.outputs.eligible == 'true'
+        if: steps.gate.outputs.eligible == 'true' && steps.gateway.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
