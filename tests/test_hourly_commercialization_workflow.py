@@ -19,7 +19,10 @@ def test_commercialization_loop_runs_once_each_hour():
 
     assert 'cron: "17 * * * *"' in workflow
     assert "workflow_dispatch:" in workflow
-    assert "${{ github.workflow }}-${{ github.repository }}-${{ github.run_id }}" in workflow
+    concurrency_group = (
+        "${{ github.workflow }}-${{ github.repository }}-${{ github.run_id }}"
+    )
+    assert concurrency_group in workflow
     assert "cancel-in-progress: false" in workflow
 
 
