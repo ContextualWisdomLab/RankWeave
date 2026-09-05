@@ -1,37 +1,31 @@
 # Hourly commercialization loop
 
-`.github/workflows/hourly-commercialization-loop.yml` runs at minute 17 of
-every hour and can also be started manually. It turns the repository's
-review→repair→revalidation→development policy into a bounded, inspectable
-GitHub Actions workflow rather than an unobservable background promise.
+`.github/workflows/hourly-commercialization-loop.yml` has no repository-local
+schedule. The central Organization Commercial Readiness Loop admits dispatches
+using its `cwl-org-commercial-entrypoint: v1` marker; operators can also invoke
+`workflow_dispatch`. PR #64 changed this boundary at
+`92323cb8b55baf5d840cb97fa8534a0e75ef234c`. The entry point alone does not prove
+that any particular hourly dispatch ran.
 
 ## Sequence
 
-Each run performs four jobs in order:
+Each admitted run performs three local jobs in order:
 
 1. **Inspect the PR queue.** Call the central PR review/merge scheduler to
    request missing current-head reviews, update eligible behind branches, and
    merge or enable auto-merge only when repository policy is satisfied.
-2. **Repair review feedback.** Call the central review-fix scheduler with one
-   dispatch of budget and a one-hour same-head retry interval.
-3. **Revalidate the PR queue.** Call the merge scheduler again so a repaired or
+2. **Revalidate the PR queue.** Call the merge scheduler again so a repaired or
    newly approved current head is reconsidered under the same checks.
-4. **Develop the next product gap.** Only when every governance job succeeded,
+3. **Develop the next product gap.** Only when every governance job succeeded,
    no PR is open, and `NVIDIA_NIM_API_KEY` exists, author one design, prove a
    failing test, implement the bounded increment, validate it without network
    or inherited credentials, and open one pull request.
 
-The reusable workflows are referenced at immutable commits:
-
-- merge/revalidation policy:
-  `5983b41ace75040c1d81818171ca7d0f3653254e`;
-- hourly review-repair policy with called-workflow source bound to
-  `job.workflow_repository` and `job.workflow_sha`:
-  `21397126d708d2d536ccc1d68b0d333653ce9315`.
-
-This prevents a privileged scheduled run from silently changing behavior
-because the central `main` branch moved. Updating either central policy
-requires an explicit reviewed SHA change in RankWeave.
+The two local merge/revalidation calls pin the central policy to
+`5983b41ace75040c1d81818171ca7d0f3653254e`. Review-feedback repair is a separate
+central dispatch from `rankweave-hourly-review-repair.yml`, not a fourth local
+job. Its current owner-side execution evidence must be checked independently;
+an old consumer-side revision does not establish the current repair policy.
 
 ## Product-development trust zones
 
