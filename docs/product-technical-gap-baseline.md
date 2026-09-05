@@ -53,6 +53,35 @@ A generic paired-p95 comparison API is still absent from the released owner
 contract; contextual-orchestrator must not duplicate it or consume this open
 PR as a released statistical API.
 
+### Statistical owner correction — 2026-09-05, proposed
+
+Source `7a2b75aa2a5a5492ca1bd939d8bd90dd42658657` moves the existing Holm
+adjustment into `rankweave-core`, removes the Python arithmetic copy, and
+preserves the public family report and CLI contracts. The regression first
+failed because the native operation did not exist (`df5a198`); the Rust boundary
+now rejects non-finite/out-of-range probabilities before sorting. Empty input,
+ties, candidate-order restoration, cumulative monotonicity, clipping, signed
+zero, and subnormal probabilities are covered. A deterministic unit-fixture
+audit matched the prior `326594b` implementation's output bits for all 7,477
+families checked; this is calculation parity, not a workload benchmark.
+
+The unchanged executable source passes 697 Python tests with 1,677 statements
+and 444 branches covered at 100%. Rust passes 35 tests on macOS (3,360 regions,
+163 functions, 2,164 lines) and 34 on network-disconnected Linux (3,021 regions,
+148 functions, 1,931 lines), with every reported region/function/line covered.
+Ruff, Rust formatting, and Clippy pass. These are local tests, not current-head
+hosted approval, protected integration, governed publication, or a measured
+route-decision improvement.
+
+Paired randomization remains Python-owned pending an exact seeded-stream and
+summation compatibility migration; evaluation, weighted fusion, and tuning
+also remain incomplete. Holm requires valid individual p-values even when
+candidate tests are correlated. The existing per-query sign flips do not
+provide cluster/block randomization; related queries and repeated attempts
+need a justified sampling/randomization design before inferential use. Neither
+this migration nor Holm itself repairs that design or supplies the missing
+generic paired-p95 owner contract.
+
 ## 1. Product identity and responsibility boundary
 
 RankWeave is a **leaf product**: a Python library and CLI with no third-party
@@ -229,8 +258,9 @@ Severity: 🔴 blocks a user today · 🟡 user-visible friction · 🟢 hardeni
    incomplete** (issue #45).
    LineageWeave ADR 0225 names RankWeave as the sole fusion owner, while the
    development head now routes theoretical normalization, two-channel convex
-   fusion, and unweighted RRF through `rankweave-core`; N-channel weighted,
-   evaluation, comparison, and tuning arithmetic still execute in Python. The
+   fusion, unweighted RRF, and Holm adjustment through `rankweave-core`;
+   N-channel weighted, evaluation, paired randomization, and tuning arithmetic
+   still execute in Python. The
    remaining migration keeps
    the public Python surface as an adapter over one Rust core, preserves
    exact documented semantics, and publishes provenance and limitations with
@@ -238,16 +268,15 @@ Severity: 🔴 blocks a user today · 🟡 user-visible friction · 🟢 hardeni
    require exact-workload parity and benchmark evidence; no throughput claim
    is available yet. The migration must not add an inferred policy, threshold,
    candidate window, fold, or channel weight.
-6. 🟢 **Multilevel/temporal modeling mandate — partially inapplicable, partially
-   already shipped.** RankWeave fuses and evaluates rankings; it does not fit
-   respondents to latent traits, so the atomistic-fallacy multilevel/
-   multiple-membership concern (which governs person-level psychometric
-   estimation) does not have a natural target inside this repository — that
-   concern belongs to fast-mlsirm/TEPP, which do estimate latent parameters
-   from nested data. The **temporal** half of the mandate is already shipped
-   here: `temporal_backtesting.py` (ADR 0003) enforces availability-time
-   windows and forbids future-leaking assessment queries. No gap to close on
-   this axis beyond keeping ADR 0003's guarantees intact.
+6. 🟡 **Latent modeling is external; dependent-observation inference remains
+   a local gap.** RankWeave does not fit latent traits; that estimation remains
+   with fast-mlsirm/TEPP. However, repeated or related queries directly affect
+   RankWeave's paired-test validity. Caller-owned blocked folds and temporal
+   windows prevent specified training/assessment leakage; they do not change
+   the paired test's per-query sign flips into block randomization. A justified
+   unit of analysis and an owner-level dependent-observation contract are
+   still required. `temporal_backtesting.py` (ADR 0003) enforces availability
+   times, but does not prove temporal independence or valid uncertainty.
 
 ## 7. UI/UX, Storybook, and accessibility scope note
 

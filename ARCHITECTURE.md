@@ -9,6 +9,12 @@ comparison, policy tuning, strict TREC interchange, and auditable report
 transport. It operates as a standalone package and as a bounded module inside
 naruon or another service-oriented system.
 
+Native migration is partial: normalization, two-channel convex fusion,
+unweighted RRF, Holm adjustment, and semantic ranking/indexing use Rust.
+Evaluation, paired randomization, weighted fusion, and tuning still contain
+Python arithmetic. The architecture target is not evidence that every
+calculation has already migrated.
+
 ## Architectural boundaries
 
 1. **Pure calculation core** — fusion, evaluation, randomization, Holm
@@ -60,7 +66,8 @@ scientific validity.
 - `temporal_backtesting.py` — availability-time historical policy assessment.
 - `trec.py` — strict TREC parsing, formatting, and evaluation.
 - `trec_comparison.py` — direct pairwise TREC comparison orchestration.
-- `trec_family_comparison.py` — ordered family comparison and Holm correction.
+- `trec_family_comparison.py` — ordered family comparison, delegating Holm
+  arithmetic to `rankweave-core` through the packaged native binding.
 - `cli.py` — bounded local-file and UTF-8 JSON transport adapter.
 - `report_schemas.py` — stable schema discovery and package-resource loading.
 - `schemas/` — Draft 2020-12 report contracts shipped in the wheel.

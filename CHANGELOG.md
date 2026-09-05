@@ -23,6 +23,11 @@ All notable changes to rankweave are documented here. The format follows [Keep a
   a minor version, enforced by `tests/test_public_api_compatibility.py`.
 
 ### Changed
+- Family-wise comparison now delegates Holm adjustment to the Rust core,
+  preserving candidate order, tied p-values, cumulative monotonicity, clipping,
+  and the public report/CLI contracts. The native boundary rejects non-finite
+  and out-of-range probabilities; no Python Holm fallback remains. Paired
+  randomization and its seeded sign stream are unchanged.
 - Two-channel convex fusion now delegates its deterministic scalar arithmetic
   to the Rust calculation core while retaining the public Python validation,
   missing-evidence, and exception contracts.
