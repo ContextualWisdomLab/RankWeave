@@ -407,10 +407,45 @@ pub fn reciprocal_rank_fusion_score(ranks: &[BigUint], rank_constant_eta: &BigUi
 mod tests {
     use super::{
         SemanticUnitCandidate, SemanticUnitRankingError, convex_combination_score,
+        holm_adjusted_p_values,
         rank_semantic_units, rank_semantic_units_packed, reciprocal_rank_fusion_score,
         theoretical_min_max_normalize,
     };
     use num_bigint::BigUint;
+
+    #[test]
+    fn holm_preserves_order_monotonicity_ties_and_probability_boundaries() {
+        for (raw_values, expected_values) in [
+            (vec![], vec![]),
+            (vec![0.25], vec![0.25]),
+            (
+                vec![0.375, 0.125, 0.125, 0.25, 0.75],
+                vec![0.75, 0.625, 0.625, 0.75, 0.75],
+            ),
+            (vec![0.5, 0.75, 1.0], vec![1.0, 1.0, 1.0]),
+            (vec![-0.0, 0.0, 1.0], vec![0.0, 0.0, 1.0]),
+            (
+                vec![f64::from_bits(1), 1.0],
+                vec![f64::from_bits(2), 1.0],
+            ),
+        ] {
+            let adjusted_values = holm_adjusted_p_values(&raw_values).unwrap();
+            assert_eq!(adjusted_values.len(), expected_values.len());
+            for (actual_value, expected_value) in adjusted_values.iter().zip(expected_values) {
+                assert_eq!(actual_value.to_bits(), expected_value.to_bits());
+            }
+        }
+    }
+
+    #[test]
+    fn holm_rejects_invalid_probabilities_before_sorting() {
+        for invalid_value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -0.1, 1.1] {
+            assert_eq!(
+                holm_adjusted_p_values(&[0.25, invalid_value]),
+                Err("raw_p_values must contain only finite values between 0 and 1")
+            );
+        }
+    }
 
     #[test]
     fn normalization_uses_theoretical_bounds_and_clamps() {
