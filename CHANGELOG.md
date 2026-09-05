@@ -29,6 +29,10 @@ All notable changes to rankweave are documented here. The format follows [Keep a
   a minor version, enforced by `tests/test_public_api_compatibility.py`.
 
 ### Changed
+- Paired-p95 replay now selects the required order statistics without sorting
+  every resample completely. The quantile convention, validation, returned
+  values and evidence identity are unchanged. A documented local workload
+  completed faster; this does not establish a gateway latency improvement.
 - Family-wise comparison now delegates Holm adjustment to the Rust core,
   preserving candidate order, tied p-values, cumulative monotonicity, clipping,
   and the public report/CLI contracts. The native boundary rejects non-finite

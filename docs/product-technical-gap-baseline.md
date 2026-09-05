@@ -116,6 +116,36 @@ few units or degenerate tails cannot certify 95% coverage; missing/censored
 attempts and nested/crossed or informative-size sampling need their own
 supported design. No production defaults, consumer pins or p95 KPI are changed.
 
+### Paired-p95 calculation cost — 2026-09-05, proposed
+
+Source `511019f6d97788ac52a04ea01ea3167e1fe3d6ff` removes full sorting from
+the existing replay calculation by selecting only the required empirical
+order statistics. The public contract, validation, complete resample evidence,
+type-1 ranks, and report/digest versions remain unchanged. The unsorted and
+signed-zero selection regression was observed RED at `0836d79` before repair.
+
+- The [reproducible protocol](research/paired-p95-selection-profile.md) uses
+  all 67,122 published xRoute generic test rows as 33,561 numeric pairs,
+  grouped in 3,729 complete task units with 50 explicit draws. It excludes no
+  row based on answer quality or success. This constructs a calculation
+  workload, not a routing policy or validated inferential sample.
+- Matched installed release wheels, 6 alternating process rounds, 9 calls per
+  process, no warm-up exclusion: median complete replay API time decreased
+  **91.5451 ms → 49.8053 ms (45.59%)**. Every one of 108 reports retained the
+  same input and complete-report digest. All timings and runtime identities
+  are [retained](research/paired-p95-selection-profile.json); a mixed editable/
+  wheel measurement was excluded from the comparison, not presented as a gain.
+- Same source: Python **702 passed**, **100%** across 1,712 statements and
+  454 branches; macOS Rust **39 tests**, **3,883 regions / 174 functions /
+  2,435 lines**; network-disconnected Linux Rust **38 tests**, **3,544 regions /
+  159 functions / 2,202 lines**, all native coverage measures **100%**. Ruff,
+  fmt, Clippy, wheel/source archive verification and installed-wheel full
+  Python tests pass.
+- This local calculation improvement does not close gateway route-decision or
+  provider p95, buyer quality, inference calibration, protected review/merge,
+  publication or consumer-adoption gaps. One machine and one workload are not
+  a general performance guarantee. Existing ADRs remain Proposed.
+
 ## 1. Product identity and responsibility boundary
 
 RankWeave is a **leaf product**: a Python library and CLI with no third-party

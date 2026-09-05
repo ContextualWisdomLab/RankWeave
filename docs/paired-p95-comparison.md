@@ -107,6 +107,12 @@ and consumer adoption remain separate work; no open PR is a released API.
 
 ## Research grounding (APA 7th)
 
+The source implementation selects the required order statistic in place using
+the Rust standard library's total-order comparator; it need not sort every
+resample fully. This preserves type-1 ranks and signed-zero ordering. A separate
+[local calculation profile](research/paired-p95-selection-profile.md) records
+the unchanged report digests, measured runtime, and non-production scope.
+
 Hyndman, R. J., & Fan, Y. (1996). Sample quantiles in statistical packages.
 *The American Statistician, 50*(4), 361–365.
 https://doi.org/10.1080/00031305.1996.10473566

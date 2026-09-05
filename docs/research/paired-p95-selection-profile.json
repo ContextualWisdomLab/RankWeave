@@ -1,0 +1,303 @@
+{
+  "record_kind": "local_calculation_runtime_not_policy_performance",
+  "date": "2026-09-05",
+  "baseline_source": "9375287982912fffe96c269c309f70fe518cfafd",
+  "candidate_source": "511019f6d97788ac52a04ea01ea3167e1fe3d6ff",
+  "red_test_source": "0836d79",
+  "dataset": {
+    "name": "ulab-ai/xRouteBench",
+    "revision": "ea4b6e1b29d9a734f55f0a637baf326bad6aa681",
+    "split": "llmrouter_generic/test.parquet",
+    "sha256": "cc7f33f03298c734c1f4b3c380d8d9b84dc8723eb0d08f850de033d2645778f4",
+    "rows": 67122,
+    "reader": "existing cached PyArrow 25.0.0",
+    "raw_rows_redistributed": false
+  },
+  "protocol": {
+    "paired_rows": 33561,
+    "task_units": 3729,
+    "model_count": 18,
+    "model_pairs_per_task": 9,
+    "model_pairing": "adjacent lexicographically ordered model names; workload construction only, not a routing policy",
+    "draws": 50,
+    "draw_generator": "Python random.Random(20260905), randrange(unit_count) once per unit per draw",
+    "rounds": 6,
+    "calls_per_process": 9,
+    "order": "baseline/candidate in even rounds, candidate/baseline in odd rounds",
+    "warmup_calls": 0,
+    "timed": "complete public compare_paired_p95 call, including adapter and Rust validation, allocation, expansion, quantiles and report projection",
+    "excluded_from_timer": "Parquet/JSON decoding, construction of a fixed request, imports and report digest serialization",
+    "execution": "network denied and sanitized environment; both optimized Rust 1.97.1 release wheels; Linux test container stopped before timing",
+    "failed_outcome_filter": false
+  },
+  "initial_baseline_api_ms": [
+    75.016916,
+    72.218,
+    72.658542,
+    71.89525,
+    71.623708,
+    71.725959,
+    71.776,
+    71.998708,
+    72.007167
+  ],
+  "discarded_measurement": "Editable-build timing was not comparable to the baseline release wheel and was not used for the performance decision.",
+  "median_api_ms": {
+    "baseline": 91.5450835,
+    "candidate": 49.805270500000006
+  },
+  "reduction_percent": 45.59481667849481,
+  "records": [
+    {
+      "round_index": 0,
+      "label": "baseline",
+      "elapsed_ms": [
+        76.527667,
+        72.179,
+        74.681875,
+        73.68575,
+        74.494542,
+        73.350917,
+        76.101625,
+        73.962625,
+        75.13275
+      ],
+      "result_digest": "4eef2339af30a1c417478e0b56aced22e0af88070990636534358bdd3f4817b3",
+      "input_digest": "sha256:0ec39a2cc6f4b82405aa655a6fc9c3d8c915259d82d82ee7d57bfbc3179fbdec",
+      "observation_count": 33561,
+      "draw_count": 50
+    },
+    {
+      "round_index": 0,
+      "label": "candidate",
+      "elapsed_ms": [
+        44.087667,
+        45.605,
+        41.8655,
+        43.956125,
+        44.710333,
+        42.490833,
+        43.871708,
+        44.215292,
+        43.189583
+      ],
+      "result_digest": "4eef2339af30a1c417478e0b56aced22e0af88070990636534358bdd3f4817b3",
+      "input_digest": "sha256:0ec39a2cc6f4b82405aa655a6fc9c3d8c915259d82d82ee7d57bfbc3179fbdec",
+      "observation_count": 33561,
+      "draw_count": 50
+    },
+    {
+      "round_index": 1,
+      "label": "candidate",
+      "elapsed_ms": [
+        44.554291,
+        43.199375,
+        43.783791,
+        46.434625,
+        48.821958,
+        53.997541,
+        49.387375,
+        45.882958,
+        49.83675
+      ],
+      "result_digest": "4eef2339af30a1c417478e0b56aced22e0af88070990636534358bdd3f4817b3",
+      "input_digest": "sha256:0ec39a2cc6f4b82405aa655a6fc9c3d8c915259d82d82ee7d57bfbc3179fbdec",
+      "observation_count": 33561,
+      "draw_count": 50
+    },
+    {
+      "round_index": 1,
+      "label": "baseline",
+      "elapsed_ms": [
+        80.543542,
+        77.419708,
+        81.074583,
+        74.692042,
+        78.988708,
+        81.816083,
+        79.480667,
+        79.172667,
+        85.520833
+      ],
+      "result_digest": "4eef2339af30a1c417478e0b56aced22e0af88070990636534358bdd3f4817b3",
+      "input_digest": "sha256:0ec39a2cc6f4b82405aa655a6fc9c3d8c915259d82d82ee7d57bfbc3179fbdec",
+      "observation_count": 33561,
+      "draw_count": 50
+    },
+    {
+      "round_index": 2,
+      "label": "baseline",
+      "elapsed_ms": [
+        83.894583,
+        84.598,
+        89.253792,
+        93.508917,
+        98.263,
+        95.977875,
+        96.752375,
+        98.930833,
+        107.430458
+      ],
+      "result_digest": "4eef2339af30a1c417478e0b56aced22e0af88070990636534358bdd3f4817b3",
+      "input_digest": "sha256:0ec39a2cc6f4b82405aa655a6fc9c3d8c915259d82d82ee7d57bfbc3179fbdec",
+      "observation_count": 33561,
+      "draw_count": 50
+    },
+    {
+      "round_index": 2,
+      "label": "candidate",
+      "elapsed_ms": [
+        78.8145,
+        71.941292,
+        72.220875,
+        81.733083,
+        75.527542,
+        71.11,
+        69.934917,
+        70.398666,
+        72.146583
+      ],
+      "result_digest": "4eef2339af30a1c417478e0b56aced22e0af88070990636534358bdd3f4817b3",
+      "input_digest": "sha256:0ec39a2cc6f4b82405aa655a6fc9c3d8c915259d82d82ee7d57bfbc3179fbdec",
+      "observation_count": 33561,
+      "draw_count": 50
+    },
+    {
+      "round_index": 3,
+      "label": "candidate",
+      "elapsed_ms": [
+        65.713625,
+        63.501708,
+        69.965084,
+        63.815125,
+        62.932625,
+        59.267709,
+        57.697834,
+        64.461542,
+        57.747791
+      ],
+      "result_digest": "4eef2339af30a1c417478e0b56aced22e0af88070990636534358bdd3f4817b3",
+      "input_digest": "sha256:0ec39a2cc6f4b82405aa655a6fc9c3d8c915259d82d82ee7d57bfbc3179fbdec",
+      "observation_count": 33561,
+      "draw_count": 50
+    },
+    {
+      "round_index": 3,
+      "label": "baseline",
+      "elapsed_ms": [
+        96.415875,
+        105.955958,
+        103.929791,
+        100.797125,
+        102.72875,
+        98.573625,
+        95.548709,
+        94.805209,
+        92.85175
+      ],
+      "result_digest": "4eef2339af30a1c417478e0b56aced22e0af88070990636534358bdd3f4817b3",
+      "input_digest": "sha256:0ec39a2cc6f4b82405aa655a6fc9c3d8c915259d82d82ee7d57bfbc3179fbdec",
+      "observation_count": 33561,
+      "draw_count": 50
+    },
+    {
+      "round_index": 4,
+      "label": "baseline",
+      "elapsed_ms": [
+        90.86275,
+        93.515083,
+        96.593625,
+        97.367625,
+        93.100541,
+        87.752334,
+        89.680875,
+        87.879917,
+        86.990334
+      ],
+      "result_digest": "4eef2339af30a1c417478e0b56aced22e0af88070990636534358bdd3f4817b3",
+      "input_digest": "sha256:0ec39a2cc6f4b82405aa655a6fc9c3d8c915259d82d82ee7d57bfbc3179fbdec",
+      "observation_count": 33561,
+      "draw_count": 50
+    },
+    {
+      "round_index": 4,
+      "label": "candidate",
+      "elapsed_ms": [
+        51.021958,
+        50.342,
+        48.771625,
+        57.903334,
+        50.009,
+        51.269708,
+        55.895542,
+        54.297542,
+        49.615166
+      ],
+      "result_digest": "4eef2339af30a1c417478e0b56aced22e0af88070990636534358bdd3f4817b3",
+      "input_digest": "sha256:0ec39a2cc6f4b82405aa655a6fc9c3d8c915259d82d82ee7d57bfbc3179fbdec",
+      "observation_count": 33561,
+      "draw_count": 50
+    },
+    {
+      "round_index": 5,
+      "label": "candidate",
+      "elapsed_ms": [
+        49.773791,
+        48.410167,
+        47.6755,
+        48.09,
+        47.160917,
+        48.307458,
+        48.480416,
+        47.21525,
+        47.175833
+      ],
+      "result_digest": "4eef2339af30a1c417478e0b56aced22e0af88070990636534358bdd3f4817b3",
+      "input_digest": "sha256:0ec39a2cc6f4b82405aa655a6fc9c3d8c915259d82d82ee7d57bfbc3179fbdec",
+      "observation_count": 33561,
+      "draw_count": 50
+    },
+    {
+      "round_index": 5,
+      "label": "baseline",
+      "elapsed_ms": [
+        89.803541,
+        92.227417,
+        101.977334,
+        94.413,
+        102.294916,
+        103.029417,
+        116.779875,
+        113.005292,
+        108.945792
+      ],
+      "result_digest": "4eef2339af30a1c417478e0b56aced22e0af88070990636534358bdd3f4817b3",
+      "input_digest": "sha256:0ec39a2cc6f4b82405aa655a6fc9c3d8c915259d82d82ee7d57bfbc3179fbdec",
+      "observation_count": 33561,
+      "draw_count": 50
+    }
+  ],
+  "runtimes": {
+    "baseline": {
+      "python": "3.13.14 (main, Jul 23 2026, 14:48:16) [Clang 22.1.3 ]",
+      "machine": "arm64",
+      "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+      "extension_sha256": "c01b945283fbb75c67b487271916e9dad27c3452fdf1e2602ccd50c86ad60b7d"
+    },
+    "candidate": {
+      "python": "3.13.14 (main, Jul 23 2026, 14:48:16) [Clang 22.1.3 ]",
+      "machine": "arm64",
+      "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+      "extension_sha256": "58290412e88be3b5ce141783a6e3225d47cd5256390c60a3d185c741bc84d3f0"
+    }
+  },
+  "request_sha256": "2945a4ec24f97d32abd11ba6bf38f28f41698aeef413b08c50f508abe70d748e",
+  "production_default_change_allowed": false,
+  "inference_coverage_established": false,
+  "limitations": [
+    "One local machine and one workload; no CPU-exclusive allocation or confidence interval claim.",
+    "Model pairing and explicit unit draws define a calculation workload, not an admitted sampling design or deployed policy.",
+    "Source terminal status, collection timing, censoring, semantic independence and total attempt denominator remain unestablished.",
+    "No gateway route-decision latency, end-to-end provider latency, answer quality, protected merge or release is proved."
+  ]
+}
