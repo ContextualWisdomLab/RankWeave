@@ -1,5 +1,9 @@
 """Static types for the packaged RankWeave Rust extension."""
 
+from collections.abc import Sequence
+
+def holm_adjusted_p_values(raw_p_values: Sequence[float]) -> list[float]: ...
+
 
 def theoretical_min_max_normalize(
     score: float,

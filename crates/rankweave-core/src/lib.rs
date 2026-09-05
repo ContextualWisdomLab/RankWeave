@@ -403,13 +403,45 @@ pub fn reciprocal_rank_fusion_score(ranks: &[BigUint], rank_constant_eta: &BigUi
     })
 }
 
+/// Return monotone Holm-adjusted p-values in the original candidate order.
+///
+/// Equal p-values retain input order. An empty family returns an empty vector.
+///
+/// # Errors
+/// Rejects any non-finite p-value or value outside `[0, 1]` before sorting.
+pub fn holm_adjusted_p_values(raw_p_values: &[f64]) -> Result<Vec<f64>, &'static str> {
+    if raw_p_values
+        .iter()
+        .any(|value| !(0.0..=1.0).contains(value))
+    {
+        return Err("raw_p_values must contain only finite values between 0 and 1");
+    }
+    let family_size = raw_p_values.len();
+    let mut ordered_indices: Vec<_> = (0..family_size).collect();
+    ordered_indices.sort_by(|&left_index, &right_index| {
+        raw_p_values[left_index]
+            .partial_cmp(&raw_p_values[right_index])
+            .expect("validated p-values are comparable")
+    });
+    let mut adjusted_values = vec![0.0; family_size];
+    let mut cumulative_maximum: f64 = 0.0;
+    for (sorted_position, original_index) in ordered_indices.into_iter().enumerate() {
+        let scaled_value =
+            ((family_size - sorted_position) as f64 * raw_p_values[original_index]).min(1.0);
+        if scaled_value > cumulative_maximum {
+            cumulative_maximum = scaled_value;
+        }
+        adjusted_values[original_index] = cumulative_maximum;
+    }
+    Ok(adjusted_values)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         SemanticUnitCandidate, SemanticUnitRankingError, convex_combination_score,
-        holm_adjusted_p_values,
-        rank_semantic_units, rank_semantic_units_packed, reciprocal_rank_fusion_score,
-        theoretical_min_max_normalize,
+        holm_adjusted_p_values, rank_semantic_units, rank_semantic_units_packed,
+        reciprocal_rank_fusion_score, theoretical_min_max_normalize,
     };
     use num_bigint::BigUint;
 
@@ -424,10 +456,7 @@ mod tests {
             ),
             (vec![0.5, 0.75, 1.0], vec![1.0, 1.0, 1.0]),
             (vec![-0.0, 0.0, 1.0], vec![0.0, 0.0, 1.0]),
-            (
-                vec![f64::from_bits(1), 1.0],
-                vec![f64::from_bits(2), 1.0],
-            ),
+            (vec![f64::from_bits(1), 1.0], vec![f64::from_bits(2), 1.0]),
         ] {
             let adjusted_values = holm_adjusted_p_values(&raw_values).unwrap();
             assert_eq!(adjusted_values.len(), expected_values.len());

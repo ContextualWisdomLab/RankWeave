@@ -28,6 +28,11 @@ fn reciprocal_rank_fusion_score(ranks: Vec<BigUint>, rank_constant_eta: BigUint)
     rankweave_core::reciprocal_rank_fusion_score(&ranks, &rank_constant_eta)
 }
 
+#[pyfunction]
+fn holm_adjusted_p_values(raw_p_values: Vec<f64>) -> PyResult<Vec<f64>> {
+    rankweave_core::holm_adjusted_p_values(&raw_p_values).map_err(PyValueError::new_err)
+}
+
 type SemanticUnitReportTuple = (String, String, String, usize, Vec<(String, String, f64)>);
 type SemanticIndexEvidenceTuple = (String, String, String, String, String, String, usize, usize);
 type SemanticIndexReportTuple = (
@@ -299,6 +304,7 @@ fn _rankweave_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(theoretical_min_max_normalize, module)?)?;
     module.add_function(wrap_pyfunction!(convex_combination_score, module)?)?;
     module.add_function(wrap_pyfunction!(reciprocal_rank_fusion_score, module)?)?;
+    module.add_function(wrap_pyfunction!(holm_adjusted_p_values, module)?)?;
     module.add_function(wrap_pyfunction!(rank_semantic_units, module)?)?;
     module.add_function(wrap_pyfunction!(rank_semantic_units_packed, module)?)?;
     module.add_class::<SemanticUnitIndex>()?;
