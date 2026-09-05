@@ -15,6 +15,8 @@ implementation. This directory preserves that grounding with the code.
 | Järvelin and Kekäläinen (2002) | Graded cumulative gain, logarithmic rank discounting, and ideal-ranking normalization. |
 | Smucker et al. (2007) | Paired topic-level randomization as a suitable transparent test for comparing IR systems. |
 | Holm (1979) | Sequentially rejective family-wise error control for candidate-family comparisons. |
+| Hyndman and Fan (1996) | Explicit inverse-empirical-CDF quantile convention in [paired-p95 replay](../paired-p95-comparison.md). |
+| Field and Welsh (2007) | Model- and design-dependent limits on interpreting clustered resampling; [citations and limitations](../paired-p95-comparison.md#research-grounding-apa-7th). |
 
 Complete APA 7th edition references appear in [References](#references-apa-7th-edition).
 Where a locally preserved PDF is absent, the source remains cite-only until

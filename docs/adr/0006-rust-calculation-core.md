@@ -102,6 +102,35 @@ source fallback is not a second production engine.
 
 ## Security and operability properties
 
+### Proposed paired-p95 owner extension (2026-09-05)
+
+The same calculation boundary applies to the gateway's missing paired-p95
+comparison. `compare_paired_p95` accepts paired finite observations, an explicit
+complete partition into resampling units, and a persisted draw plan. Rust owns
+whole-unit expansion, inverse-empirical-CDF quantiles, candidate-minus-baseline
+differences, percentile-replay endpoints and the ordered request digest.
+Python transports typed values and projects the immutable report only.
+
+```text
+paired observations + complete units + explicit draws + row bound
+  -> validate identities, partition, draw shape and expanded row counts
+  -> same drawn units -> baseline p95 and candidate p95 -> subtract
+  -> ordered replicate evidence + percentile endpoints + request digest
+```
+
+This avoids a second consumer engine and makes the draw plan auditable, at the
+cost of retaining the plan and validating its inferential suitability outside
+the replay operation. No RNG, inferred independence, cluster weighting or
+automatic admission decision is added. In particular, the interval is not a
+claim of calibrated coverage, and the original mixed-size units define an
+observation-weighted distribution. Incomplete/multiple-membership or temporal
+designs cannot be reinterpreted as supported disjoint units. The rationale,
+alternatives, research and remaining release/calibration work are recorded in
+[the paired-p95 contract](../paired-p95-comparison.md). This extension and ADR
+remain Proposed until protected integration; no consumer pin is changed.
+
+### Existing release properties
+
 - Rust core inputs are bounded before allocation and reject duplicate,
   non-finite, and domain-invalid state.
 - Python releases contain no provider, database, identity, or network client.

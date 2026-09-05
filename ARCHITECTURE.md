@@ -10,7 +10,7 @@ transport. It operates as a standalone package and as a bounded module inside
 naruon or another service-oriented system.
 
 Native migration is partial: normalization, two-channel convex fusion,
-unweighted RRF, Holm adjustment, and semantic ranking/indexing use Rust.
+unweighted RRF, Holm adjustment, explicit paired-p95 replay, and semantic ranking/indexing use Rust.
 Evaluation, paired randomization, weighted fusion, and tuning still contain
 Python arithmetic. The architecture target is not evidence that every
 calculation has already migrated.
@@ -61,6 +61,8 @@ scientific validity.
 - `ranked_list_fusion.py` — complete-list fusion and contribution evidence.
 - `evaluation.py` — precision, recall, reciprocal rank, and graded nDCG.
 - `comparison.py` — exact and deterministic Monte Carlo paired randomization.
+- `paired_p95.py` — transport adapter for Rust-owned paired p95/whole-unit
+  resampling replay; the caller owns the sampling design and draw plan.
 - `cross_validation.py` — caller-owned blocked folds, fold-local policy selection, and out-of-fold evaluation.
 - `tuning.py` — validation-set convex-score and weighted-RRF policy selection.
 - `temporal_backtesting.py` — availability-time historical policy assessment.

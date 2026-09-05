@@ -7,6 +7,12 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 ## [0.19.0] - Unreleased
 
 ### Added
+- Proposed `compare_paired_p95` and immutable `PairedP95Report` for complete,
+  caller-declared paired resampling units and explicit draws. The Rust core
+  validates and replays the plan, computes each policy's empirical p95 before
+  subtracting, and returns percentile-replay endpoints, row counts and input
+  integrity evidence. This is not an automatic sampling design, calibrated
+  confidence-interval guarantee or measured latency improvement.
 - Added immutable exact semantic-unit index snapshots with atomic validated
   replacement, digest-bound model/dimension/vector evidence, caller-supplied
   row or packed authorization, and deterministic multithreaded Rust scoring

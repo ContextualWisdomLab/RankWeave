@@ -82,6 +82,40 @@ need a justified sampling/randomization design before inferential use. Neither
 this migration nor Holm itself repairs that design or supplies the missing
 generic paired-p95 owner contract.
 
+### Paired-p95 replay prerequisite — 2026-09-05, proposed
+
+Source `f88d5ab1acb42bdf9057b7c5849222ef9c63cb9f` adds the missing reusable
+calculation as `compare_paired_p95`; RED source `971e930` first failed because
+the public operation was absent. This extends the native owner rather than
+copying quantile arithmetic into contextual-orchestrator. It remains proposed
+0.19.0 source, not a released dependency or a complete inferential gate.
+
+The request includes paired observation IDs/values, an exact partition into
+caller-declared units, an explicit plan drawing whole units with replacement,
+and an expanded-row bound. Rust validates the partition/plan and computes each
+policy's inverse-empirical-CDF p95 before subtraction. It retains every draw's
+difference and row count, percentile-replay endpoints and a full request
+digest; the Python adapter performs no quantile arithmetic. In the hand-checked
+counterexample the original p95 difference is zero, not the 99 obtained by
+taking a p95 of paired differences. Mixed-size resampling units produce four,
+two and three observations without discarding members.
+
+Local verification passes 702 Python tests and 100% statement/branch coverage
+(1,712 statements, 454 branches), plus 38 macOS Rust tests (3,862 regions,
+173 functions, 2,423 lines) and 37 network-disconnected Linux Rust tests
+(3,523 regions, 158 functions, 2,190 lines), all reported Rust coverage 100%.
+Ruff, formatting and Clippy pass. The source/wheel verifier now requires the
+new adapter and Rust source. These fixtures establish calculation and
+validation behavior only; they are not real-data accuracy or latency evidence.
+
+The [contract](paired-p95-comparison.md) and Proposed ADR 0006 record the design
+choice, alternatives, UML flow, research and limitations. Draw generation,
+sampling provenance, design-specific calibration, protected CI/review,
+publication and consumer adoption remain required. An arbitrary replay plan,
+few units or degenerate tails cannot certify 95% coverage; missing/censored
+attempts and nested/crossed or informative-size sampling need their own
+supported design. No production defaults, consumer pins or p95 KPI are changed.
+
 ## 1. Product identity and responsibility boundary
 
 RankWeave is a **leaf product**: a Python library and CLI with no third-party
