@@ -35,17 +35,17 @@ pub struct PairedP95Report {
     pub resample_observation_counts: Vec<usize>,
 }
 
-fn empirical_quantile(sorted_values: &[f64], numerator: u128, denominator: u128) -> f64 {
-    let rank = (sorted_values.len() as u128 * numerator).div_ceil(denominator);
-    sorted_values[rank as usize - 1]
+fn empirical_quantile(values: &mut [f64], numerator: u128, denominator: u128) -> f64 {
+    let rank = (values.len() as u128 * numerator).div_ceil(denominator);
+    *values
+        .select_nth_unstable_by(rank as usize - 1, f64::total_cmp)
+        .1
 }
 
 fn paired_p95(
     baseline_values: &mut [f64],
     candidate_values: &mut [f64],
 ) -> Result<(f64, f64, f64), &'static str> {
-    baseline_values.sort_by(f64::total_cmp);
-    candidate_values.sort_by(f64::total_cmp);
     let baseline_p95 = empirical_quantile(baseline_values, 19, 20);
     let candidate_p95 = empirical_quantile(candidate_values, 19, 20);
     let difference = candidate_p95 - baseline_p95;
@@ -162,8 +162,7 @@ pub fn compare_paired_p95(
         }
         resampled_differences.push(paired_p95(&mut baseline_values, &mut candidate_values)?.2);
     }
-    let mut sorted_differences = resampled_differences.clone();
-    sorted_differences.sort_by(f64::total_cmp);
+    let mut quantile_differences = resampled_differences.clone();
     Ok(PairedP95Report {
         schema_version: "rankweave.paired-p95.v1",
         algorithm_version: "rankweave.paired-p95.hf1-unit-replay.v1",
@@ -173,8 +172,8 @@ pub fn compare_paired_p95(
         baseline_p95,
         candidate_p95,
         p95_difference,
-        interval_low: empirical_quantile(&sorted_differences, 1, 40),
-        interval_high: empirical_quantile(&sorted_differences, 39, 40),
+        interval_low: empirical_quantile(&mut quantile_differences, 1, 40),
+        interval_high: empirical_quantile(&mut quantile_differences, 39, 40),
         resampled_differences,
         resample_observation_counts,
     })
