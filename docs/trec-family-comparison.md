@@ -97,8 +97,10 @@ qrels errors remain unchanged.
 
 Every candidate receives the same explicit randomization seed. Monte Carlo
 comparisons therefore use reproducible common sign streams. Holm's procedure
-controls the family-wise error rate under arbitrary dependence, so shared
-queries and correlated candidates do not invalidate the adjustment.
+does not require independence **between candidate tests**, provided each raw
+p-value is valid under its own null hypothesis. Correlated candidates sharing
+queries therefore do not, by themselves, invalidate the adjustment. This does
+not justify independently randomizing dependent queries within each test.
 
 ## Holm adjustment
 
@@ -138,6 +140,13 @@ Holm adjustment controls false rejections across the candidate family that the
 caller supplied. Changing the family after seeing results changes the
 statistical question. Define the candidate family before inspecting p-values.
 
+The current paired test independently flips each non-zero query difference;
+it has no block-randomization option. Repeated attempts, translations, related
+task variants, or other dependent observations cannot be declared independent
+queries merely by assigning distinct identifiers. The caller must justify the
+randomization unit and exchangeability assumptions. Holm cannot repair an
+invalid raw p-value, an unsuitable sampling design, or a mismatched estimand.
+
 Neither a raw nor adjusted p-value measures retrieval lift. Report the observed
 mean difference and per-query evidence with the adjusted p-value. Statistical
 significance does not establish practical importance, robustness to dataset
@@ -149,7 +158,7 @@ comparison once on an independent held-out test set.
 ## Research grounding
 
 Holm's sequentially rejective procedure controls the family-wise error rate for
-arbitrarily dependent hypotheses and is uniformly at least as powerful as the
+valid raw p-values under arbitrary dependence and is uniformly at least as powerful as the
 single-step Bonferroni procedure (Holm, 1979). Pairwise raw p-values use
 RankWeave's Smucker-grounded paired randomization implementation. See
 [Research grounding](research/README.md).

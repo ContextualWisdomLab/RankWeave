@@ -8,7 +8,7 @@ except ModuleNotFoundError:  # pragma: no cover - Python 3.10 compatibility
 import rankweave
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_RELEASE_VERSION = "0.18.0"
+EXPECTED_RELEASE_VERSION = "0.19.0"
 
 
 def test_public_version_matches_release_version():
@@ -21,3 +21,8 @@ def test_project_metadata_matches_public_version():
     )
 
     assert project_metadata["project"]["version"] == rankweave.__version__
+
+    cargo_metadata = tomllib.loads(
+        (PROJECT_ROOT / "Cargo.toml").read_text(encoding="utf-8")
+    )
+    assert cargo_metadata["workspace"]["package"]["version"] == rankweave.__version__

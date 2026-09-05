@@ -1,37 +1,31 @@
 # Hourly commercialization loop
 
-`.github/workflows/hourly-commercialization-loop.yml` runs at minute 17 of
-every hour and can also be started manually. It turns the repository's
-review→repair→revalidation→development policy into a bounded, inspectable
-GitHub Actions workflow rather than an unobservable background promise.
+`.github/workflows/hourly-commercialization-loop.yml` has no repository-local
+schedule. The central Organization Commercial Readiness Loop admits dispatches
+using its `cwl-org-commercial-entrypoint: v1` marker; operators can also invoke
+`workflow_dispatch`. PR #64 changed this boundary at
+`92323cb8b55baf5d840cb97fa8534a0e75ef234c`. The entry point alone does not prove
+that any particular hourly dispatch ran.
 
 ## Sequence
 
-Each run performs four jobs in order:
+Each admitted run performs three local jobs in order:
 
 1. **Inspect the PR queue.** Call the central PR review/merge scheduler to
    request missing current-head reviews, update eligible behind branches, and
    merge or enable auto-merge only when repository policy is satisfied.
-2. **Repair review feedback.** Call the central review-fix scheduler with one
-   dispatch of budget and a one-hour same-head retry interval.
-3. **Revalidate the PR queue.** Call the merge scheduler again so a repaired or
+2. **Revalidate the PR queue.** Call the merge scheduler again so a repaired or
    newly approved current head is reconsidered under the same checks.
-4. **Develop the next product gap.** Only when every governance job succeeded,
+3. **Develop the next product gap.** Only when every governance job succeeded,
    no PR is open, and `NVIDIA_NIM_API_KEY` exists, author one design, prove a
    failing test, implement the bounded increment, validate it without network
    or inherited credentials, and open one pull request.
 
-The reusable workflows are referenced at immutable commits:
-
-- merge/revalidation policy:
-  `5983b41ace75040c1d81818171ca7d0f3653254e`;
-- hourly review-repair policy with called-workflow source bound to
-  `job.workflow_repository` and `job.workflow_sha`:
-  `21397126d708d2d536ccc1d68b0d333653ce9315`.
-
-This prevents a privileged scheduled run from silently changing behavior
-because the central `main` branch moved. Updating either central policy
-requires an explicit reviewed SHA change in RankWeave.
+The two local merge/revalidation calls pin the central policy to
+`5983b41ace75040c1d81818171ca7d0f3653254e`. Review-feedback repair is a separate
+central dispatch from `rankweave-hourly-review-repair.yml`, not a fourth local
+job. Its current owner-side execution evidence must be checked independently;
+an old consumer-side revision does not establish the current repair policy.
 
 ## Product-development trust zones
 
@@ -71,10 +65,16 @@ the red gate.
 ### 3. Implementation and deterministic validation
 
 The verified red state is committed locally only so model fallback can return
-to a known tree. The implementation phase may edit normal product,
-documentation, version, and package files, but it still cannot execute Bash,
-use the web, touch external directories, or edit `.github/`, `.git/`, or agent
-control files.
+to a known tree. The implementation phase may edit normal Python product and
+documentation files, but it still cannot execute Bash, use the web, touch
+external directories, or edit `.github/`, `.git/`, or agent control files.
+
+This autonomous lane is limited to Python production changes. Rust source,
+Cargo manifests, `pyproject.toml`, and the complete `crates/` tree are outside
+its diff boundary. That restriction keeps model-authored native code out of
+later credentialed builders and makes the trusted base extension the correct
+native dependency for final validation. A Rust-core increment requires a
+separate maintainer-authored and reviewed pull request.
 
 A deterministic post-agent gate rejects:
 
@@ -84,7 +84,8 @@ A deterministic post-agent gate rejects:
 - more than 25 changed files;
 - any file larger than 256 KiB;
 - more than 1 MiB of changed-file content;
-- proposals without a production `src/rankweave/*.py` change.
+- proposals without a production `src/rankweave/*.py` change;
+- Rust, Cargo, or Python build-metadata changes.
 
 The accepted proposal then runs, with no provider or GitHub credential and no
 network access:

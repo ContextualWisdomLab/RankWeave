@@ -4,6 +4,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
+from rankweave import _rankweave_core, trec_family_comparison
 from rankweave.comparison import (
     CANDIDATE_GREATER_ALTERNATIVE,
     MONTE_CARLO_RANDOMIZATION_METHOD,
@@ -43,6 +44,25 @@ query-b Q0 relevant-b 2 0.1 partial
 """
 
 EQUAL_CANDIDATE = BASELINE_RUN
+
+
+def test_family_holm_calculation_uses_the_validated_native_owner():
+    native_adjustment = _rankweave_core.holm_adjusted_p_values
+    assert trec_family_comparison._holm_adjusted_p_values is native_adjustment
+    for raw_values, expected_values in [
+        ((), []),
+        ((0.25,), [0.25]),
+        ((0.375, 0.125, 0.125, 0.25, 0.75), [0.75, 0.625, 0.625, 0.75, 0.75]),
+        ((0.5, 0.75, 1.0), [1.0, 1.0, 1.0]),
+        ((-0.0, 0.0, 1.0), [0.0, 0.0, 1.0]),
+        ((math.ulp(0.0), 1.0), [2 * math.ulp(0.0), 1.0]),
+    ]:
+        assert [value.hex() for value in native_adjustment(raw_values)] == [
+            value.hex() for value in expected_values
+        ]
+    for invalid_value in (math.nan, math.inf, -math.inf, -0.1, 1.1):
+        with pytest.raises(ValueError, match="raw_p_values.*finite.*between 0 and 1"):
+            native_adjustment((0.25, invalid_value))
 
 
 def test_family_comparison_applies_hand_checked_holm_adjustment():

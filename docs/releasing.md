@@ -111,7 +111,7 @@ A failed re-publication is not silently skipped. PyPI versions are immutable; co
 Download the exact wheel and source distribution from PyPI before verifying them. An authorized repository operator may alternatively download the short-lived `rankweave-distributions` artifact from the successful publication workflow run during its retention window. Verify GitHub's build provenance against this repository:
 
 ```bash
-gh attestation verify path/to/rankweave-0.18.0-py3-none-any.whl \
+gh attestation verify path/to/rankweave-0.18.0-cp310-abi3-PLATFORM.whl \
   --repo ContextualWisdomLab/RankWeave
 
 gh attestation verify path/to/rankweave-0.18.0.tar.gz \

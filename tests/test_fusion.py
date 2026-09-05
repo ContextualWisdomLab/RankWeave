@@ -131,6 +131,12 @@ class TestReciprocalRankFusionScore:
         with pytest.raises(ValueError):
             reciprocal_rank_fusion_score({"a": 1}, rank_constant_eta=0)
 
+    def test_preserves_unbounded_python_integer_contract(self):
+        rank = 2**64
+        assert reciprocal_rank_fusion_score({"channel": rank}) == pytest.approx(
+            1.0 / (60 + rank)
+        )
+
 
 class TestFusionSettings:
     def test_defaults_follow_research_grounding(self):

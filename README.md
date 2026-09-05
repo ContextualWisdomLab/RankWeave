@@ -1,6 +1,6 @@
 # RankWeave
 
-**Dependency-free, store-agnostic retrieval fusion, evaluation, statistical
+**Python-runtime-dependency-free, store-agnostic retrieval fusion, evaluation, statistical
 comparison, tuning, TREC benchmarking, and auditable CLI workflows for Python
 3.10+.**
 
@@ -8,8 +8,8 @@ RankWeave combines lexical, dense, learned-sparse, graph, and other retrieval
 channels into deterministic rankings. It evaluates rankings, compares paired
 systems, controls family-wise error across candidate experiments, tunes fixed
 weighted-RRF policies, reads standard TREC artifacts, and exposes both pairwise
-and candidate-family comparison contracts to shell and CI users. The runtime
-uses only the Python standard library.
+and candidate-family comparison contracts to shell and CI users. Python
+adapters use only the standard library and the packaged Rust calculation core.
 
 RankWeave originated in the Context Search engine of
 [ContextualWisdomLab/naruon](https://github.com/ContextualWisdomLab/naruon) and
@@ -32,7 +32,8 @@ remains suitable both as a standalone package and as a small MSA module.
   for every run and qrels input without exposing local paths.
 - **Fail-closed contracts:** malformed values, duplicate identifiers, missing
   queries, and invalid artifacts raise stable validation errors.
-- **Portable core:** Apache-2.0, typed, Python 3.10+, and stdlib-only runtime.
+- **Portable core:** Apache-2.0, typed, Python 3.10+, and one packaged Rust
+  calculation core with no third-party Python runtime dependency.
 
 ## Installation
 
@@ -112,6 +113,42 @@ results = weighted_reciprocal_rank_fuse(
 
 Complete-list results expose immutable per-channel contribution evidence,
 including explicit missing channels.
+
+## Rank provider-produced semantic units
+
+RankWeave compares vectors that your authorized retrieval boundary already
+obtained. It does not select or call an embedding model.
+
+```python
+from rankweave import SemanticUnitCandidate, rank_semantic_units
+
+report = rank_semantic_units(
+    [1.0, 0.0],
+    [
+        SemanticUnitCandidate("post-a", "paragraph-1", [1.0, 0.0]),
+        SemanticUnitCandidate("post-a", "paragraph-2", [0.0, 1.0]),
+        SemanticUnitCandidate("post-b", "paragraph-1", [0.8, 0.2]),
+    ],
+)
+
+assert report.results[0].item_id == "post-a"
+assert report.results[0].winning_unit_id == "paragraph-1"
+```
+
+The report binds the ordered input with SHA-256, identifies the schema and
+algorithm versions, and retains the winning semantic unit for each item. Invalid
+dimensions, non-finite values, zero vectors, and duplicate item/unit pairs fail
+with stable error codes. See [ADR 0007](docs/adr/0007-semantic-unit-cosine-ranking.md).
+
+For repeated queries over one governed snapshot, `SemanticUnitExactIndex`
+validates canonical packed vectors once, records model/dimension/vector and
+snapshot digests, and scores only caller-supplied authorized candidate IDs on
+the deterministic multithreaded Rust CPU path. Snapshot replacement is atomic;
+v1 exposes no partial mutation or approximate retrieval. The caller still owns
+persistence, model selection, ABAC, and result post-authorization. See
+[ADR 0008](docs/adr/0008-persistent-exact-semantic-index.md).
+Large authorization sets may use the canonical length-prefixed packed identity
+transport; it is exact and digest-equivalent to the ordinary identity rows.
 
 ## Evaluate ranking quality
 

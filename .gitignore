@@ -10,3 +10,6 @@ dist/
 venv/
 .coverage
 htmlcov/
+.codegraph/
+target/
+src/rankweave/*.so

@@ -4,6 +4,7 @@ from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 
+from rankweave._rankweave_core import holm_adjusted_p_values as _holm_adjusted_p_values
 from rankweave._validation import _require_unit_interval
 from rankweave.comparison import (
     DEFAULT_RANDOM_SEED,
@@ -70,25 +71,6 @@ def _snapshot_candidates(
         except TypeError as exc:
             raise ValueError("candidate identifiers must be hashable") from exc
     return candidate_items
-
-
-def _holm_adjusted_p_values(raw_p_values: tuple[float, ...]) -> tuple[float, ...]:
-    """Return monotone Holm-adjusted p-values in original candidate order."""
-    family_size = len(raw_p_values)
-    ordered_indices = sorted(
-        range(family_size),
-        key=lambda index: (raw_p_values[index], index),
-    )
-    adjusted_values = [0.0] * family_size
-    cumulative_maximum = 0.0
-    for sorted_position, original_index in enumerate(ordered_indices):
-        scaled_value = min(
-            1.0,
-            (family_size - sorted_position) * raw_p_values[original_index],
-        )
-        cumulative_maximum = max(cumulative_maximum, scaled_value)
-        adjusted_values[original_index] = cumulative_maximum
-    return tuple(adjusted_values)
 
 
 def compare_trec_run_family(

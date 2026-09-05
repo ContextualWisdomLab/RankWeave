@@ -1,11 +1,11 @@
 """rankweave — retrieval fusion, evaluation, comparison, and tuning.
 
-Pure-Python (stdlib-only) fusion of lexical, semantic, learned-sparse,
-and other retrieval channels, complete-list fusion, ranked-effectiveness
-evaluation, paired and family-wise statistical comparison, offline weight
-policy tuning, strict TREC interchange, and Unicode NFC query normalization.
-Store-agnostic: bring your own channels; rankweave combines and evaluates their
-evidence.
+Python adapters over one Rust calculation core for lexical, semantic,
+learned-sparse, and other retrieval channels, complete-list fusion,
+ranked-effectiveness evaluation, paired and family-wise statistical comparison,
+offline weight policy tuning, strict TREC interchange, and Unicode NFC query
+normalization. Store-agnostic: bring your own channels; rankweave combines and
+evaluates their evidence.
 
 Two fusion strategies, research-grounded (see ``docs/research/``):
 
@@ -74,6 +74,7 @@ from rankweave.evaluation import (
     evaluate_ranking,
     evaluate_rankings,
 )
+from rankweave.paired_p95 import PairedP95Report, compare_paired_p95
 from rankweave.query_normalization import (
     DEFAULT_MAX_QUERY_CHARACTER_LENGTH,
     normalize_search_text,
@@ -106,6 +107,18 @@ from rankweave.score_fusion import (
     theoretical_min_max_normalize,
     weighted_convex_combination_score,
     weighted_reciprocal_rank_fusion_score,
+)
+from rankweave.semantic_index import (
+    SemanticIndexRankingReport,
+    SemanticIndexSnapshotEvidence,
+    SemanticUnitExactIndex,
+)
+from rankweave.semantic_vector_ranking import (
+    SemanticUnitCandidate,
+    SemanticUnitRank,
+    SemanticUnitRankingReport,
+    rank_semantic_units,
+    rank_semantic_units_packed,
 )
 from rankweave.temporal_backtesting import (
     WeightedConvexBacktestReport,
@@ -147,7 +160,7 @@ from rankweave.tuning import (
     tune_weighted_reciprocal_rank_fusion,
 )
 
-__version__ = "0.18.0"
+__version__ = "0.19.0"
 
 __all__ = [
     "AggregateRankingMetrics",
@@ -176,6 +189,7 @@ __all__ = [
     "PAIRWISE_REPORT_SCHEMA_VERSION",
     "PRECISION_AT_K_METRIC",
     "PairedRandomizationResult",
+    "PairedP95Report",
     "QueryMetricDifference",
     "QueryRankingMetrics",
     "RECALL_AT_K_METRIC",
@@ -184,6 +198,12 @@ __all__ = [
     "RankingComparisonReport",
     "RankingEvaluationReport",
     "RankingMetrics",
+    "SemanticUnitCandidate",
+    "SemanticIndexRankingReport",
+    "SemanticIndexSnapshotEvidence",
+    "SemanticUnitExactIndex",
+    "SemanticUnitRank",
+    "SemanticUnitRankingReport",
     "ReportSchemaDescriptor",
     "SUPPORTED_COMPARISON_ALTERNATIVES",
     "SUPPORTED_COMPARISON_METRICS",
@@ -213,6 +233,7 @@ __all__ = [
     "available_report_schemas",
     "backtest_weighted_convex_fusion",
     "compare_ranking_reports",
+    "compare_paired_p95",
     "compare_rankings",
     "compare_trec_run_family",
     "compare_trec_runs",
@@ -232,6 +253,8 @@ __all__ = [
     "parse_trec_run",
     "reciprocal_rank_fuse",
     "reciprocal_rank_fusion_score",
+    "rank_semantic_units",
+    "rank_semantic_units_packed",
     "theoretical_min_max_normalize",
     "tune_weighted_convex_fusion",
     "tune_weighted_reciprocal_rank_fusion",

@@ -15,10 +15,12 @@ def _job_section(workflow: str, job_name: str, next_job_name: str) -> str:
     return workflow[start:end]
 
 
-def test_commercialization_loop_runs_once_each_hour():
+def test_commercialization_loop_uses_central_admission_without_local_schedule():
     workflow = _workflow_text()
 
-    assert 'cron: "17 * * * *"' in workflow
+    assert workflow.startswith("# cwl-org-commercial-entrypoint: v1\n")
+    trigger_section = workflow.split("permissions:", maxsplit=1)[0]
+    assert "schedule:" not in trigger_section
     assert "workflow_dispatch:" in workflow
     assert "cancel-in-progress: true" in workflow
 
@@ -148,7 +150,8 @@ def test_product_prompt_enforces_bounded_commercial_quality():
         "exactly one highest-impact buyer-visible product gap",
         "write the failing",
         "full production docstrings",
-        "standard-library-only runtime",
+        "no-third-party Python runtime dependency",
+        "one Rust calculation core",
         "Update CHANGELOG.md",
         "Do not commit, push",
         "Figma is not applicable because RankWeave has no UI",
@@ -171,16 +174,33 @@ def test_autonomous_diff_is_text_only_bounded_and_policy_safe():
     for protected_path in (
         '".gitmodules"',
         '"CODEOWNERS"',
+        '"pyproject.toml"',
         '"SECURITY.md"',
         '"AGENTS.md"',
         '".github/"',
         '".git/"',
+        '"crates/"',
     ):
         assert protected_path in workflow
     assert "non-regular file changed" in workflow
     assert "NUL byte found" in workflow
     assert "non-text or unsupported path changed" in workflow
+    assert '"crates/rankweave-core/src/"' not in workflow
+    assert '"crates/rankweave-python/src/"' not in workflow
+    assert '".rs"' not in workflow
     assert "must change a production Python module" in workflow
+    assert "This autonomous lane is Python-only" in workflow
+
+
+def test_ignored_native_core_is_restored_from_trusted_copy_after_each_cleanup():
+    workflow = _workflow_text()
+
+    assert (
+        "trusted editable install did not produce exactly one native core" in workflow
+    )
+    assert workflow.count('git clean -fdX') == 2
+    assert workflow.count('cp "$AUTOMATION_TRUSTED_NATIVE_CORE"') == 2
+    assert workflow.count('sha256sum "$AUTOMATION_TRUSTED_NATIVE_CORE"') == 2
 
 
 def test_untrusted_validation_has_no_network_or_inherited_environment():
@@ -198,6 +218,11 @@ def test_untrusted_validation_has_no_network_or_inherited_environment():
     assert "python -m coverage report" in workflow
     assert "python -m pip wheel" in workflow
     assert "-m pip check" in workflow
+    assert "cargo +1.97.1 fetch --locked" in workflow
+    assert '"CARGO_NET_OFFLINE=true"' in workflow
+    assert '"CARGO_HOME=$SANDBOX_CARGO_HOME"' in workflow
+    assert '"CARGO_TARGET_DIR=$validation_home/cargo-target"' in workflow
+    assert '"RUSTC=$SANDBOX_RUST_TOOLCHAIN/bin/rustc"' in workflow
 
 
 def test_queue_and_base_are_checked_before_and_after_token_exchange():

@@ -40,6 +40,7 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from rankweave import _rankweave_core
 from rankweave._validation import (
     _require_finite,
     _require_positive_integer,
@@ -113,8 +114,9 @@ def theoretical_min_max_normalize(
         raise ValueError("bounds must be finite") from exc
     if upper_bound <= lower_bound:
         raise ValueError("bounds must satisfy upper > lower")
-    normalized = (score - lower_bound) / (upper_bound - lower_bound)
-    return min(1.0, max(0.0, normalized))
+    return _rankweave_core.theoretical_min_max_normalize(
+        score, lower_bound, upper_bound
+    )
 
 
 def convex_combination_score(
@@ -134,11 +136,8 @@ def convex_combination_score(
     if lexical_score is not None:
         _require_unit_interval(lexical_score, "lexical_score")
     _require_unit_interval(semantic_weight_alpha, "semantic_weight_alpha")
-    semantic_component = semantic_score if semantic_score is not None else 0.0
-    lexical_component = lexical_score if lexical_score is not None else 0.0
-    return (
-        semantic_weight_alpha * semantic_component
-        + (1.0 - semantic_weight_alpha) * lexical_component
+    return _rankweave_core.convex_combination_score(
+        semantic_score, lexical_score, semantic_weight_alpha
     )
 
 
@@ -183,13 +182,16 @@ def reciprocal_rank_fusion_score(
     validated_eta = _require_positive_integer(
         rank_constant_eta, "rank_constant_eta"
     )
-    fused_score = 0.0
+    validated_ranks = []
     for channel_name, one_based_rank in channel_ranks.items():
-        validated_rank = _require_positive_integer(
-            one_based_rank, f"rank for channel {channel_name!r}"
+        validated_ranks.append(
+            _require_positive_integer(
+                one_based_rank, f"rank for channel {channel_name!r}"
+            )
         )
-        fused_score += 1.0 / (validated_eta + validated_rank)
-    return fused_score
+    return _rankweave_core.reciprocal_rank_fusion_score(
+        validated_ranks, validated_eta
+    )
 
 
 def weighted_reciprocal_rank_fusion_score(

@@ -2,17 +2,26 @@
 
 ## Purpose
 
-RankWeave is a dependency-free Python library and command-line component for
+RankWeave is a Python library and command-line component backed by one Rust
+calculation core and no third-party Python runtime dependency. It provides
 retrieval-score fusion, ranking evaluation, paired and candidate-family
 comparison, policy tuning, strict TREC interchange, and auditable report
 transport. It operates as a standalone package and as a bounded module inside
 naruon or another service-oriented system.
 
+Native migration is partial: normalization, two-channel convex fusion,
+unweighted RRF, Holm adjustment, explicit paired-p95 replay, and semantic ranking/indexing use Rust.
+Evaluation, paired randomization, weighted fusion, and tuning still contain
+Python arithmetic. The architecture target is not evidence that every
+calculation has already migrated.
+
 ## Architectural boundaries
 
 1. **Pure calculation core** — fusion, evaluation, randomization, Holm
-   correction, and tuning accept in-memory values and perform no network,
-   database, provider, or filesystem access.
+   correction, tuning, and exact semantic indexing accept in-memory values and
+   perform no network, database, provider, or filesystem access. Immutable
+   semantic snapshots precompute digest-bound scale and norm metadata, then
+   atomically replace only after complete validation (ADR 0008).
 2. **Interchange adapters** — TREC parsers and formatters convert strict text
    artifacts to immutable domain records.
 3. **Transport adapters** — the CLI performs bounded local reads and delegates
@@ -45,15 +54,22 @@ scientific validity.
 ## Module map
 
 - `score_fusion.py` — scalar fusion primitives.
+- `semantic_vector_ranking.py` — typed adapter to Rust-owned semantic-unit
+  cosine ranking; authorization and embedding generation remain upstream.
+- `semantic_index.py` — typed adapter to immutable exact Rust index snapshots;
+  the caller owns persistence, model selection, and authorized candidate IDs.
 - `ranked_list_fusion.py` — complete-list fusion and contribution evidence.
 - `evaluation.py` — precision, recall, reciprocal rank, and graded nDCG.
 - `comparison.py` — exact and deterministic Monte Carlo paired randomization.
+- `paired_p95.py` — transport adapter for Rust-owned paired p95/whole-unit
+  resampling replay; the caller owns the sampling design and draw plan.
 - `cross_validation.py` — caller-owned blocked folds, fold-local policy selection, and out-of-fold evaluation.
 - `tuning.py` — validation-set convex-score and weighted-RRF policy selection.
 - `temporal_backtesting.py` — availability-time historical policy assessment.
 - `trec.py` — strict TREC parsing, formatting, and evaluation.
 - `trec_comparison.py` — direct pairwise TREC comparison orchestration.
-- `trec_family_comparison.py` — ordered family comparison and Holm correction.
+- `trec_family_comparison.py` — ordered family comparison, delegating Holm
+  arithmetic to `rankweave-core` through the packaged native binding.
 - `cli.py` — bounded local-file and UTF-8 JSON transport adapter.
 - `report_schemas.py` — stable schema discovery and package-resource loading.
 - `schemas/` — Draft 2020-12 report contracts shipped in the wheel.
@@ -130,9 +146,9 @@ separate.
 `publish.yml` independently accepts an external stable release event or the
 explicit tag/SHA dispatch. Its read-only build job verifies the existing GitHub
 Release, tag-to-commit identity, default-branch reachability, package version,
-complete quality gate, and wheel/source contents. It records a SHA-256 manifest
-and uploads both distributions plus that manifest as one immutable Actions
-artifact.
+complete quality gate, and platform-wheel/source contents. It records a SHA-256
+manifest and uploads the Linux, macOS, and Windows wheels, source distribution,
+and that manifest as one immutable Actions artifact.
 
 Separate provenance and publication jobs verify the handoff before use. The
 provenance job creates GitHub build-provenance attestations. The protected
