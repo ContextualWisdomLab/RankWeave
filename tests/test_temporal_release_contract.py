@@ -5,7 +5,7 @@ CI_WORKFLOW = PROJECT_ROOT / ".github/workflows/ci.yml"
 PUBLISH_WORKFLOW = PROJECT_ROOT / ".github/workflows/publish.yml"
 ARCHIVE_VERIFIER = PROJECT_ROOT / "scripts/verify_release_archives.py"
 TEMPORAL_MODULE = "rankweave/temporal_backtesting.py"
-RELEASE_VERSION = "0.18.0"
+RELEASE_VERSION = "0.19.0"
 
 
 def test_package_and_release_workflows_require_temporal_module():

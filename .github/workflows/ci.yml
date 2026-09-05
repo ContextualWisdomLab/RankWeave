@@ -96,7 +96,7 @@ jobs:
       - name: Verify wheel and source distribution contents
         run: >-
           uv run --frozen --extra dev --python 3.13 python
-          scripts/verify_release_archives.py --dist-dir dist --version 0.18.0
+          scripts/verify_release_archives.py --dist-dir dist --version 0.19.0
           --wheel-tag linux --require-sdist
       - name: Exercise release checksum handoff
         run: |
@@ -132,8 +132,8 @@ jobs:
 
           import rankweave
 
-          assert version("rankweave") == "0.18.0"
-          assert rankweave.__version__ == "0.18.0"
+          assert version("rankweave") == "0.19.0"
+          assert rankweave.__version__ == "0.19.0"
           assert find_spec("jsonschema") is None
 
           expected = [

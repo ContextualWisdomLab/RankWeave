@@ -4,6 +4,8 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+## [0.19.0] - Unreleased
+
 ### Added
 - Added immutable exact semantic-unit index snapshots with atomic validated
   replacement, digest-bound model/dimension/vector evidence, caller-supplied
@@ -40,6 +42,12 @@ All notable changes to rankweave are documented here. The format follows [Keep a
   to duplicate the fusion arithmetic.
 
 ### Fixed
+- Run shared top-k validation tests on Linux as well as macOS; only the
+  accelerator-specific dimension tests remain platform-gated. This covers the
+  malformed-authorization rejection previously absent from Linux coverage.
+- Give the native API additions a distinct 0.19.0 source identity across Python,
+  Cargo, lock files, and installed-package checks. The 0.18.0 public-API baseline
+  remains unchanged. This source update does not publish a release.
 - Supplied the network-isolated autonomous validation sandbox with a pinned,
   pre-fetched Rust 1.97.1 toolchain and Cargo registry, so Maturin can build the
   proposed wheel offline without exposing runner credentials or enabling a
