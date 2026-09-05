@@ -121,7 +121,7 @@ This grounds the dependence/design limitation, not a theorem that the present
 p95 replay always attains nominal coverage.
 
 SciPy Developers. (2026). *bootstrap*. SciPy 1.18.0 manual.
-https://docs.scipy.org/doc/scipy-1.18.0/reference/generated/scipy.stats.bootstrap.html
+https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.bootstrap.html
 The paired option documents shared resampling indices across supplied samples.
 No SciPy code or dependency is used by this implementation.
 
