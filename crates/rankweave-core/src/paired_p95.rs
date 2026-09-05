@@ -182,7 +182,24 @@ pub fn compare_paired_p95(
 
 #[cfg(test)]
 mod tests {
-    use super::compare_paired_p95;
+    use super::{compare_paired_p95, empirical_quantile};
+
+    #[test]
+    fn empirical_quantiles_select_unsorted_values_with_total_order_ties() {
+        let mut values = [9.0, -4.0, 2.0, 8.0, 1.0, 6.0, 3.0, 7.0, 5.0, 4.0];
+        assert_eq!(empirical_quantile(&mut values, 1, 40), -4.0);
+        assert_eq!(empirical_quantile(&mut values, 19, 20), 9.0);
+        assert_eq!(empirical_quantile(&mut values, 39, 40), 9.0);
+        let mut zeros = [0.0, -0.0, 0.0, -0.0];
+        assert_eq!(
+            empirical_quantile(&mut zeros, 1, 40).to_bits(),
+            (-0.0_f64).to_bits()
+        );
+        assert_eq!(
+            empirical_quantile(&mut zeros, 19, 20).to_bits(),
+            0.0_f64.to_bits()
+        );
+    }
 
     #[test]
     fn whole_unit_replay_preserves_pairs_counts_and_request_identity() {
