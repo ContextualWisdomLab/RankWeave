@@ -1642,9 +1642,8 @@ mod tests {
         }
     }
 
-    #[cfg(target_os = "macos")]
     #[test]
-    fn interval_top_k_validation_and_scalar_fallback_are_explicit() {
+    fn top_k_validation_and_scalar_fallback_are_explicit() {
         let exact_index = index("snapshot-v1");
         let known = ("item-a".to_owned(), "unit-a".to_owned());
         let packed_known = packed_authorization(std::slice::from_ref(&known));
@@ -1708,7 +1707,12 @@ mod tests {
             scalar[0].execution_profile,
             SEMANTIC_INDEX_TOP_K_CPU_EXECUTION_PROFILE
         );
+    }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn accelerate_dimension_limits_fall_back_or_fail_closed() {
+        let authorization = [("item-a", "unit-a")];
         let mut oversized_dimension = index("snapshot-v1");
         oversized_dimension.evidence.vector_dimension = usize::MAX;
         assert_eq!(
