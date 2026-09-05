@@ -1,6 +1,6 @@
 # ADR 0007: Rust-owned semantic-unit cosine ranking
 
-- **Status: Accepted**
+- **Status: Proposed** — pending protected integration of PR #41.
 - **Date:** 2026-08-26
 - **Scope:** ranking caller-authorized embedding vectors by semantic unit
 

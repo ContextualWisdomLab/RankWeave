@@ -7,6 +7,10 @@ Product: `ContextualWisdomLab/RankWeave`
 Normative architecture: repository ADRs, including
 [`ADR 0006`](adr/0006-rust-calculation-core.md), and `AGENTS.md`
 
+ADRs 0005–0008 and the native 0.19.0 contract remain proposed in PR #41.
+Only protected, released contracts authorize consumer adoption; source tests
+and locally built wheels do not establish publication.
+
 Supporting evidence: [`docs/research/README.md`](research/README.md)
 
 ## 1. Product purpose

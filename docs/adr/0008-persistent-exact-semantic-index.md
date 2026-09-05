@@ -1,6 +1,6 @@
 # ADR 0008: Persistent exact semantic-unit index snapshots
 
-- **Status: Accepted**
+- **Status: Proposed** — pending protected integration of PR #41.
 - **Date:** 2026-08-31
 - **Scope:** exact authorization-scoped ranking over reusable embedding snapshots
 

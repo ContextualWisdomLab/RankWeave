@@ -1,6 +1,6 @@
 # ADR 0006: One Rust calculation core behind the public Python contract
 
-- **Status: Accepted**
+- **Status: Proposed** — pending protected integration of PR #41.
 - **Date:** 2026-08-26
 - **Scope:** RankWeave fusion, evaluation, comparison, and policy-assessment arithmetic
 
@@ -154,4 +154,3 @@ https://pyo3.rs/main/features
 
 Rayon Developers. (2026). *ParallelIterator*. Rayon 1.12.0 documentation.
 https://docs.rs/rayon/1.12.0/rayon/iter/trait.ParallelIterator.html
-

@@ -1,6 +1,6 @@
 # ADR 0005: Versioned public-API compatibility policy
 
-- **Status: Accepted**
+- **Status: Proposed** — pending protected integration of PR #41.
 - **Date:** 2026-08-22
 - **Scope:** the package-root API, installed CLI, and versioned JSON transports
 

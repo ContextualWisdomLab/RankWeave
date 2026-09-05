@@ -12,6 +12,47 @@ it whenever a §2 row's state changes, a §6 gap closes, or a new gap is found
 (see Maintenance below). Do not let it drift from `gh pr list` / `gh issue
 list` reality.
 
+### Foundation correction — 2026-09-05, proposed
+
+PR #41 now proposes Rust calculation, semantic ranking/index APIs, native
+packaging, and compatibility policy, not only this baseline document. The
+tables and queue narrative below retain their explicitly dated historical
+snapshot; their old green/approval claims are not current delivery evidence.
+
+The correction source is `cd49e955bfa34d860ee201f7d8ff964bf3b2f569`, which
+preserves PR head `eb216beee9abf0adde8d481d9f477d72316ed062` and merges protected
+main `92323cb8b55baf5d840cb97fa8534a0e75ef234c` without rewriting history.
+
+- **Portable validation:** the Linux CI failure was reproduced with Rust
+  1.97.1 and cargo-llvm-cov 0.8.6 in a credential-free, network-disconnected
+  container: 31 tests passed but only 2,858/2,859 regions executed. The missing
+  region was the malformed packed-authorization return in the public top-k
+  batch API. Its common validation test had been gated to macOS along with
+  accelerator-only cases. Splitting those scopes covers the rejection on every
+  platform without changing production arithmetic or lowering any threshold.
+- **Verification:** Linux now passes 32 Rust tests with 2,939/2,939 regions,
+  143/143 functions, and 1,883/1,883 lines. macOS passes 33 tests with
+  3,278/3,278 regions, 158/158 functions, and 2,116/2,116 lines. The Python suite
+  passes 696 tests; 1,686 statements and 446 branches are covered at 100%.
+  Ruff's configured docstring/lint gate, Rust formatting, and Clippy pass.
+- **Distinct release identity:** the proposed native APIs now use 0.19.0 in
+  Python, Cargo, lock files, and installed CLI checks. A regression first
+  rejected the old 0.18.0 source identity. The frozen 0.18.0 public-API set is
+  unchanged. Wheel/source archive checks and an isolated installed-wheel
+  version/native-import/CLI smoke pass; no tag or package is published here.
+- **Current admission contract:** merging PR #64 exposed an obsolete test
+  requiring a local hourly cron. Tests and operations documentation now preserve
+  central dispatch admission and distinguish separately dispatched review repair
+  from the three local jobs. No local schedule was reintroduced.
+
+ADRs 0005–0008 are Proposed until protected integration. Current-head CI,
+independent review, dependency-review availability, governed publication, and
+consumer-specific upgrade evidence remain required. These tests establish
+calculation and packaging contracts, not a held-out quality or p95 improvement.
+A generic paired-p95 comparison API is still absent from the released owner
+contract; contextual-orchestrator must not duplicate it or consume this open
+PR as a released statistical API.
+
 ## 1. Product identity and responsibility boundary
 
 RankWeave is a **leaf product**: a Python library and CLI with no third-party
@@ -29,7 +70,7 @@ index, a benchmark-download service, or an HTTP service. It never calls a
 network or a store. Adding any of those belongs in a consumer, not here
 (AGENTS.md, "Hard rules").
 
-## 2. Current PR/issue queue (evidence, not aspiration)
+## 2. Historical PR/issue queue (2026-08-22–23)
 
 Snapshot taken during this session's review→fix→checks→merge pass:
 
