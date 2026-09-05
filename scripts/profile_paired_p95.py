@@ -15,6 +15,9 @@ def main() -> None:
     if sample_count < 1 or len(sys.argv) != 2:
         raise ValueError("provide one positive timing sample count")
     replay_request = json.load(sys.stdin)
+    replay_request["observation_pairs"] = [
+        tuple(row) for row in replay_request["observation_pairs"]
+    ]
     elapsed_ms = []
     result_digests = set()
     for _ in range(sample_count):
