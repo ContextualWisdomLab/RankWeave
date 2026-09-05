@@ -22,6 +22,9 @@ def test_installed_package_smoke_targets_current_temporal_release():
     ci_workflow = CI_WORKFLOW.read_text(encoding="utf-8")
 
     assert ci_workflow.count(f'== "{RELEASE_VERSION}"') >= 2
+    assert (
+        f'assert payload["rankweave_version"] == "{RELEASE_VERSION}"' in ci_workflow
+    )
     assert "backtest_weighted_convex_fusion" in ci_workflow
     assert "WeightedConvexBacktestWindowDefinition" in ci_workflow
     assert "WeightedConvexBacktestReport" in ci_workflow
