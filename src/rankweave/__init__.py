@@ -74,6 +74,7 @@ from rankweave.evaluation import (
     evaluate_ranking,
     evaluate_rankings,
 )
+from rankweave.paired_p95 import PairedP95Report, compare_paired_p95
 from rankweave.query_normalization import (
     DEFAULT_MAX_QUERY_CHARACTER_LENGTH,
     normalize_search_text,
@@ -188,6 +189,7 @@ __all__ = [
     "PAIRWISE_REPORT_SCHEMA_VERSION",
     "PRECISION_AT_K_METRIC",
     "PairedRandomizationResult",
+    "PairedP95Report",
     "QueryMetricDifference",
     "QueryRankingMetrics",
     "RECALL_AT_K_METRIC",
@@ -231,6 +233,7 @@ __all__ = [
     "available_report_schemas",
     "backtest_weighted_convex_fusion",
     "compare_ranking_reports",
+    "compare_paired_p95",
     "compare_rankings",
     "compare_trec_run_family",
     "compare_trec_runs",

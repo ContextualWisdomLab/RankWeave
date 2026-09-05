@@ -5,6 +5,22 @@ from collections.abc import Sequence
 def holm_adjusted_p_values(raw_p_values: Sequence[float]) -> list[float]: ...
 
 
+def compare_paired_p95(
+    observation_pairs: list[tuple[str, float, float]],
+    resampling_units: list[list[str]],
+    unit_draws: list[list[int]],
+    max_resample_observations: int,
+) -> tuple[
+    str,
+    str,
+    str,
+    tuple[int, int],
+    tuple[float, float, float, float, float],
+    list[float],
+    list[int],
+]: ...
+
+
 def theoretical_min_max_normalize(
     score: float,
     lower: float,

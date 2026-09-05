@@ -1,6 +1,19 @@
 """Hand-checked paired quantile replay and complete-unit validation."""
 
+import pytest
+
 import rankweave
+
+
+@pytest.mark.parametrize("unit_index", [-1, 2**100, True, 0.5])
+def test_invalid_draw_indices_fail_at_the_public_boundary(unit_index):
+    with pytest.raises(ValueError, match="unit"):
+        rankweave.compare_paired_p95(
+            [("task-a", 0.0, 1.0)],
+            [["task-a"]],
+            [[unit_index]],
+            max_resample_observations=1,
+        )
 
 
 def test_paired_p95_replays_whole_units_not_quantiles_of_differences():

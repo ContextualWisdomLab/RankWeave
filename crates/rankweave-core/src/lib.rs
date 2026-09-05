@@ -7,6 +7,7 @@ use num_bigint::BigUint;
 use num_traits::ToPrimitive;
 use sha2::{Digest, Sha256};
 
+pub mod paired_p95;
 pub mod semantic_index;
 
 /// Version of the semantic-unit ranking result envelope.

@@ -34,6 +34,49 @@ fn holm_adjusted_p_values(raw_p_values: Vec<f64>) -> PyResult<Vec<f64>> {
 }
 
 type SemanticUnitReportTuple = (String, String, String, usize, Vec<(String, String, f64)>);
+type PairedP95ReportTuple = (
+    String,
+    String,
+    String,
+    (usize, usize),
+    (f64, f64, f64, f64, f64),
+    Vec<f64>,
+    Vec<usize>,
+);
+
+#[pyfunction]
+fn compare_paired_p95(
+    py: Python<'_>,
+    observation_pairs: Vec<(String, f64, f64)>,
+    resampling_units: Vec<Vec<String>>,
+    unit_draws: Vec<Vec<usize>>,
+    max_resample_observations: usize,
+) -> PyResult<PairedP95ReportTuple> {
+    py.detach(move || {
+        let report = rankweave_core::paired_p95::compare_paired_p95(
+            &observation_pairs,
+            &resampling_units,
+            &unit_draws,
+            max_resample_observations,
+        )
+        .map_err(PyValueError::new_err)?;
+        Ok((
+            report.schema_version.to_owned(),
+            report.algorithm_version.to_owned(),
+            report.ordered_input_digest,
+            (report.observation_count, report.resampling_unit_count),
+            (
+                report.baseline_p95,
+                report.candidate_p95,
+                report.p95_difference,
+                report.interval_low,
+                report.interval_high,
+            ),
+            report.resampled_differences,
+            report.resample_observation_counts,
+        ))
+    })
+}
 type SemanticIndexEvidenceTuple = (String, String, String, String, String, String, usize, usize);
 type SemanticIndexReportTuple = (
     SemanticIndexEvidenceTuple,
@@ -305,6 +348,7 @@ fn _rankweave_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(convex_combination_score, module)?)?;
     module.add_function(wrap_pyfunction!(reciprocal_rank_fusion_score, module)?)?;
     module.add_function(wrap_pyfunction!(holm_adjusted_p_values, module)?)?;
+    module.add_function(wrap_pyfunction!(compare_paired_p95, module)?)?;
     module.add_function(wrap_pyfunction!(rank_semantic_units, module)?)?;
     module.add_function(wrap_pyfunction!(rank_semantic_units_packed, module)?)?;
     module.add_class::<SemanticUnitIndex>()?;
