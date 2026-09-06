@@ -1,58 +1,155 @@
 # RankWeave
 
-**Dependency-free, store-agnostic retrieval fusion, evaluation, statistical
-comparison, tuning, TREC benchmarking, and auditable CLI workflows for Python
-3.10+.**
+**A leaf product for hybrid-retrieval fusion, evaluation, statistical
+comparison, offline policy tuning, and strict TREC interchange.**
 
-RankWeave combines lexical, dense, learned-sparse, graph, and other retrieval
-channels into deterministic rankings. It evaluates rankings, compares paired
-systems, controls family-wise error across candidate experiments, tunes fixed
-weighted-RRF policies, reads standard TREC artifacts, and exposes both pairwise
-and candidate-family comparison contracts to shell and CI users. The runtime
-uses only the Python standard library.
+RankWeave is a pure-Python, standard-library-only library and command-line
+tool. It fuses lexical, dense, learned-sparse, graph, and other retrieval
+channels into deterministic rankings; evaluates those rankings; compares paired
+systems; controls family-wise error across a named candidate family; selects
+fixed fusion policies on validation evidence; and reads and writes standard
+TREC artifacts.
 
-RankWeave originated in the Context Search engine of
-[ContextualWisdomLab/naruon](https://github.com/ContextualWisdomLab/naruon) and
-remains suitable both as a standalone package and as a small MSA module.
+It is a **leaf product**: it must run by itself, and a host may call it as a
+published dependency. Those are the same product, not competing designs.
 
-## Why RankWeave
+[Naruon](https://github.com/ContextualWisdomLab/naruon) is the intended
+composition hub and may call RankWeave through the published package, CLI, and
+report-schema contracts. That hub-and-leaf call is the supported integration
+path; it is not a layering or MSA violation. RankWeave does not talk to a
+database, embedding provider, search index, or benchmark download service, and
+it does **not** require a Naruon checkout to install, run, or test.
 
-- **Research-grounded fusion:** TM2C2 convex fusion and reciprocal-rank fusion,
-  including fixed channel-reliability weights.
-- **Production-shaped APIs:** fuse complete scored or rank-only result lists.
-- **Auditable decisions:** frozen records preserve every score, rank, weight,
-  contribution, query metric, p-value, and benchmark artifact.
-- **Closed experiment loop:** evaluate, compare, correct multiple comparisons,
-  and tune policies without a numerical runtime dependency.
-- **Strict TREC workflow:** parse, format, evaluate, compare two runs, or compare
-  a named family of candidates against one baseline.
-- **Shell-ready evidence:** `rankweave compare` and `rankweave compare-family`
-  emit versioned JSON audit reports without requiring Python glue.
-- **Exact artifact binding:** opt-in v2 reports retain SHA-256 and raw byte counts
-  for every run and qrels input without exposing local paths.
-- **Fail-closed contracts:** malformed values, duplicate identifiers, missing
-  queries, and invalid artifacts raise stable validation errors.
-- **Portable core:** Apache-2.0, typed, Python 3.10+, and stdlib-only runtime.
+The runtime imports only the Python standard library. Python 3.10+; Apache-2.0.
 
-## Installation
+## What operators get
 
-Until PyPI Trusted Publishing is configured:
+- **Fusion:** TM2C2 convex combination and reciprocal-rank fusion, including
+  fixed channel-reliability weights.
+- **Evaluation:** precision@k, recall@k, reciprocal-rank@k, and graded nDCG@k
+  on complete query sets.
+- **Comparison:** identifier-aligned paired randomization, plus Holm
+  family-wise correction for an explicit candidate family.
+- **Tuning and assessment:** validation-set policy selection, caller-owned
+  blocked folds, and availability-time backtesting.
+- **TREC interchange:** fail-closed four-column qrels and six-column runs.
+- **Shell and CI transport:** versioned UTF-8 JSON reports, opt-in exact-byte
+  artifact digests, and packaged JSON Schema contracts.
+
+RankWeave never silently drops a query to inflate a metric. A p-value is not
+effect size, practical significance, or permission to deploy.
+
+## Run RankWeave alone
+
+No host application, Naruon tree, database, or network service is required.
+
+### Install
+
+PyPI currently publishes only `0.1.0`. Check
+[pypi.org/project/rankweave](https://pypi.org/project/rankweave/) for the live
+index before assuming a newer version is public. Install the published
+package:
 
 ```bash
-pip install "rankweave @ git+https://github.com/ContextualWisdomLab/RankWeave.git"
+python -m pip install rankweave==0.1.0
 ```
 
-For development:
+The wheel installs the `rankweave` package and the `rankweave` console command.
+`python -m rankweave` is equivalent to the console script. **`0.1.0` does not
+carry every API this README documents below** — if an example import fails,
+install the git reference immediately below instead of the PyPI package.
+
+The reviewed source tree is currently `0.18.0`, and a GitHub Release exists for
+it, but that version is **not yet on PyPI** (see
+[`docs/releasing.md`](docs/releasing.md) for the open publication gap). For the
+post-0.1.0 APIs documented below (everything from "Fuse, evaluate, and compare
+in Python" onward), install the exact reviewed commit or tag instead of
+assuming the PyPI name already carries them:
+
+```bash
+python -m pip install "rankweave @ git+https://github.com/ContextualWisdomLab/RankWeave.git@v0.18.0"
+```
 
 ```bash
 git clone https://github.com/ContextualWisdomLab/RankWeave.git
 cd RankWeave
-pip install -e ".[dev]"
+python -m pip install .
 ```
 
-The wheel installs both the Python package and the `rankweave` console command.
+See [`docs/releasing.md`](docs/releasing.md) for publisher identity and
+attestation boundaries.
 
-## Fuse retrieval channels
+### Compare two TREC runs
+
+```bash
+rankweave compare \
+  --baseline-run baseline.run \
+  --candidate-run candidate.run \
+  --qrels qrels.txt \
+  --cutoff 10 \
+  --alternative candidate-greater \
+  --pretty > comparison.json
+```
+
+Success writes one UTF-8 JSON document and a newline to stdout and exits `0`.
+Expected usage, file, UTF-8, size, TREC, evaluation, and statistical errors
+write one `rankweave: error: ...` line to stderr, no stdout, and exit `2`.
+
+The default schema is `rankweave.trec-comparison.v1`.
+
+### Compare a named candidate family
+
+```bash
+rankweave compare-family \
+  --baseline-run baseline.run \
+  --candidate model-a=artifacts/model-a.run \
+  --candidate model-b=artifacts/model-b.run \
+  --qrels qrels.txt \
+  --cutoff 10 \
+  --alternative candidate-greater \
+  --familywise-alpha 0.05 \
+  --pretty > family-comparison.json
+```
+
+Repeatable `--candidate ID=PATH` options define the complete family in
+command-line order. RankWeave does not scan a directory to invent the family.
+The default schema is `rankweave.trec-family-comparison.v1`.
+
+### Bind and verify exact input bytes
+
+Run tags are descriptive provenance and may repeat. Add
+`--include-artifact-digests` when a persisted report must identify the exact
+baseline, candidate, and qrels bytes that were evaluated. That opt-in path
+emits `rankweave.trec-comparison.v2` or
+`rankweave.trec-family-comparison.v2`. Local paths are never written.
+
+```bash
+rankweave compare \
+  --baseline-run baseline.run \
+  --candidate-run candidate.run \
+  --qrels qrels.txt \
+  --cutoff 10 \
+  --include-artifact-digests > comparison.json
+```
+
+```bash
+rankweave verify-artifacts \
+  --report comparison.json \
+  --baseline-run baseline.run \
+  --candidate-run candidate.run \
+  --qrels qrels.txt
+```
+
+Family verification uses the same ordered `--candidate ID=PATH` arguments.
+Exit `0` means every digest and byte count matches, `1` means at least one
+artifact differs, and `2` means the command or evidence is invalid. A match is
+an integrity comparison only—not authentication, a signature check, provenance
+verification, or a SLSA claim.
+
+Inputs default to a 64 MiB limit **per artifact**. The same bounded payload is
+hashed, counted, and strictly decoded once.
+
+### Fuse, evaluate, and compare in Python
 
 Fuse one lexical+dense candidate:
 
@@ -67,23 +164,12 @@ score = fuse_channel_scores(
 )
 ```
 
-Fuse arbitrary normalized channels:
+Fuse complete score lists or rank-only lists:
 
 ```python
-from rankweave import weighted_convex_combination_score
+from rankweave import weighted_convex_fuse, weighted_reciprocal_rank_fuse
 
-score = weighted_convex_combination_score(
-    {"semantic": 0.80, "lexical": 0.55, "sparse": 0.65},
-    {"semantic": 0.50, "lexical": 0.30, "sparse": 0.20},
-)
-```
-
-Fuse complete score lists:
-
-```python
-from rankweave import weighted_convex_fuse
-
-results = weighted_convex_fuse(
+scored = weighted_convex_fuse(
     {
         "semantic": [("document-b", 0.90), ("document-a", 0.50)],
         "lexical": [("document-a", 0.80), ("document-c", 0.70)],
@@ -92,15 +178,7 @@ results = weighted_convex_fuse(
     limit=10,
 )
 
-assert results[0].item_id == "document-a"
-```
-
-Fuse complete rank-only lists:
-
-```python
-from rankweave import weighted_reciprocal_rank_fuse
-
-results = weighted_reciprocal_rank_fuse(
+ranked = weighted_reciprocal_rank_fuse(
     {
         "lexical": ["document-a", "document-b"],
         "dense": ["document-b", "document-c"],
@@ -110,10 +188,8 @@ results = weighted_reciprocal_rank_fuse(
 )
 ```
 
-Complete-list results expose immutable per-channel contribution evidence,
-including explicit missing channels.
-
-## Evaluate ranking quality
+Evaluate a complete ranking set. Ranking and judgment mappings must contain
+exactly the same query IDs:
 
 ```python
 from rankweave import evaluate_rankings
@@ -133,12 +209,11 @@ report = evaluate_rankings(
 print(report.aggregate.mean_ndcg_at_k)
 ```
 
-The evaluation API reports precision@k, recall@k, reciprocal-rank@k, and graded
-nDCG@k. Ranking and judgment mappings must contain exactly the same query IDs.
-The nDCG implementation uses gain `2**relevance - 1`; it is not claimed to be
-numerically identical to `trec_eval`'s default identity-gain configuration.
+nDCG uses gain `2**relevance - 1`. That is not claimed to be numerically
+identical to `trec_eval`'s default identity-gain configuration.
 
-## Compare a candidate with a baseline
+Compare a candidate with a baseline. Values join by query identifier, never
+tuple position:
 
 ```python
 from rankweave import CANDIDATE_GREATER_ALTERNATIVE, compare_rankings
@@ -155,127 +230,14 @@ print(comparison.significance.mean_difference)
 print(comparison.significance.p_value)
 ```
 
-`compare_ranking_reports` compares existing immutable evaluation reports.
-`compare_rankings` evaluates and compares two ranking mappings. Candidate values
-are aligned by query ID, never tuple position.
-
 For up to 16 non-zero query differences, RankWeave enumerates all sign
 assignments exactly. Larger comparisons use deterministic local Monte Carlo
-randomization with a plus-one p-value correction. Supported metrics are
-precision, recall, reciprocal rank, and nDCG; supported alternatives are
-`two-sided`, `candidate-greater`, and `candidate-less`.
+randomization with a plus-one p-value correction.
 
-A p-value is not an effect-size or business-value threshold. Report the observed
-mean difference and per-query evidence with the p-value.
-
-## Cross-validate convex score-fusion selection
+Parse and compare TREC artifacts without a host:
 
 ```python
-from rankweave import cross_validate_weighted_convex_fusion
-
-report = cross_validate_weighted_convex_fusion(
-    scored_results_by_query,
-    relevance_by_query,
-    {
-        "dense-heavy": {"lexical": 0.1, "dense": 0.9},
-        "lexical-heavy": {"lexical": 0.9, "dense": 0.1},
-    },
-    {
-        "query-a1": "source-family-a",
-        "query-a2": "source-family-a",
-        "query-b1": "source-family-b",
-        "query-b2": "source-family-b",
-    },
-    cutoff=10,
-)
-
-print(report.out_of_fold_evaluation.aggregate.mean_ndcg_at_k)
-print(report.final_tuning.best_policy_id)
-```
-
-Every held-out fold is evaluated with a policy selected only from the remaining
-queries. Fold IDs are caller-owned so translations, paraphrases, revisions,
-tenants, projects, events, or time blocks can remain together when the
-experimental boundary requires it. The out-of-fold evaluation estimates the
-selection procedure under that exact fold design; the separate full-data tuning
-report recommends one future policy and is not held-out evidence.
-
-See [Explicit-fold convex fusion cross-validation](docs/convex-fusion-cross-validation.md).
-
-## Tune a fixed convex score-fusion policy
-
-```python
-from rankweave import tune_weighted_convex_fusion
-
-report = tune_weighted_convex_fusion(
-    {
-        "query-a": {
-            "lexical": [("a", 1.0), ("b", 0.0)],
-            "dense": [("b", 1.0), ("a", 0.0)],
-        },
-        "query-b": {
-            "lexical": [("c", 0.9), ("d", 0.1)],
-            "dense": [("d", 0.9), ("c", 0.1)],
-        },
-    },
-    {
-        "query-a": {"a": 3},
-        "query-b": {"c": 3},
-    },
-    {
-        "dense-heavy": {"lexical": 0.1, "dense": 0.9},
-        "lexical-heavy": {"lexical": 0.9, "dense": 0.1},
-    },
-    cutoff=1,
-)
-
-assert report.best_policy_id == "lexical-heavy"
-```
-
-The caller defines the finite policy family before inspecting validation
-results. Every trial retains its complete immutable evaluation, and the first
-policy wins an exact objective tie. Freeze the selected weights and evaluate
-them once on an independent held-out test set before reporting final quality.
-
-See [Convex score-fusion policy tuning](docs/convex-fusion-tuning.md).
-
-## Tune a fixed weighted-RRF policy
-
-```python
-from rankweave import tune_weighted_reciprocal_rank_fusion
-
-report = tune_weighted_reciprocal_rank_fusion(
-    {
-        "query-a": {
-            "lexical": ["a", "b"],
-            "dense": ["b", "a"],
-        },
-        "query-b": {
-            "lexical": ["c", "d"],
-            "dense": ["d", "c"],
-        },
-    },
-    {
-        "query-a": {"a": 3},
-        "query-b": {"c": 3},
-    },
-    {
-        "dense-heavy": {"lexical": 0.1, "dense": 0.9},
-        "lexical-heavy": {"lexical": 0.9, "dense": 0.1},
-    },
-    cutoff=10,
-)
-
-assert report.best_policy_id == "lexical-heavy"
-```
-
-Tuning is validation-set model selection. Evaluate the selected policy once on
-an independent held-out test set before reporting final quality.
-
-## Parse and evaluate TREC artifacts
-
-```python
-from rankweave import evaluate_trec_run, parse_trec_qrels, parse_trec_run
+from rankweave import compare_trec_runs, evaluate_trec_run, parse_trec_qrels, parse_trec_run
 
 qrels_text = """\
 # topic judgments
@@ -289,22 +251,8 @@ q1 Q0 document-b 2 0.42 NIST-run_1
 
 qrels = parse_trec_qrels(qrels_text)
 run = parse_trec_run(run_text)
-report = evaluate_trec_run(run_text, qrels_text, cutoff=10)
-```
-
-TREC qrels require four fields and signed ASCII integer relevance in
-`[-127, 127]`. Runs require six fields, literal `Q0`, a positive rank, finite
-score, and one portable 1–20 character ASCII run tag containing only ASCII
-letters, digits, periods, underscores, or hyphens. Blank and `#` comment lines
-are ignored while physical error line numbers are preserved. Evaluation orders
-runs by decreasing score, not the submitted rank field.
-
-## Compare two TREC runs directly
-
-```python
-from rankweave import compare_trec_runs
-
-report = compare_trec_runs(
+evaluation = evaluate_trec_run(run_text, qrels_text, cutoff=10)
+comparison = compare_trec_runs(
     "q Q0 irrelevant 1 0.9 baseline\nq Q0 relevant 2 0.2 baseline\n",
     "q Q0 relevant 1 0.9 candidate\nq Q0 irrelevant 2 0.2 candidate\n",
     "q 0 relevant 1\nq 0 irrelevant 0\n",
@@ -312,30 +260,69 @@ report = compare_trec_runs(
 )
 ```
 
-`TrecRunComparisonReport` retains both parsed runs, qrels, both evaluations, and
-the complete paired statistical result. Identical run tags are allowed because
-tags are provenance rather than artifact identity.
+TREC qrels require four fields and signed ASCII integer relevance in
+`[-127, 127]`. Runs require six fields, literal `Q0`, a positive rank, a
+finite score, and one portable 1–20 character ASCII run tag. Blank and `#`
+comment lines are ignored while physical error line numbers are preserved.
+Evaluation orders runs by decreasing score, not the submitted rank field.
 
-See [Direct TREC run comparison](docs/trec-run-comparison.md).
+## Call RankWeave from a host
 
-## Run a pairwise comparison from shell or CI
+A host—including Naruon—should depend on the **published contract**, not on a
+sibling source tree.
+
+The published contract is:
+
+1. **The installed Python package.** Import public names from `rankweave`.
+   The package `__all__` list is the supported library surface. Pin an exact
+   released version. A source-only API on this repository is not a published
+   contract for a host while that host still pins an older package.
+2. **The CLI JSON transports.** `rankweave compare`,
+   `rankweave compare-family`, and `rankweave verify-artifacts` write
+   independently versioned UTF-8 JSON documents. Default pairwise and family
+   output remains the exact v1 field set. `--include-artifact-digests` is the
+   only way to receive the corresponding v2 schema.
+3. **The packaged report schemas.** Strict JSON Schema Draft 2020-12 resources
+   describe every emitted pairwise and family v1/v2 document, plus the
+   verification report. Discover them from the installed wheel; do not scrape
+   this repository at runtime.
+
+Naruon is expected to compose RankWeave through its hybrid-retrieval seam
+(`services.hybrid_retrieval`) by depending on the published package. Other
+hosts should do the same: add `rankweave` to their dependency set, call the
+public API or CLI, and validate CLI output against the packaged schemas. Do
+not vendor RankWeave files out of a Naruon checkout, and do not require
+operators of this package to clone Naruon.
+
+### Discover the installed report contracts
 
 ```bash
-rankweave compare \
-  --baseline-run baseline.run \
-  --candidate-run candidate.run \
-  --qrels qrels.txt \
-  --cutoff 10 \
-  --alternative candidate-greater \
-  --pretty > comparison.json
+rankweave schema --report-type pairwise --schema-version v2
+python -m rankweave schema --report-type family --schema-version v1
 ```
 
-The equivalent module invocation is `python -m rankweave compare ...`.
-Default execution emits `rankweave.trec-comparison.v1` JSON. Expected usage,
-filesystem, UTF-8, size, TREC, evaluation, and statistical validation failures
-emit no JSON, write one `rankweave: error: ...` line to stderr, and return `2`.
+```python
+from rankweave import available_report_schemas, load_report_schema
 
-## Compare a TREC candidate family with Holm correction
+for descriptor in available_report_schemas():
+    schema = load_report_schema(
+        descriptor.report_type,
+        descriptor.schema_version,
+    )
+    assert schema["properties"]["schema_version"]["const"] == (
+        descriptor.transport_schema_id
+    )
+```
+
+The runtime does not embed a validator. The host chooses a conforming Draft
+2020-12 implementation. Structural validation does not authenticate a report,
+verify external artifact bytes, or establish that a statistical conclusion is
+scientifically valid.
+
+See [Report JSON Schemas](docs/report-schemas.md) and
+[RankWeave command-line interface](docs/cli.md).
+
+### Compare a candidate family from a host process
 
 ```python
 from rankweave import (
@@ -371,153 +358,60 @@ for candidate in report.candidates:
     )
 ```
 
-The baseline and qrels are parsed and evaluated once. Every candidate is tested
-with the same explicit metric, alternative, randomization count, and seed.
-RankWeave applies Holm's step-down correction to the resulting family of raw
-p-values and returns both raw and adjusted evidence in candidate input order.
+The baseline and qrels are parsed and evaluated once. Every candidate is
+tested with the same explicit metric, alternative, randomization count, and
+seed. Holm correction controls false rejections within the supplied family; it
+does not measure lift or justify automatic deployment.
 
-The candidate family must be defined before inspecting results. Holm correction
-controls false rejections within the supplied family; it does not measure lift
-or justify automatic deployment.
+## Select a fixed fusion policy
 
-See [TREC candidate-family comparison](docs/trec-family-comparison.md).
-
-## Run the candidate family from shell or CI
-
-```bash
-rankweave compare-family \
-  --baseline-run baseline.run \
-  --candidate model-a=artifacts/model-a.run \
-  --candidate model-b=artifacts/model-b.run \
-  --qrels qrels.txt \
-  --cutoff 10 \
-  --alternative candidate-greater \
-  --familywise-alpha 0.05 \
-  --pretty > family-comparison.json
-```
-
-Repeatable `--candidate ID=PATH` options define the complete family and preserve
-command-line order. Default execution emits
-`rankweave.trec-family-comparison.v1` JSON with each candidate's effect, raw and
-Holm-adjusted p-values, family-wise decision, run provenance, and complete
-per-query differences.
-
-## Bind reports to exact input bytes
-
-Run tags are descriptive provenance and may repeat. Add
-`--include-artifact-digests` when a persisted report must identify the exact
-baseline, candidate, and qrels bytes that were evaluated:
-
-```bash
-rankweave compare \
-  --baseline-run baseline.run \
-  --candidate-run candidate.run \
-  --qrels qrels.txt \
-  --cutoff 10 \
-  --include-artifact-digests > comparison.json
-```
-
-```bash
-rankweave compare-family \
-  --baseline-run baseline.run \
-  --candidate model-a=model-a.run \
-  --candidate model-b=model-b.run \
-  --qrels qrels.txt \
-  --cutoff 10 \
-  --include-artifact-digests > family-comparison.json
-```
-
-Digest mode uses the opt-in schemas `rankweave.trec-comparison.v2` and
-`rankweave.trec-family-comparison.v2`. Each artifact record contains a SHA-256
-hex digest and exact raw `byte_count`; candidate evidence retains the declared
-family order. Local paths are never emitted.
-
-Hashes cover the original bounded bytes before UTF-8 decoding. Comments, line
-endings, and trailing whitespace therefore change artifact identity even when
-they do not change the evaluated ranking. SHA-256 evidence is an integrity
-binding, not a signature, producer-authentication mechanism, trusted-execution
-proof, or SLSA-level claim.
-
-See [RankWeave command-line interface](docs/cli.md) for v1/v2 field order,
-verification examples, and operator boundaries.
-
-## Discover machine-readable report contracts
-
-RankWeave 0.13.0 ships strict JSON Schema Draft 2020-12 resources for every
-pairwise and candidate-family v1/v2 transport. Shell and container consumers
-can retrieve the exact installed contract without locating package files:
-
-```bash
-rankweave schema --report-type pairwise --schema-version v2
-```
-
-The equivalent module entrypoint is:
-
-```bash
-python -m rankweave schema --report-type family --schema-version v1
-```
-
-Python and MSA consumers can use the dependency-free resource API:
+The caller defines the finite policy family before inspecting validation
+results. Freeze the selected weights and evaluate them once on an independent
+held-out test set before reporting final quality.
 
 ```python
-from rankweave import available_report_schemas, load_report_schema
+from rankweave import tune_weighted_convex_fusion, tune_weighted_reciprocal_rank_fusion
 
-for descriptor in available_report_schemas():
-    schema = load_report_schema(
-        descriptor.report_type,
-        descriptor.schema_version,
-    )
-    assert schema["properties"]["schema_version"]["const"] == (
-        descriptor.transport_schema_id
-    )
-```
+convex = tune_weighted_convex_fusion(
+    {
+        "query-a": {
+            "lexical": [("a", 1.0), ("b", 0.0)],
+            "dense": [("b", 1.0), ("a", 0.0)],
+        },
+        "query-b": {
+            "lexical": [("c", 0.9), ("d", 0.1)],
+            "dense": [("d", 0.9), ("c", 0.1)],
+        },
+    },
+    {"query-a": {"a": 3}, "query-b": {"c": 3}},
+    {
+        "dense-heavy": {"lexical": 0.1, "dense": 0.9},
+        "lexical-heavy": {"lexical": 0.9, "dense": 0.1},
+    },
+    cutoff=1,
+)
 
-The runtime does not embed a validator. Consumers select a conforming Draft
-2020-12 implementation appropriate to their platform. Structural validation
-does not authenticate a report, verify external artifact bytes, or establish
-that a statistical conclusion is scientifically valid. See
-[Report JSON Schemas](docs/report-schemas.md).
-
-## Cross-validate fixed weighted-RRF policies
-
-Rank-only retrieval systems can evaluate their complete fixed-weight selection
-procedure with explicit blocked folds:
-
-```python
-from rankweave import cross_validate_weighted_reciprocal_rank_fusion
-
-report = cross_validate_weighted_reciprocal_rank_fusion(
-    channel_rankings_by_query,
-    relevance_by_query,
-    candidate_channel_weights,
-    fold_id_by_query,
+rrf = tune_weighted_reciprocal_rank_fusion(
+    {
+        "query-a": {"lexical": ["a", "b"], "dense": ["b", "a"]},
+        "query-b": {"lexical": ["c", "d"], "dense": ["d", "c"]},
+    },
+    {"query-a": {"a": 3}, "query-b": {"c": 3}},
+    {
+        "dense-heavy": {"lexical": 0.1, "dense": 0.9},
+        "lexical-heavy": {"lexical": 0.9, "dense": 0.1},
+    },
     cutoff=10,
-    rank_constant_eta=60,
 )
 ```
 
-Every fold tunes weights only on complementary training queries, applies the
-selected weights and one fixed eta unchanged to held-out rank lists, and retains
-the complete tuning and evaluation reports. The aggregate out-of-fold result is
-kept separate from all-data final tuning. The caller owns leakage-safe grouping
-for translations, users, tenants, revisions, projects, events, and time blocks.
+Caller-owned blocked folds and availability-time windows assess the selection
+procedure without treating all-data final tuning as held-out quality:
 
-See [Weighted-RRF explicit-fold cross-validation](docs/rrf-cross-validation.md).
-
-## Backtest convex policies by availability time
-
-Use `backtest_weighted_convex_fusion` when a policy must be selected only from
-information available before each historical assessment window. The caller
-supplies timezone-aware availability timestamps and explicit ordered windows;
-RankWeave rejects future-evidence leakage, overlapping held-out windows,
-incomplete query accounting, and ambiguous same-instant boundaries.
-
-Each window preserves the complete training tuning report, selected fixed
-weights, held-out rankings, and held-out evaluation. The report also reconstructs
-one original-order out-of-sample evaluation and keeps the all-data final policy
-recommendation separate from prospective evidence.
-
-See [Temporal convex-fusion backtesting](docs/temporal-convex-backtesting.md).
+- [Convex score-fusion policy tuning](docs/convex-fusion-tuning.md)
+- [Explicit-fold convex fusion cross-validation](docs/convex-fusion-cross-validation.md)
+- [Weighted-RRF explicit-fold cross-validation](docs/rrf-cross-validation.md)
+- [Temporal convex-fusion backtesting](docs/temporal-convex-backtesting.md)
 
 ## Input and determinism guarantees
 
@@ -531,42 +425,14 @@ See [Temporal convex-fusion backtesting](docs/temporal-convex-backtesting.md).
 - public result, evaluation, comparison, tuning, and TREC records are frozen;
 - CLI artifact digests bind exact raw bytes and disclose no local path.
 
-Both CLI workflows accept local files only and delegate all parsing,
-evaluation, randomization, and adjustment behavior to the native Python APIs.
-Inputs default to a 64 MiB limit **per artifact**. The same bounded payload is
-hashed, counted, and strictly decoded once, so a file that grows after its
-initial size check cannot trigger an unbounded in-memory read.
-
-## Hourly governed development loop
-
-The default branch runs an hourly workflow at minute 17:
-
-`PR review/merge scan → review-feedback repair → exact-head revalidation → one
-bounded buyer-visible product proposal when the governed PR queue is empty`.
-
-PR inspection, review repair, and merge decisions use immutable reusable
-workflows from the organization's central `.github` repository. The local
-product stage uses a hash-pinned OpenCode binary with the official NVIDIA
-provider and `NVIDIA_NIM_API_KEY`; it does not use GitHub Copilot Agent Tasks or
-alter the existing review-agent credential path.
-
-The workflow first permits edits only to tests and a design specification, then
-runs pytest without network or inherited credentials and requires a genuine
-failed test. Only then may the agent implement one bounded production change.
-`AGENTS.md`, workflow, ownership, security, environment, and repository-control
-files remain maintainer-owned and outside autonomous scope. Ruff, the complete
-tests, 100% line/branch coverage, wheel build, offline installation, import
-smoke, and `pip check` run in a network-isolated process.
-
-Before requesting the short-lived OIDC-derived GitHub App token, the workflow
-rechecks both the open-PR queue and exact `main` SHA. It repeats both checks
-immediately before opening one PR. Generated work is never self-approved,
-merged, published, or released.
-
-See [Hourly commercialization loop](docs/operations/hourly-commercialization-loop.md)
-for the credential, sandbox, failure, and operating contracts.
+Both CLI comparison commands accept local files only and delegate parsing,
+evaluation, randomization, and adjustment to the native Python APIs.
 
 ## Research and standards
+
+Defaults, metrics, comparison, and interchange trace to the APA 7th edition
+references in [`docs/research/`](docs/research/). Do not treat the short labels
+below as a new bibliography.
 
 - Bruch et al. (2024) — TM2C2 and theoretical normalization.
 - Cormack et al. (2009) — reciprocal-rank fusion.
@@ -580,44 +446,20 @@ for the credential, sandbox, failure, and operating contracts.
 - RFC 8259 — interoperable UTF-8 JSON transport.
 - Unicode UAX #15 — NFC normalization.
 
-Full APA 7th edition references are in [`docs/research/`](docs/research/).
+## Operator documentation
 
-## Development
-
-```bash
-pip install -e ".[dev]"
-python -m ruff check .
-python -m coverage run -m pytest -q
-python -m coverage report    # 100% line + branch coverage required
-python -m pip wheel . --no-deps --wheel-dir dist
-```
+| Topic | Document |
+|---|---|
+| CLI transports, exits, and CI examples | [docs/cli.md](docs/cli.md) |
+| Pairwise TREC comparison | [docs/trec-run-comparison.md](docs/trec-run-comparison.md) |
+| Candidate-family comparison and Holm | [docs/trec-family-comparison.md](docs/trec-family-comparison.md) |
+| TREC parse/format contracts | [docs/trec-interoperability.md](docs/trec-interoperability.md) |
+| Report JSON Schemas | [docs/report-schemas.md](docs/report-schemas.md) |
+| Artifact verification | [docs/artifact-verification.md](docs/artifact-verification.md) |
+| Trusted publication | [docs/releasing.md](docs/releasing.md) |
+| Architecture boundaries | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Contributor and automation procedure | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
-
-## Verify persisted artifact evidence
-
-RankWeave 0.18.0 can compare explicit local files with the unsigned SHA-256 and raw byte-count evidence in a persisted v2 report without exposing file paths or payloads:
-
-```bash
-rankweave verify-artifacts \
-  --report comparison.json \
-  --baseline-run baseline.run \
-  --candidate-run candidate.run \
-  --qrels qrels.txt
-```
-
-Candidate-family verification uses ordered, repeatable `--candidate ID=PATH` arguments. Exit status `0` means all bytes match, `1` means at least one artifact differs, and `2` means the command or evidence is invalid. A match is an integrity comparison only—not authentication, signature verification, provenance verification, or a SLSA claim.
-
-## Trusted distribution and provenance
-
-RankWeave releases are built from the exact published GitHub Release tag, tested at 100% production statement and branch coverage, transferred between jobs as one immutable distribution artifact, and published through PyPI Trusted Publishing after the protected `pypi` environment approves the deployment.
-
-After a version has been published and independently verified, install it from PyPI:
-
-```bash
-python -m pip install rankweave==0.18.0
-```
-
-Before the first Trusted Publisher is configured or when a version has not been published, use a reviewed source checkout instead of assuming that the PyPI name is owned by this project. See [`docs/releasing.md`](docs/releasing.md) for the exact publisher identity, release procedure, and GitHub/PyPI attestation verification boundaries.
