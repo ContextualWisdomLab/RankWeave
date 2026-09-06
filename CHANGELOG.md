@@ -28,6 +28,7 @@ All notable changes to rankweave are documented here. The format follows [Keep a
   re-verified at 664 passed, 100% statement/branch coverage, ruff clean.
 
 ### Fixed
+- Repaired the local commercialization workflow contract after organization scheduling moved to `ContextualWisdomLab/.github`: the leaf test now requires the central-entrypoint marker and manual-only trigger instead of a removed local cron, and the operator guide now describes the actual three-job local sequence plus the separately owned hourly repair caller.
 - Restricted both autonomous OpenCode phases to explicit repository read paths
   and removed agent-authored pull-request metadata, preventing workspace-external
   reads or generated text from becoming a pull-request title or body.
