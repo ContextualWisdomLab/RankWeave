@@ -15,11 +15,12 @@ def _job_section(workflow: str, job_name: str, next_job_name: str) -> str:
     return workflow[start:end]
 
 
-def test_commercialization_loop_runs_once_each_hour():
+def test_local_entrypoint_is_manual_and_centrally_scheduled():
     workflow = _workflow_text()
 
-    assert 'cron: "17 * * * *"' in workflow
+    assert workflow.startswith("# cwl-org-commercial-entrypoint: v1\n")
     assert "workflow_dispatch:" in workflow
+    assert "\n  schedule:" not in workflow
     assert "cancel-in-progress: true" in workflow
 
 
