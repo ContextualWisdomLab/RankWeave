@@ -113,6 +113,10 @@ results = weighted_reciprocal_rank_fuse(
 Complete-list results expose immutable per-channel contribution evidence,
 including explicit missing channels.
 
+`lazy_reciprocal_rank_fuse` accepts rank-ordered streams plus an exact
+random-access rank resolver. It returns the same bounded Cormack RRF result
+without consuming stream tails after the channel-frontier proof is complete.
+
 ## Evaluate ranking quality
 
 ```python
