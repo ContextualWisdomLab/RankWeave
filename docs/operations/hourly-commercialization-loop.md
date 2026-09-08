@@ -1,37 +1,38 @@
 # Hourly commercialization loop
 
-`.github/workflows/hourly-commercialization-loop.yml` runs at minute 17 of
-every hour and can also be started manually. It turns the repository's
-review→repair→revalidation→development policy into a bounded, inspectable
-GitHub Actions workflow rather than an unobservable background promise.
+This is maintainer and automation procedure. The customer and operator entry
+point is [README.md](../../README.md). Contributor setup and a short loop
+summary live in [CONTRIBUTING.md](../../CONTRIBUTING.md).
+
+`.github/workflows/hourly-commercialization-loop.yml` is the repository-local
+manual entry point for PR queue revalidation and bounded product development.
+The hourly review-repair schedule is owned by the central
+`ContextualWisdomLab/.github` caller, which discovers this file through the
+`cwl-org-commercial-entrypoint: v1` marker. This keeps the leaf workflow
+inspectable without duplicating the organization schedule.
 
 ## Sequence
 
-Each run performs four jobs in order:
+Each local invocation performs three jobs in order:
 
 1. **Inspect the PR queue.** Call the central PR review/merge scheduler to
    request missing current-head reviews, update eligible behind branches, and
    merge or enable auto-merge only when repository policy is satisfied.
-2. **Repair review feedback.** Call the central review-fix scheduler with one
-   dispatch of budget and a one-hour same-head retry interval.
-3. **Revalidate the PR queue.** Call the merge scheduler again so a repaired or
+2. **Revalidate the PR queue.** Call the merge scheduler again so a repaired or
    newly approved current head is reconsidered under the same checks.
-4. **Develop the next product gap.** Only when every governance job succeeded,
+3. **Develop the next product gap.** Only when every governance job succeeded,
    no PR is open, and `NVIDIA_NIM_API_KEY` exists, author one design, prove a
    failing test, implement the bounded increment, validate it without network
    or inherited credentials, and open one pull request.
 
-The reusable workflows are referenced at immutable commits:
+Review-feedback repair remains hourly, but runs from the central `.github`
+caller rather than as a cross-repository reusable-workflow job in this file.
 
-- merge/revalidation policy:
-  `5983b41ace75040c1d81818171ca7d0f3653254e`;
-- hourly review-repair policy with called-workflow source bound to
-  `job.workflow_repository` and `job.workflow_sha`:
-  `21397126d708d2d536ccc1d68b0d333653ce9315`.
-
-This prevents a privileged scheduled run from silently changing behavior
-because the central `main` branch moved. Updating either central policy
-requires an explicit reviewed SHA change in RankWeave.
+The two local merge/revalidation jobs reference the central scheduler at the
+immutable commit `5983b41ace75040c1d81818171ca7d0f3653254e`. Updating that
+policy requires an explicit reviewed SHA change in RankWeave. The separate
+hourly review-repair caller stays in `ContextualWisdomLab/.github`, where its
+same-repository source check can be satisfied without copying central logic.
 
 ## Product-development trust zones
 
@@ -158,8 +159,8 @@ list or OpenCode version changes.
 ## Single-flight and TOCTOU behavior
 
 The workflow uses one concurrency group with `cancel-in-progress: true`, so a
-new hourly run replaces a stale previous orchestration instead of building an
-unbounded queue.
+new manual invocation replaces a stale previous local orchestration instead of
+building an unbounded queue.
 
 The open-PR gate runs twice:
 
@@ -190,7 +191,8 @@ branch or PR is created after any of these conditions:
 - validation-time workspace mutation;
 - invalid or oversized PR title/body.
 
-The next hourly run begins from the then-current protected `main` branch.
+The next eligible central repair or manual local invocation begins from the
+then-current protected `main` branch.
 
 ## Operational verification
 
