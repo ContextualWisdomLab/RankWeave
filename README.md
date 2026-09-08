@@ -1,5 +1,7 @@
 # RankWeave
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ContextualWisdomLab/RankWeave)
+
 **A leaf product for hybrid-retrieval fusion, evaluation, statistical
 comparison, offline policy tuning, and strict TREC interchange.**
 
