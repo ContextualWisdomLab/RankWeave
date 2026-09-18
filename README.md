@@ -200,7 +200,7 @@ experimental boundary requires it. The out-of-fold evaluation estimates the
 selection procedure under that exact fold design; the separate full-data tuning
 report recommends one future policy and is not held-out evidence.
 
-See [Explicit-fold convex fusion cross-validation](docs/convex-fusion-cross-validation.md).
+See [Explicit-fold convex fusion cross-validation](https://github.com/ContextualWisdomLab/RankWeave/blob/main/docs/convex-fusion-cross-validation.md).
 
 ## Tune a fixed convex score-fusion policy
 
@@ -237,7 +237,7 @@ results. Every trial retains its complete immutable evaluation, and the first
 policy wins an exact objective tie. Freeze the selected weights and evaluate
 them once on an independent held-out test set before reporting final quality.
 
-See [Convex score-fusion policy tuning](docs/convex-fusion-tuning.md).
+See [Convex score-fusion policy tuning](https://github.com/ContextualWisdomLab/RankWeave/blob/main/docs/convex-fusion-tuning.md).
 
 ## Tune a fixed weighted-RRF policy
 
@@ -316,7 +316,7 @@ report = compare_trec_runs(
 the complete paired statistical result. Identical run tags are allowed because
 tags are provenance rather than artifact identity.
 
-See [Direct TREC run comparison](docs/trec-run-comparison.md).
+See [Direct TREC run comparison](https://github.com/ContextualWisdomLab/RankWeave/blob/main/docs/trec-run-comparison.md).
 
 ## Run a pairwise comparison from shell or CI
 
@@ -380,7 +380,7 @@ The candidate family must be defined before inspecting results. Holm correction
 controls false rejections within the supplied family; it does not measure lift
 or justify automatic deployment.
 
-See [TREC candidate-family comparison](docs/trec-family-comparison.md).
+See [TREC candidate-family comparison](https://github.com/ContextualWisdomLab/RankWeave/blob/main/docs/trec-family-comparison.md).
 
 ## Run the candidate family from shell or CI
 
@@ -438,7 +438,7 @@ they do not change the evaluated ranking. SHA-256 evidence is an integrity
 binding, not a signature, producer-authentication mechanism, trusted-execution
 proof, or SLSA-level claim.
 
-See [RankWeave command-line interface](docs/cli.md) for v1/v2 field order,
+See [RankWeave command-line interface](https://github.com/ContextualWisdomLab/RankWeave/blob/main/docs/cli.md) for v1/v2 field order,
 verification examples, and operator boundaries.
 
 ## Discover machine-readable report contracts
@@ -476,7 +476,7 @@ The runtime does not embed a validator. Consumers select a conforming Draft
 2020-12 implementation appropriate to their platform. Structural validation
 does not authenticate a report, verify external artifact bytes, or establish
 that a statistical conclusion is scientifically valid. See
-[Report JSON Schemas](docs/report-schemas.md).
+[Report JSON Schemas](https://github.com/ContextualWisdomLab/RankWeave/blob/main/docs/report-schemas.md).
 
 ## Cross-validate fixed weighted-RRF policies
 
@@ -502,7 +502,7 @@ the complete tuning and evaluation reports. The aggregate out-of-fold result is
 kept separate from all-data final tuning. The caller owns leakage-safe grouping
 for translations, users, tenants, revisions, projects, events, and time blocks.
 
-See [Weighted-RRF explicit-fold cross-validation](docs/rrf-cross-validation.md).
+See [Weighted-RRF explicit-fold cross-validation](https://github.com/ContextualWisdomLab/RankWeave/blob/main/docs/rrf-cross-validation.md).
 
 ## Backtest convex policies by availability time
 
@@ -517,7 +517,7 @@ weights, held-out rankings, and held-out evaluation. The report also reconstruct
 one original-order out-of-sample evaluation and keeps the all-data final policy
 recommendation separate from prospective evidence.
 
-See [Temporal convex-fusion backtesting](docs/temporal-convex-backtesting.md).
+See [Temporal convex-fusion backtesting](https://github.com/ContextualWisdomLab/RankWeave/blob/main/docs/temporal-convex-backtesting.md).
 
 ## Input and determinism guarantees
 
@@ -563,9 +563,6 @@ rechecks both the open-PR queue and exact `main` SHA. It repeats both checks
 immediately before opening one PR. Generated work is never self-approved,
 merged, published, or released.
 
-See [Hourly commercialization loop](docs/operations/hourly-commercialization-loop.md)
-for the credential, sandbox, failure, and operating contracts.
-
 ## Research and standards
 
 - Bruch et al. (2024) — TM2C2 and theoretical normalization.
@@ -580,7 +577,7 @@ for the credential, sandbox, failure, and operating contracts.
 - RFC 8259 — interoperable UTF-8 JSON transport.
 - Unicode UAX #15 — NFC normalization.
 
-Full APA 7th edition references are in [`docs/research/`](docs/research/).
+Full APA 7th edition references are in [`docs/research/`](https://github.com/ContextualWisdomLab/RankWeave/tree/main/docs/research).
 
 ## Development
 
@@ -594,7 +591,7 @@ python -m pip wheel . --no-deps --wheel-dir dist
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE).
+Apache-2.0 — see [LICENSE](https://github.com/ContextualWisdomLab/RankWeave/blob/main/LICENSE).
 
 ## Verify persisted artifact evidence
 
@@ -620,4 +617,4 @@ After a version has been published and independently verified, install it from P
 python -m pip install rankweave==0.18.0
 ```
 
-Before the first Trusted Publisher is configured or when a version has not been published, use a reviewed source checkout instead of assuming that the PyPI name is owned by this project. See [`docs/releasing.md`](docs/releasing.md) for the exact publisher identity, release procedure, and GitHub/PyPI attestation verification boundaries.
+Before the first Trusted Publisher is configured or when a version has not been published, use a reviewed source checkout instead of assuming that the PyPI name is owned by this project. See [`docs/releasing.md`](https://github.com/ContextualWisdomLab/RankWeave/blob/main/docs/releasing.md) for the exact publisher identity, release procedure, and GitHub/PyPI attestation verification boundaries.
