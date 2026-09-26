@@ -4,27 +4,27 @@ All notable changes to rankweave are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+### Fixed
+- Replaced an unreachable central review-fix reusable-workflow SHA that caused
+  scheduled commercialization runs to fail before job creation with a local
+  read-only, provider-neutral hold job.
+- Kept review repair fail-closed until the protected central NVIDIA NIM/OpenCode
+  scheduler is merged, without falling back to GitHub Models,
+  `COPILOT_GITHUB_TOKEN`, inherited repair secrets, or mutable central code.
+- Preserved hourly PR inspection, exact-policy revalidation, and the existing
+  NVIDIA NIM product-development stage while preventing a single unavailable
+  repair engine from disabling the entire loop.
+
+- Restricted both autonomous OpenCode phases to explicit repository read paths
+  and removed agent-authored pull-request metadata, preventing workspace-external
+  reads or generated text from becoming a pull-request title or body.
+
 ### Added
 
 - Classic reciprocal-rank fusion results now expose the exact per-channel
   Cormack contribution beside each owned input rank, so consumers do not need
   to duplicate the fusion arithmetic.
 
-### Fixed
-- Restricted both autonomous OpenCode phases to explicit repository read paths
-  and removed agent-authored pull-request metadata, preventing workspace-external
-  reads or generated text from becoming a pull-request title or body.
-- Removed the `repair-review-feedback` job from
-  `hourly-commercialization-loop.yml`: it called
-  `ContextualWisdomLab/.github`'s `pr-review-fix-scheduler.yml`
-  cross-repository at a pinned commit SHA, a shape that reusable workflow's
-  same-repository trusted-source hardening can never satisfy
-  (`github.repository == ContextualWisdomLab/.github`), so every hourly run
-  failed before any job was scheduled for as long as that hardening has been
-  in place. Review-feedback repair is now dispatched by a central,
-  always-current `rankweave-hourly-review-repair.yml` caller added to
-  `ContextualWisdomLab/.github`, matching the pattern already used by every
-  other product repository in the organization.
 ### Changed
 - Bumped the pinned `uv` version from `0.11.29` to `0.12.1` in `pyproject.toml`
   and every `astral-sh/setup-uv` workflow step (`ci.yml`, `create-release.yml`,
