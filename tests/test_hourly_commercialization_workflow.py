@@ -74,6 +74,25 @@ def test_review_repair_bridge_is_local_read_only_and_provider_neutral():
     assert "/pulls?state=open&per_page=1" in repair
 
 
+def test_revalidation_waits_for_repair_and_invalid_counts_fail_closed():
+    workflow = _workflow_text()
+    repair = _job_section(
+        workflow,
+        "repair-review-feedback",
+        "revalidate-pr-queue",
+    )
+    revalidate = _job_section(
+        workflow,
+        "revalidate-pr-queue",
+        "develop-next-product-gap",
+    )
+
+    assert "needs: repair-review-feedback" in revalidate
+    assert '""|*[!0-9]*)' in repair
+    assert "Invalid open pull request count" in repair
+    assert "exit 1" in repair
+
+
 def test_product_development_uses_nvidia_nim_and_fails_closed():
     workflow = _workflow_text()
 
